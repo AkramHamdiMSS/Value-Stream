@@ -10,6 +10,8 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showAllDemandPeriods, setShowAllDemandPeriods] = useState(false);
+  const [showAllAllocPeriods, setShowAllAllocPeriods] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -168,7 +170,15 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
           : "Besoin entièrement couvert ✓"}
       </div>
 
-      <SectionTitle>Besoin exprimé par le SVO {!canEditDemand && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}</SectionTitle>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>Besoin exprimé par le SVO {!canEditDemand && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}</SectionTitle>
+        {canEditDemand && (
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: MUTED, cursor: "pointer" }}>
+            <input type="checkbox" checked={showAllDemandPeriods} onChange={(e) => setShowAllDemandPeriods(e.target.checked)} />
+            Afficher les 52 semaines de l'année
+          </label>
+        )}
+      </div>
       <LinesTable
         lines={project.demandLines}
         editable={canEditDemand}
@@ -183,11 +193,20 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
         onPatch={patchDemandLine}
         onRemove={removeDemandLine}
         groupBy="period"
+        expandAllGroups={showAllDemandPeriods}
       />
 
-      <SectionTitle style={{ marginTop: 28 }}>
-        Affectation des ressources (Head of Value Stream) {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}
-      </SectionTitle>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28, marginBottom: 10 }}>
+        <SectionTitle style={{ marginBottom: 0 }}>
+          Affectation des ressources (Head of Value Stream) {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}
+        </SectionTitle>
+        {canEditAlloc && (
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: MUTED, cursor: "pointer" }}>
+            <input type="checkbox" checked={showAllAllocPeriods} onChange={(e) => setShowAllAllocPeriods(e.target.checked)} />
+            Afficher les 52 semaines de l'année
+          </label>
+        )}
+      </div>
       <LinesTable
         lines={project.allocationLines}
         editable={canEditAlloc}
@@ -201,6 +220,7 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
         onPatch={patchAllocationLine}
         onRemove={removeAllocationLine}
         groupBy="period"
+        expandAllGroups={showAllAllocPeriods}
       />
 
       {relevantPeriods.length > 0 && (

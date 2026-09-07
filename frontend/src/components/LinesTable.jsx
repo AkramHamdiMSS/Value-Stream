@@ -7,7 +7,7 @@ import { Th, Td } from "./ui";
 // commit to the server on blur (text/number/percent) or immediately on select change.
 // When `groupBy` names a column key (e.g. "period"), rows are grouped under a single
 // header per distinct value instead of repeating that column on every row.
-export default function LinesTable({ lines, columns, addLabel, editable = true, onAdd, onPatch, onRemove, groupBy }) {
+export default function LinesTable({ lines, columns, addLabel, editable = true, onAdd, onPatch, onRemove, groupBy, expandAllGroups = false }) {
   const [local, setLocal] = useState(lines);
   useEffect(() => setLocal(lines), [lines]);
 
@@ -41,9 +41,9 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
       if (!byValue.has(key)) byValue.set(key, []);
       byValue.get(key).push(line);
     }
-    const orderedKeys = groupCol.options.filter((v) => byValue.has(v));
+    const orderedKeys = expandAllGroups && editable ? [...groupCol.options] : groupCol.options.filter((v) => byValue.has(v));
     for (const k of byValue.keys()) if (!orderedKeys.includes(k)) orderedKeys.push(k);
-    groups = orderedKeys.map((key) => ({ key, label: groupLabel(key), lines: byValue.get(key) }));
+    groups = orderedKeys.map((key) => ({ key, label: groupLabel(key), lines: byValue.get(key) || [] }));
   }
 
   const renderCell = (c, line) => (
