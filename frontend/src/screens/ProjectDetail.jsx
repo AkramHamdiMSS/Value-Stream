@@ -32,6 +32,27 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
     return periods.map((p) => p.id).filter((id) => set.has(id));
   }, [project, periods]);
 
+  // Periods the SVO has asked for (count > 0) but that don't yet have an allocation
+  // line of the matching squad — surfaced as one-click suggestions above the
+  // affectation table instead of making the HSV hunt for them in a 52-week picker.
+  const pendingAllocPeriods = useMemo(() => {
+    if (!project) return [];
+    const missingByPeriod = new Map();
+    for (const dl of project.demandLines) {
+      if (effective(dl.count, dl.pct) <= 0) continue;
+      const covered = project.allocationLines.some((al) => {
+        if (al.period !== dl.period) return false;
+        const member = pool.find((r) => r.id === al.poolMemberId);
+        return member?.squad === dl.profile;
+      });
+      if (!covered) {
+        if (!missingByPeriod.has(dl.period)) missingByPeriod.set(dl.period, []);
+        missingByPeriod.get(dl.period).push(dl.profile);
+      }
+    }
+    return periods.filter((p) => missingByPeriod.has(p.id)).map((p) => ({ ...p, missing: missingByPeriod.get(p.id) }));
+  }, [project, periods, pool]);
+
   if (loading) {
     return <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, padding: 40 }}><Loader2 className="animate-spin" size={18} /> Chargement…</div>;
   }
@@ -222,6 +243,23 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
       <SectionTitle style={{ marginTop: 28 }}>
         Affectation des ressources (Head of Value Stream) {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}
       </SectionTitle>
+      {canEditAlloc && pendingAllocPeriods.length > 0 && (
+        <div style={{
+          display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8,
+          padding: "10px 12px", marginBottom: 10, borderRadius: 10,
+          background: "rgba(245,158,11,0.1)", border: `1px solid ${AMBER}55`,
+        }}>
+          <span style={{ fontSize: 12, color: "#fbbf24", fontWeight: 600 }}>Semaines demandées par le SVO, pas encore affectées :</span>
+          {pendingAllocPeriods.map((p) => (
+            <button key={p.id} onClick={() => addAllocationLine(p.id)} style={{
+              background: "rgba(245,158,11,0.15)", border: `1px solid ${AMBER}88`, borderRadius: 20,
+              color: "#fbbf24", fontSize: 11.5, fontWeight: 600, padding: "4px 10px", cursor: "pointer",
+            }}>
+              {p.label} <span style={{ fontWeight: 400, opacity: 0.8 }}>({p.missing.join(", ")})</span>
+            </button>
+          ))}
+        </div>
+      )}
       <LinesTable
         lines={project.allocationLines}
         editable={canEditAlloc}
