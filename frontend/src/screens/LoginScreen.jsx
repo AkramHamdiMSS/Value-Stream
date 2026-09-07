@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
+import { Sun, Moon } from "lucide-react";
 import { api } from "../api";
-import { NAVY, SURFACE, BORDER, TEXT, MUTED, RED, FONT_BODY, FONT_DISPLAY, inputStyle, btnPrimary } from "../styles";
+import { NAVY, SURFACE, BORDER, TEXT, MUTED, RED, FONT_BODY, FONT_DISPLAY, inputStyle, btnPrimary, iconBtn } from "../styles";
 import { BrandMark } from "../components/ui";
 
-export default function LoginScreen({ onLogin }) {
+export default function LoginScreen({ onLogin, theme, onToggleTheme }) {
   const [accounts, setAccounts] = useState([]);
   const [selected, setSelected] = useState("");
   const [password, setPassword] = useState("");
@@ -37,7 +38,12 @@ export default function LoginScreen({ onLogin }) {
   };
 
   return (
-    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+      {onToggleTheme && (
+        <button onClick={onToggleTheme} style={{ ...iconBtn, position: "absolute", top: 20, right: 20, border: `1px solid ${BORDER}`, borderRadius: 999, padding: 8 }} aria-label="Changer de thème">
+          {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
+      )}
       <div style={{ width: 340, background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <BrandMark size={20} />

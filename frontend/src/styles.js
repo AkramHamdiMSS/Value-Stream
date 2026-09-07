@@ -1,5 +1,6 @@
-// Light SaaS-dashboard look (Inntegrate-style reference): light canvas, white
-// cards with soft shadows, dark sidebar, purple accent, pill buttons.
+// SaaS-dashboard look (Inntegrate-style reference): light or dark canvas
+// (toggled via [data-theme] — see index.css and lib/theme.js), white/dark
+// cards with soft shadows, dark sidebar in both modes, purple accent, pills.
 export const NAVY = "var(--bg)";
 export const SURFACE = "var(--surface)";
 export const SURFACE2 = "var(--surface-2)";
@@ -18,7 +19,7 @@ export const SIDEBAR_TEXT = "var(--sidebar-text)";
 export const SIDEBAR_MUTED = "var(--sidebar-muted)";
 export const SIDEBAR_ACTIVE = "var(--sidebar-active)";
 
-export const CARD_SHADOW = "0 1px 2px rgba(20, 23, 58, 0.04), 0 4px 16px rgba(20, 23, 58, 0.06)";
+export const CARD_SHADOW = "var(--card-shadow)";
 
 export const FONT_BODY = "'Funnel Sans', system-ui, -apple-system, sans-serif";
 export const FONT_DISPLAY = "'Funnel Display', 'Funnel Sans', system-ui, sans-serif";

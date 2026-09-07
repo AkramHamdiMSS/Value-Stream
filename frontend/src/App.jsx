@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2,
+  LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2, Sun, Moon,
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
 import { NAVY, TEXT, MUTED, FONT_BODY, SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_MUTED, btnGhostSidebar } from "./styles";
+import { getInitialTheme, applyTheme } from "./lib/theme";
 import { NavItem, BrandHeader } from "./components/ui";
 import LoginScreen from "./screens/LoginScreen";
 import ChangePasswordModal from "./screens/ChangePasswordModal";
@@ -29,8 +30,12 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState("");
   const [showAccount, setShowAccount] = useState(false);
+  const [theme, setTheme] = useState(getInitialTheme);
 
   const isHSV = user?.role === "hsv";
+
+  useEffect(() => { applyTheme(theme); }, [theme]);
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
   useEffect(() => {
     if (!getToken()) { setAuthLoading(false); return; }
@@ -85,7 +90,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return <LoginScreen onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />;
   }
 
   const filteredProjects = projects
@@ -120,6 +125,9 @@ export default function App() {
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => setShowAccount(true)} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px", flex: 1 }}>
               <KeyRound size={13} /> Mot de passe
+            </button>
+            <button onClick={toggleTheme} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px" }} aria-label="Changer de thème">
+              {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
             </button>
             <button onClick={handleLogout} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px" }} aria-label="Se déconnecter">
               <LogOut size={13} />
