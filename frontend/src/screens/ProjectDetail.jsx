@@ -32,22 +32,22 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
     return periods.map((p) => p.id).filter((id) => set.has(id));
   }, [project, periods]);
 
-  // Periods the SVO has asked for (count > 0) but that don't yet have an allocation
-  // line of the matching squad — surfaced as one-click suggestions above the
-  // affectation table instead of making the HSV hunt for them in a 52-week picker.
+  // Periods where the SVO's requested headcount (per profile) isn't fully covered yet
+  // by allocation lines of the matching squad — surfaced as one-click suggestions
+  // above the affectation table instead of making the HSV hunt for them in a picker.
   const pendingAllocPeriods = useMemo(() => {
     if (!project) return [];
     const missingByPeriod = new Map();
     for (const dl of project.demandLines) {
       if (effective(dl.count, dl.pct) <= 0) continue;
-      const covered = project.allocationLines.some((al) => {
+      const needed = Math.max(1, Math.round(Number(dl.count) || 0));
+      const existing = project.allocationLines.filter((al) => {
         if (al.period !== dl.period) return false;
-        const member = pool.find((r) => r.id === al.poolMemberId);
-        return member?.squad === dl.profile;
-      });
-      if (!covered) {
+        return pool.find((r) => r.id === al.poolMemberId)?.squad === dl.profile;
+      }).length;
+      if (existing < needed) {
         if (!missingByPeriod.has(dl.period)) missingByPeriod.set(dl.period, []);
-        missingByPeriod.get(dl.period).push(dl.profile);
+        missingByPeriod.get(dl.period).push(`${dl.profile} ${existing}/${needed}`);
       }
     }
     return periods.filter((p) => missingByPeriod.has(p.id)).map((p) => ({ ...p, missing: missingByPeriod.get(p.id) }));
@@ -101,29 +101,38 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
   };
 
   // ---- allocation lines ----
-  // Adding a brand-new period pre-fills one line per profile the SVO actually asked
-  // for that week (defaulting to a resource of the matching squad) so the HSV starts
-  // from the real need instead of an empty pick list. Falls back to a single blank
-  // line when there's no demand to go on, or when adding to an already-seeded period.
+  // Pre-fills one line PER HEADCOUNT the SVO actually asked for that week — a demand
+  // of "Mobile: 5" seeds 5 Mobile-squad lines, not one. Tops up whatever's still
+  // missing per profile (so it's safe to call again on a partially-filled period),
+  // spreading across distinct squad members where possible. Falls back to a single
+  // blank line once every demanded headcount is already covered, or when there's no
+  // demand to go on at all.
   const addAllocationLine = async (period) => {
     const targetPeriod = period || periods[0]?.id || "";
-    const isNewPeriod = !project.allocationLines.some((l) => l.period === targetPeriod);
-
-    if (isNewPeriod) {
-      const demandedProfiles = ["Mobile", "TPE", "Digital"].filter((profile) =>
-        project.demandLines.some((l) => l.period === targetPeriod && l.profile === profile && effective(l.count, l.pct) > 0)
-      );
-      const seeds = demandedProfiles
-        .map((profile) => pool.find((r) => r.squad === profile))
-        .filter(Boolean);
-      if (seeds.length > 0) {
-        const created = await Promise.all(seeds.map((member) =>
-          api.post(`/projects/${project.id}/allocation-lines`, { period: targetPeriod, poolMemberId: member.id, pct: 1 })
-        ));
-        setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, ...created] }));
-        notifyChanged();
-        return;
+    const seeds = [];
+    for (const profile of ["Mobile", "TPE", "Digital"]) {
+      const dl = project.demandLines.find((l) => l.period === targetPeriod && l.profile === profile);
+      if (!dl || effective(dl.count, dl.pct) <= 0) continue;
+      const needed = Math.max(1, Math.round(Number(dl.count) || 0));
+      const squadMembers = pool.filter((r) => r.squad === profile);
+      if (squadMembers.length === 0) continue;
+      const existing = project.allocationLines.filter((al) =>
+        al.period === targetPeriod && squadMembers.some((m) => m.id === al.poolMemberId)
+      ).length;
+      const missing = needed - existing;
+      const pctValue = dl.pct === null || dl.pct === undefined || dl.pct === "" ? 1 : Number(dl.pct);
+      for (let i = 0; i < missing; i++) {
+        seeds.push({ poolMemberId: squadMembers[(existing + i) % squadMembers.length].id, pct: pctValue });
       }
+    }
+
+    if (seeds.length > 0) {
+      const created = await Promise.all(seeds.map((s) =>
+        api.post(`/projects/${project.id}/allocation-lines`, { period: targetPeriod, poolMemberId: s.poolMemberId, pct: s.pct })
+      ));
+      setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, ...created] }));
+      notifyChanged();
+      return;
     }
 
     if (pool.length === 0) return;
