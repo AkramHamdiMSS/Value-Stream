@@ -1,0 +1,342 @@
+[
+  {
+    "name": "SMT - Mobile Payment & Switch",
+    "svo": "Aymen",
+    "status": "Exploitation"
+  },
+  {
+    "name": "SMT - Inscription Scolaire USSD",
+    "svo": "Aymen",
+    "status": "Livré (En attente retour client)"
+  },
+  {
+    "name": "SMT - BIAT",
+    "svo": "Aymen",
+    "status": "En cours (Dev)"
+  },
+  {
+    "name": "WIFAK - Lot 2",
+    "svo": "Aymen",
+    "status": "En cours (Dev Lot 2)"
+  },
+  {
+    "name": "MOAMALAT - Exploitation",
+    "svo": "Aymen",
+    "status": "Exploitation"
+  },
+  {
+    "name": "NATIXIS (Algérie) - Cadrage",
+    "svo": "Akram",
+    "status": "Cadrage"
+  },
+  {
+    "name": "FSBK - Validation Prod",
+    "svo": "Taher",
+    "status": "Phase de validation en Prod (Validation des messages ISO avec SATIM)"
+  },
+  {
+    "name": "Moojup - Gateway",
+    "svo": "Abderraouf",
+    "status": "En cours de migration"
+  },
+  {
+    "name": "Moojup - Portail",
+    "svo": "Abderraouf",
+    "status": "En cours (Traitement vulnérabilités)"
+  },
+  {
+    "name": "Moojup - Remboursement et gratuité",
+    "svo": "Abderraouf",
+    "status": "Cadrage"
+  },
+  {
+    "name": "Moojup - Glovo",
+    "svo": "Abderraouf",
+    "status": "Exploitation"
+  },
+  {
+    "name": "Moojup",
+    "svo": "Abderraouf",
+    "status": "Exploitation"
+  },
+  {
+    "name": "Gateway standard Tunisie - Migration REST",
+    "svo": "Abderraouf",
+    "status": "En stand by"
+  },
+  {
+    "name": "SMT - Gateway",
+    "svo": "Abderraouf",
+    "status": "Exploitation"
+  },
+  {
+    "name": "UIB - Gateway",
+    "svo": "Abderraouf",
+    "status": "Exploitation"
+  },
+  {
+    "name": "UPNG - Relais Postillon/NIBSS",
+    "svo": "Abderraouf",
+    "status": "Cadrage"
+  },
+  {
+    "name": "BICICI - Gateway",
+    "svo": "Oussama",
+    "status": "Exploitation"
+  },
+  {
+    "name": "CBAO - Gateway",
+    "svo": "Oussama",
+    "status": "Exploitation"
+  },
+  {
+    "name": "BNI - Gateway",
+    "svo": "Moncef",
+    "status": "Mise en prod"
+  },
+  {
+    "name": "Staroil - Portail",
+    "svo": "Taher",
+    "status": "Exploitation"
+  },
+  {
+    "name": "Staroil - Synchro",
+    "svo": "Taher",
+    "status": "Exploitation"
+  },
+  {
+    "name": "Staroil - NDC",
+    "svo": "Taher",
+    "status": "Exploitation"
+  },
+  {
+    "name": "Pluxee TN - Portail",
+    "svo": "Abir",
+    "status": "Exploitation"
+  },
+  {
+    "name": "Pluxee TN - Livraison Navision",
+    "svo": "Abir",
+    "status": "En cours (Portail Livré) (WS + Mobile En cours)"
+  },
+  {
+    "name": "Pluxee TN - Cron Details (Interfaçage avec BI Pluxee)",
+    "svo": "Abir",
+    "status": "En cours (Dev)"
+  },
+  {
+    "name": "Pluxee MA - Portail (Amélioration et rectification)",
+    "svo": "Abir",
+    "status": "En cours (Dev)"
+  },
+  {
+    "name": "Pluxee MA - Portail",
+    "svo": "Abir",
+    "status": "Exploitation"
+  },
+  {
+    "name": "Pluxee MA - Web Service CMI",
+    "svo": "Abir",
+    "status": "Exploitation"
+  },
+  {
+    "name": "Servimax/Joker - Nouvelle solution",
+    "svo": "Abir",
+    "status": "Livré (En attente retour client)"
+  },
+  {
+    "name": "BICICI - Portail (Ajout module commission)",
+    "svo": "Oussama",
+    "status": "Livré (En attente retour client)"
+  },
+  {
+    "name": "CBAO - Portail",
+    "svo": "Oussama",
+    "status": "Exploitation"
+  },
+  {
+    "name": "ALL - Portail+WS",
+    "svo": "Moncef",
+    "status": "Exploitation"
+  },
+  {
+    "name": "ALL - CM +DLL",
+    "svo": "Oussama",
+    "status": "Exploitation"
+  },
+  {
+    "name": "Moamalat",
+    "svo": "Moncef",
+    "status": "Nouvelles demandes en cours de traitement + traitement des retours client"
+  },
+  {
+    "name": "RAM Pluxee",
+    "svo": "Moncef",
+    "status": "Communication avec la caisse – Lot 3 du projet"
+  },
+  {
+    "name": "GIM",
+    "svo": "Moncef",
+    "status": "Activation des licences, changement du Field 22, Cashback et DCC – Relances en cours"
+  },
+  {
+    "name": "Tunis SPDH",
+    "svo": "Oussama",
+    "status": "Traitement des retours client"
+  },
+  {
+    "name": "Tunis ISO8583",
+    "svo": "Moncef",
+    "status": "Première mise en production effectuée – En attente du retour client"
+  },
+  {
+    "name": "SOFTPOS MPOC",
+    "svo": "Abdelkader",
+    "status": "Travail en cours"
+  },
+  {
+    "name": "SPARK",
+    "svo": "Moncef",
+    "status": "Traitement des demandes de l'équipe SPARK + tests cartes – Fréquence faible"
+  },
+  {
+    "name": "SATIM",
+    "svo": "Oussama",
+    "status": "Fréquence faible"
+  },
+  {
+    "name": "BMOI",
+    "svo": "Moncef",
+    "status": "Nouvelle version en cours de test chez le client + nouvelles demandes en cours"
+  },
+  {
+    "name": "GIMAC",
+    "svo": "Moncef",
+    "status": "Fréquence faible"
+  },
+  {
+    "name": "MSS Marketplace",
+    "svo": "Moncef",
+    "status": "Démonstrations en cours"
+  },
+  {
+    "name": "TPE Android X990 AFG",
+    "svo": "Moncef",
+    "status": "Fréquence faible"
+  },
+  {
+    "name": "TPE Android X990 BANGE",
+    "svo": "Moncef",
+    "status": "Fréquence faible"
+  },
+  {
+    "name": "TPE X990 BNI",
+    "svo": "Moncef",
+    "status": "Développement et tests en cours"
+  },
+  {
+    "name": "TPE BOA +Drive+Concentrateur",
+    "svo": "Moncef",
+    "status": "Développement et tests en cours"
+  },
+  {
+    "name": "TPE X990 CBAO",
+    "svo": "Oussama",
+    "status": "En production – Fréquence faible"
+  },
+  {
+    "name": "BICICI MI - Integration MOMO + ajout de la fonctionnalite paiement mobile dans la caisse",
+    "svo": "Oussama",
+    "status": "En cours"
+  },
+  {
+    "name": "Client Monetique BICICI MI - Integration MOMO",
+    "svo": "Oussama",
+    "status": "En cours"
+  },
+  {
+    "name": "Mediasoft - Change request",
+    "svo": "Oussama",
+    "status": "En cours"
+  },
+  {
+    "name": "SG - Quick wins + Fraude V2 + Caisse",
+    "svo": "Oussama",
+    "status": "Evolutions / Taches en cours"
+  },
+  {
+    "name": "BICICI (BKCI) - Caisse RS dans paiement + ajout des certificats et test du nouveau relais SOAP",
+    "svo": "Oussama",
+    "status": "Evolutions / Taches en cours"
+  },
+  {
+    "name": "BRED - ASSISTANCE Caisse",
+    "svo": "Oussama",
+    "status": "Evolutions / Taches en cours"
+  },
+  {
+    "name": "MPAY - MPAY V2",
+    "svo": "Taher",
+    "status": "Pas de nouvelles"
+  },
+  {
+    "name": "MPAY - MPAY V1",
+    "svo": "Taher",
+    "status": "En cours"
+  },
+  {
+    "name": "MOAMALAT - MOAMALAT Buisness+Numo+Softpos",
+    "svo": "Taher",
+    "status": "En cours"
+  },
+  {
+    "name": "BOA MPAY",
+    "svo": "Abir",
+    "status": "Prêt / OK"
+  },
+  {
+    "name": "SIMLE TO PAY",
+    "svo": "Abir",
+    "status": "Prêt / OK"
+  },
+  {
+    "name": "PALM PAY",
+    "svo": "Abir",
+    "status": "Prêt / OK"
+  },
+  {
+    "name": "Tokenisation",
+    "svo": "Abir",
+    "status": "En cours"
+  },
+  {
+    "name": "ChatPay",
+    "svo": "Abir",
+    "status": "À surveiller"
+  },
+  {
+    "name": "MOBILE_TEST_LAB",
+    "svo": "Abir",
+    "status": "Pas de nouvelles"
+  },
+  {
+    "name": "ANAVA - SPLIT (→ ANAVA)",
+    "svo": "Akram",
+    "status": "En cours"
+  },
+  {
+    "name": "WIFAK - WIFAK MPAY",
+    "svo": "Abir",
+    "status": "En cours"
+  },
+  {
+    "name": "BTK - BTK MPAY",
+    "svo": "Abir",
+    "status": "En cours"
+  },
+  {
+    "name": "BTL - BTL MAPY",
+    "svo": "Abir",
+    "status": "En cours"
+  }
+]
