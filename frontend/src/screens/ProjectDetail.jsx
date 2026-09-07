@@ -51,9 +51,9 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
   };
 
   // ---- demand lines ----
-  const addDemandLine = async () => {
+  const addDemandLine = async (period) => {
     const line = await api.post(`/projects/${project.id}/demand-lines`, {
-      period: periods[0]?.id || "", profile: "Mobile", count: 0, pct: null,
+      period: period || periods[0]?.id || "", profile: "Mobile", count: 0, pct: null,
     });
     setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, line] }));
     notifyChanged();
@@ -71,10 +71,10 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
   };
 
   // ---- allocation lines ----
-  const addAllocationLine = async () => {
+  const addAllocationLine = async (period) => {
     if (pool.length === 0) return;
     const line = await api.post(`/projects/${project.id}/allocation-lines`, {
-      period: periods[0]?.id || "", poolMemberId: pool[0].id, pct: 1,
+      period: period || periods[0]?.id || "", poolMemberId: pool[0].id, pct: 1,
     });
     setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, line] }));
     notifyChanged();
@@ -182,6 +182,7 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
         onAdd={addDemandLine}
         onPatch={patchDemandLine}
         onRemove={removeDemandLine}
+        groupBy="period"
       />
 
       <SectionTitle style={{ marginTop: 28 }}>
@@ -199,6 +200,7 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
         onAdd={addAllocationLine}
         onPatch={patchAllocationLine}
         onRemove={removeAllocationLine}
+        groupBy="period"
       />
 
       {relevantPeriods.length > 0 && (
