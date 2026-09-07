@@ -80,10 +80,34 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
   };
 
   // ---- allocation lines ----
+  // Adding a brand-new period pre-fills one line per profile the SVO actually asked
+  // for that week (defaulting to a resource of the matching squad) so the HSV starts
+  // from the real need instead of an empty pick list. Falls back to a single blank
+  // line when there's no demand to go on, or when adding to an already-seeded period.
   const addAllocationLine = async (period) => {
+    const targetPeriod = period || periods[0]?.id || "";
+    const isNewPeriod = !project.allocationLines.some((l) => l.period === targetPeriod);
+
+    if (isNewPeriod) {
+      const demandedProfiles = ["Mobile", "TPE", "Digital"].filter((profile) =>
+        project.demandLines.some((l) => l.period === targetPeriod && l.profile === profile && effective(l.count, l.pct) > 0)
+      );
+      const seeds = demandedProfiles
+        .map((profile) => pool.find((r) => r.squad === profile))
+        .filter(Boolean);
+      if (seeds.length > 0) {
+        const created = await Promise.all(seeds.map((member) =>
+          api.post(`/projects/${project.id}/allocation-lines`, { period: targetPeriod, poolMemberId: member.id, pct: 1 })
+        ));
+        setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, ...created] }));
+        notifyChanged();
+        return;
+      }
+    }
+
     if (pool.length === 0) return;
     const line = await api.post(`/projects/${project.id}/allocation-lines`, {
-      period: period || periods[0]?.id || "", poolMemberId: pool[0].id, pct: 1,
+      period: targetPeriod, poolMemberId: pool[0].id, pct: 1,
     });
     setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, line] }));
     notifyChanged();
