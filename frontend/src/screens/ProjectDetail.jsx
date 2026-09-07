@@ -10,8 +10,6 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [showAllDemandPeriods, setShowAllDemandPeriods] = useState(false);
-  const [showAllAllocPeriods, setShowAllAllocPeriods] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -53,11 +51,20 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
   };
 
   // ---- demand lines ----
+  // Adding a period creates all 3 profiles (Mobile/TPE/Digital) at once — a demand
+  // period without all three is normally just because one was deleted, so a repeat
+  // call only fills in whichever profiles are still missing for that period.
   const addDemandLine = async (period) => {
-    const line = await api.post(`/projects/${project.id}/demand-lines`, {
-      period: period || periods[0]?.id || "", profile: "Mobile", count: 0, pct: null,
-    });
-    setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, line] }));
+    const targetPeriod = period || periods[0]?.id || "";
+    const existing = new Set(project.demandLines.filter((l) => l.period === targetPeriod).map((l) => l.profile));
+    const allProfiles = ["Mobile", "TPE", "Digital"];
+    const missing = allProfiles.filter((p) => !existing.has(p));
+    const toCreate = existing.size === 0 ? allProfiles : missing;
+    if (toCreate.length === 0) return;
+    const created = await Promise.all(toCreate.map((profile) =>
+      api.post(`/projects/${project.id}/demand-lines`, { period: targetPeriod, profile, count: 0, pct: null })
+    ));
+    setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, ...created] }));
     notifyChanged();
   };
   const patchDemandLine = async (id, key, value) => {
@@ -170,15 +177,7 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
           : "Besoin entièrement couvert ✓"}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <SectionTitle style={{ marginBottom: 0 }}>Besoin exprimé par le SVO {!canEditDemand && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}</SectionTitle>
-        {canEditDemand && (
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: MUTED, cursor: "pointer" }}>
-            <input type="checkbox" checked={showAllDemandPeriods} onChange={(e) => setShowAllDemandPeriods(e.target.checked)} />
-            Afficher les 52 semaines de l'année
-          </label>
-        )}
-      </div>
+      <SectionTitle>Besoin exprimé par le SVO {!canEditDemand && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}</SectionTitle>
       <LinesTable
         lines={project.demandLines}
         editable={canEditDemand}
@@ -188,25 +187,17 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
           { key: "count", label: "Nombre de personnes", type: "number", width: 90 },
           { key: "pct", label: "Allocation % (vide = 100%)", type: "percent", width: 110 },
         ]}
-        addLabel="Ajouter une ligne de besoin"
+        addLabel="Ajouter une période"
         onAdd={addDemandLine}
         onPatch={patchDemandLine}
         onRemove={removeDemandLine}
         groupBy="period"
-        expandAllGroups={showAllDemandPeriods}
+        maxPerGroup={3}
       />
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28, marginBottom: 10 }}>
-        <SectionTitle style={{ marginBottom: 0 }}>
-          Affectation des ressources (Head of Value Stream) {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}
-        </SectionTitle>
-        {canEditAlloc && (
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: MUTED, cursor: "pointer" }}>
-            <input type="checkbox" checked={showAllAllocPeriods} onChange={(e) => setShowAllAllocPeriods(e.target.checked)} />
-            Afficher les 52 semaines de l'année
-          </label>
-        )}
-      </div>
+      <SectionTitle style={{ marginTop: 28 }}>
+        Affectation des ressources (Head of Value Stream) {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}
+      </SectionTitle>
       <LinesTable
         lines={project.allocationLines}
         editable={canEditAlloc}
@@ -215,12 +206,11 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
           { key: "poolMemberId", label: "Ressource", type: "select", options: pool.map((r) => r.id), optionLabels: pool.map((r) => `${r.name} (${r.squad})`), width: 220 },
           { key: "pct", label: "Allocation %", type: "percent", width: 100 },
         ]}
-        addLabel="Ajouter une affectation"
+        addLabel="Ajouter une période"
         onAdd={addAllocationLine}
         onPatch={patchAllocationLine}
         onRemove={removeAllocationLine}
         groupBy="period"
-        expandAllGroups={showAllAllocPeriods}
       />
 
       {relevantPeriods.length > 0 && (
