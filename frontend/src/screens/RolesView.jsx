@@ -1,14 +1,16 @@
-import { useState } from "react";
-import { Plus, KeyRound, Trash2 } from "lucide-react";
+import { Fragment, useState } from "react";
+import { Plus, KeyRound, Trash2, ShieldCheck } from "lucide-react";
 import { api } from "../api";
-import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, AMBER, RED, CARD_SHADOW, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, AMBER, RED, ACCENT, CARD_SHADOW, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
+import { PERMISSIONS } from "../lib/permissions";
 import { Th, Td, Badge } from "../components/ui";
 
-export default function RolesView({ svoUsers, pool, onChanged }) {
+export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
   const [newPersonId, setNewPersonId] = useState("");
   const [error, setError] = useState("");
   const [pwDrafts, setPwDrafts] = useState({});
   const [names, setNames] = useState({});
+  const [openPermsFor, setOpenPermsFor] = useState(null);
 
   const availablePool = pool.filter((p) => !svoUsers.some((s) => s.name.toLowerCase() === p.name.toLowerCase()));
 
@@ -56,54 +58,96 @@ export default function RolesView({ svoUsers, pool, onChanged }) {
     }
   };
 
+  const togglePermission = async (user, key) => {
+    const current = user.permissions || [];
+    const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+    try {
+      await api.patch(`/users/${user.id}/permissions`, { permissions: next });
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   return (
     <div>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px" }}>Gestion des rôles</h1>
       <p style={{ color: MUTED, fontSize: 13, margin: "0 0 20px", maxWidth: 620 }}>
-        Réservé au Head of Value Stream. Créez ici le mot de passe initial de chaque SVO — chacun pourra ensuite
-        le changer lui-même depuis sa propre session ("Mot de passe" dans la sidebar).
+        Créez ici le mot de passe initial de chaque SVO — chacun pourra ensuite le changer lui-même depuis sa
+        propre session ("Mot de passe" dans la sidebar).
+        {isHSV && " Le Head of Value Stream peut aussi accorder des permissions supplémentaires à chaque SVO."}
       </p>
 
       <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", marginBottom: 16, boxShadow: CARD_SHADOW }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
-              <Th>SVO</Th><Th>Projets</Th><Th>Compte</Th><Th>Définir / réinitialiser le mot de passe</Th><Th></Th>
+              <Th>SVO</Th><Th>Projets</Th><Th>Compte</Th><Th>Définir / réinitialiser le mot de passe</Th>
+              {isHSV && <Th>Permissions</Th>}
+              <Th></Th>
             </tr>
           </thead>
           <tbody>
             {svoUsers.map((s) => (
-              <tr key={s.id} style={{ borderTop: `1px solid ${BORDER}` }}>
-                <Td>
-                  <input value={names[s.id] ?? s.name} onChange={(e) => setNames({ ...names, [s.id]: e.target.value })}
-                    onBlur={() => renameSvo(s.id)} style={inputStyle} />
-                </Td>
-                <Td><span style={{ color: MUTED }}>{s.projectCount}</span></Td>
-                <Td>
-                  {s.hasPassword ? <Badge color={GREEN} text="Actif" /> : <Badge color={AMBER} text="Sans mot de passe" />}
-                </Td>
-                <Td>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <input type="text" placeholder="Nouveau mot de passe" value={pwDrafts[s.id] || ""}
-                      onChange={(e) => setPwDrafts({ ...pwDrafts, [s.id]: e.target.value })}
-                      style={{ ...inputStyle, width: 150 }} />
-                    <button onClick={() => setPassword(s.id)} disabled={(pwDrafts[s.id] || "").trim().length < 4}
-                      style={{ ...btnGhost, opacity: (pwDrafts[s.id] || "").trim().length < 4 ? 0.4 : 1 }}>
-                      <KeyRound size={13} /> Définir
+              <Fragment key={s.id}>
+                <tr style={{ borderTop: `1px solid ${BORDER}` }}>
+                  <Td>
+                    <input value={names[s.id] ?? s.name} onChange={(e) => setNames({ ...names, [s.id]: e.target.value })}
+                      onBlur={() => renameSvo(s.id)} style={inputStyle} />
+                  </Td>
+                  <Td><span style={{ color: MUTED }}>{s.projectCount}</span></Td>
+                  <Td>
+                    {s.hasPassword ? <Badge color={GREEN} text="Actif" /> : <Badge color={AMBER} text="Sans mot de passe" />}
+                  </Td>
+                  <Td>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input type="text" placeholder="Nouveau mot de passe" value={pwDrafts[s.id] || ""}
+                        onChange={(e) => setPwDrafts({ ...pwDrafts, [s.id]: e.target.value })}
+                        style={{ ...inputStyle, width: 150 }} />
+                      <button onClick={() => setPassword(s.id)} disabled={(pwDrafts[s.id] || "").trim().length < 4}
+                        style={{ ...btnGhost, opacity: (pwDrafts[s.id] || "").trim().length < 4 ? 0.4 : 1 }}>
+                        <KeyRound size={13} /> Définir
+                      </button>
+                    </div>
+                  </Td>
+                  {isHSV && (
+                    <Td>
+                      <button onClick={() => setOpenPermsFor(openPermsFor === s.id ? null : s.id)}
+                        style={{ ...btnGhost, fontSize: 11.5, color: (s.permissions || []).length > 0 ? ACCENT : MUTED }}>
+                        <ShieldCheck size={13} /> {(s.permissions || []).length > 0 ? `${s.permissions.length} accordée(s)` : "Aucune"}
+                      </button>
+                    </Td>
+                  )}
+                  <Td>
+                    <button onClick={() => removeSvo(s.id)} disabled={s.projectCount > 0}
+                      title={s.projectCount > 0 ? "Réaffectez d'abord ses projets à un autre SVO" : "Retirer"}
+                      style={{ ...iconBtn, opacity: s.projectCount > 0 ? 0.35 : 1, cursor: s.projectCount > 0 ? "not-allowed" : "pointer" }}>
+                      <Trash2 size={14} />
                     </button>
-                  </div>
-                </Td>
-                <Td>
-                  <button onClick={() => removeSvo(s.id)} disabled={s.projectCount > 0}
-                    title={s.projectCount > 0 ? "Réaffectez d'abord ses projets à un autre SVO" : "Retirer"}
-                    style={{ ...iconBtn, opacity: s.projectCount > 0 ? 0.35 : 1, cursor: s.projectCount > 0 ? "not-allowed" : "pointer" }}>
-                    <Trash2 size={14} />
-                  </button>
-                </Td>
-              </tr>
+                  </Td>
+                </tr>
+                {isHSV && openPermsFor === s.id && (
+                  <tr style={{ background: SURFACE2 }}>
+                    <td colSpan={6} style={{ padding: "14px 16px" }}>
+                      <div style={{ fontSize: 11.5, color: MUTED, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                        Permissions supplémentaires — {s.name}
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 20px" }}>
+                        {PERMISSIONS.map((perm) => (
+                          <label key={perm.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer" }}>
+                            <input type="checkbox" checked={(s.permissions || []).includes(perm.key)}
+                              onChange={() => togglePermission(s, perm.key)} />
+                            {perm.label}
+                          </label>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
             {svoUsers.length === 0 && (
-              <tr><td colSpan={5} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun SVO.</td></tr>
+              <tr><td colSpan={6} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun SVO.</td></tr>
             )}
           </tbody>
         </table>

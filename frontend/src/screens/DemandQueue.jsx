@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "../api";
 import { SURFACE, SURFACE2, BORDER, MUTED, ACCENT, GREEN, RED, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td } from "../components/ui";
 
-export default function DemandQueue({ pool, overAllocGrid, onOpenProject, onAllocated, refreshKey }) {
+export default function DemandQueue({ pool, overAllocGrid, canManageAllocations, onOpenProject, onAllocated, refreshKey }) {
   const [rows, setRows] = useState(null);
   const [openRow, setOpenRow] = useState(null);
   const [pick, setPick] = useState({ poolMemberId: "", pct: 100 });
@@ -59,7 +59,7 @@ export default function DemandQueue({ pool, overAllocGrid, onOpenProject, onAllo
           </thead>
           <tbody>
             {visibleRows.map((row) => (
-              <>
+              <Fragment key={row.key}>
                 <tr key={row.key} style={{ borderTop: `1px solid ${BORDER}` }}>
                   <Td><button onClick={() => onOpenProject(row.projectId)} style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 13, padding: 0 }}>{row.projectName}</button></Td>
                   <Td>{row.svo}</Td>
@@ -69,12 +69,14 @@ export default function DemandQueue({ pool, overAllocGrid, onOpenProject, onAllo
                   <Td>{row.allocated}</Td>
                   <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
                   <Td>
-                    <button onClick={() => { setOpenRow(openRow === row.key ? null : row.key); setPick({ poolMemberId: "", pct: 100 }); }} style={btnGhost}>
-                      {openRow === row.key ? "Fermer" : "Affecter"}
-                    </button>
+                    {canManageAllocations && (
+                      <button onClick={() => { setOpenRow(openRow === row.key ? null : row.key); setPick({ poolMemberId: "", pct: 100 }); }} style={btnGhost}>
+                        {openRow === row.key ? "Fermer" : "Affecter"}
+                      </button>
+                    )}
                   </Td>
                 </tr>
-                {openRow === row.key && (
+                {canManageAllocations && openRow === row.key && (
                   <tr key={row.key + "-form"} style={{ background: SURFACE2 }}>
                     <td colSpan={8} style={{ padding: "12px 14px" }}>
                       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -100,7 +102,7 @@ export default function DemandQueue({ pool, overAllocGrid, onOpenProject, onAllo
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
             {visibleRows.length === 0 && (
               <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: MUTED }}>

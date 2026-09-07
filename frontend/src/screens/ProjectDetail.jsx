@@ -6,7 +6,7 @@ import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADO
 import { Th, Td, Field, SectionTitle } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 
-export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, periods, onBack, onProjectsChanged }) {
+export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, user, svoUsers, pool, periods, onBack, onProjectsChanged }) {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -60,9 +60,10 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
     return <div style={{ color: RED, padding: 24 }}>{error || "Projet introuvable."}</div>;
   }
 
-  const isMySvo = !isHSV && user.id === project.svoUserId;
-  const canEditDemand = isMySvo && !project.demandSubmitted;
-  const canEditAlloc = isHSV;
+  const isOwner = user.id === project.svoUserId;
+  const canEditDemand = isOwner && !project.demandSubmitted;
+  const canEditAlloc = canManageAllocations;
+  const canEditNameStatus = canManageProjects || isOwner;
   const poolById = Object.fromEntries(pool.map((p) => [p.id, p]));
 
   const patchProject = async (field, value) => {
@@ -179,16 +180,16 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
   return (
     <div>
       <button onClick={onBack} style={{ ...btnGhost, marginBottom: 12 }}>
-        <ChevronLeft size={15} /> {isHSV ? "Tous les projets" : "Mes projets"}
+        <ChevronLeft size={15} /> {canViewAll ? "Tous les projets" : "Mes projets"}
       </button>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
         <Field label="Nom du projet" value={project.name} onChange={(v) => setProject((p) => ({ ...p, name: v }))}
-          onBlur={() => patchProject("name", project.name)} width={260} disabled={!(isHSV || isMySvo)} />
+          onBlur={() => patchProject("name", project.name)} width={260} disabled={!canEditNameStatus} />
         <div style={{ width: 200 }}>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>SVO</div>
-          <select value={project.svoUserId} onChange={(e) => patchProject("svoUserId", e.target.value)} disabled={!isHSV}
-            style={{ ...inputStyle, width: "100%", opacity: isHSV ? 1 : 0.7 }}>
+          <select value={project.svoUserId} onChange={(e) => patchProject("svoUserId", e.target.value)} disabled={!canManageProjects}
+            style={{ ...inputStyle, width: "100%", opacity: canManageProjects ? 1 : 0.7 }}>
             {!svoUsers.some((s) => s.id === project.svoUserId) && (
               <option value={project.svoUserId}>{project.svo?.name} (retiré des rôles)</option>
             )}
@@ -196,10 +197,10 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
           </select>
         </div>
         <Field label="Statut" value={project.status} onChange={(v) => setProject((p) => ({ ...p, status: v }))}
-          onBlur={() => patchProject("status", project.status)} width={200} disabled={!(isHSV || isMySvo)} />
+          onBlur={() => patchProject("status", project.status)} width={200} disabled={!canEditNameStatus} />
       </div>
 
-      {!isHSV && isMySvo && (
+      {isOwner && (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
           padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13,
@@ -214,7 +215,7 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
           </button>
         </div>
       )}
-      {isHSV && !project.demandSubmitted && (
+      {!isOwner && !project.demandSubmitted && (
         <div style={{ padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13, color: MUTED, border: `1px dashed color-mix(in srgb, ${MUTED} 40%, transparent)` }}>
           Le SVO ({project.svo?.name}) n'a pas encore soumis sa demande pour ce projet.
         </div>
@@ -250,7 +251,7 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
       />
 
       <SectionTitle style={{ marginTop: 28 }}>
-        Affectation des ressources (Head of Value Stream) {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}
+        Affectation des ressources {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}
       </SectionTitle>
       {canEditAlloc && pendingAllocPeriods.length > 0 && (
         <div style={{

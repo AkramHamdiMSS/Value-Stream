@@ -1,10 +1,10 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
-const { authenticate, requireRole } = require("../middleware/auth");
+const { authenticate, requirePermission } = require("../middleware/auth");
 const { effective } = require("../lib/periods");
 
 const router = express.Router();
-router.use(authenticate, requireRole("hsv"));
+router.use(authenticate, requirePermission("viewDemandQueue"));
 
 function round1(n) {
   return Math.round((n + Number.EPSILON) * 10) / 10;

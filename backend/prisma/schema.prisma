@@ -23,6 +23,10 @@ model User {
   name         String   @unique
   role         Role
   passwordHash String?  @map("password_hash")
+  // Extra capabilities grantable to an svo user by the HSV (super admin), on
+  // top of their base access — see src/lib/permissions.js for the fixed key
+  // list. Always empty/ignored for hsv users, who already have full access.
+  permissions  String[] @default([])
   createdAt    DateTime @default(now()) @map("created_at")
 
   projects        Project[]        @relation("ProjectSvo")

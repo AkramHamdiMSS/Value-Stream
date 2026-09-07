@@ -1,10 +1,10 @@
 const express = require("express");
 const { z } = require("zod");
 const prisma = require("../lib/prisma");
-const { authenticate, requireRole } = require("../middleware/auth");
+const { authenticate, requirePermission } = require("../middleware/auth");
 
 const router = express.Router();
-router.use(authenticate, requireRole("hsv"));
+router.use(authenticate, requirePermission("manageAllocations"));
 
 const patchSchema = z.object({
   period: z.string().trim().min(1).optional(),

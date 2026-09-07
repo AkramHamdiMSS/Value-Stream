@@ -33,6 +33,15 @@ export default function App() {
   const [theme, setTheme] = useState(getInitialTheme);
 
   const isHSV = user?.role === "hsv";
+  const has = (key) => isHSV || !!user?.permissions?.includes(key);
+  const can = {
+    viewAllProjects: has("viewAllProjects") || has("manageProjects") || has("manageAllocations"),
+    manageProjects: has("manageProjects"),
+    manageAllocations: has("manageAllocations"),
+    viewDemandQueue: has("viewDemandQueue"),
+    managePool: has("managePool"),
+    manageRoles: has("manageRoles"),
+  };
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
@@ -63,8 +72,11 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    if (!isHSV && ["pool", "demandes", "roles"].includes(tab)) { setTab("projects"); setSelectedId(null); }
-  }, [isHSV, tab]);
+    if (tab === "demandes" && !can.viewDemandQueue) { setTab("projects"); setSelectedId(null); }
+    if (tab === "pool" && !can.managePool) { setTab("projects"); setSelectedId(null); }
+    if (tab === "roles" && !can.manageRoles) { setTab("projects"); setSelectedId(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user]);
 
   const handleLogin = async (name, password) => {
     const { token, user: loggedInUser } = await api.post("/auth/login", { name, password });
@@ -93,14 +105,15 @@ export default function App() {
     return <LoginScreen onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />;
   }
 
-  const filteredProjects = projects
-    .filter((p) => isHSV || p.svoUserId === user.id)
-    .filter((p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) || (p.svo?.name || "").toLowerCase().includes(search.toLowerCase())
-    );
+  // The API already returns exactly the projects this user is allowed to see
+  // (own, or all when they hold viewAllProjects/manageProjects/manageAllocations) —
+  // only the search filter applies client-side.
+  const filteredProjects = projects.filter((p) =>
+    p.name.toLowerCase().includes(search.toLowerCase()) || (p.svo?.name || "").toLowerCase().includes(search.toLowerCase())
+  );
 
   const createProject = async () => {
-    const svoUserId = isHSV ? svoUsers[0]?.id : user.id;
+    const svoUserId = can.manageProjects ? svoUsers[0]?.id : user.id;
     if (!svoUserId) return;
     const project = await api.post("/projects", { name: "Nouveau projet", svoUserId, status: "Cadrage" });
     await refreshProjects();
@@ -137,14 +150,14 @@ export default function App() {
         </div>
 
         <NavItem icon={<LayoutDashboard size={16} />} label="Dashboard" active={tab === "dashboard"} onClick={() => { setTab("dashboard"); setSelectedId(null); }} />
-        <NavItem icon={<FolderKanban size={16} />} label={isHSV ? "Tous les projets" : "Mes projets"} active={tab === "projects"} onClick={() => setTab("projects")} />
-        {isHSV && (
+        <NavItem icon={<FolderKanban size={16} />} label={can.viewAllProjects ? "Tous les projets" : "Mes projets"} active={tab === "projects"} onClick={() => setTab("projects")} />
+        {can.viewDemandQueue && (
           <NavItem icon={<ClipboardList size={16} />} label="Demandes à affecter" active={tab === "demandes"} onClick={() => { setTab("demandes"); setSelectedId(null); }} />
         )}
-        {isHSV && (
+        {can.managePool && (
           <NavItem icon={<Users size={16} />} label="Pool" active={tab === "pool"} onClick={() => { setTab("pool"); setSelectedId(null); }} />
         )}
-        {isHSV && (
+        {can.manageRoles && (
           <NavItem icon={<ShieldCheck size={16} />} label="Rôles" active={tab === "roles"} onClick={() => { setTab("roles"); setSelectedId(null); }} />
         )}
       </div>
@@ -154,7 +167,7 @@ export default function App() {
 
         {tab === "projects" && !selectedId && (
           <ProjectsList projects={filteredProjects} search={search} setSearch={setSearch}
-            isHSV={isHSV} user={user}
+            canViewAll={can.viewAllProjects} canManage={can.manageProjects} user={user}
             onSelect={setSelectedId}
             onCreate={createProject}
             onDelete={deleteProject}
@@ -164,27 +177,28 @@ export default function App() {
         {tab === "projects" && selectedId && (
           <ProjectDetail
             projectId={selectedId}
-            isHSV={isHSV} user={user}
+            canViewAll={can.viewAllProjects} canManageProjects={can.manageProjects} canManageAllocations={can.manageAllocations}
+            user={user}
             svoUsers={svoUsers} pool={pool} periods={periods}
             onBack={() => setSelectedId(null)}
             onProjectsChanged={() => { refreshProjects(); refreshDashboard(); }}
           />
         )}
 
-        {tab === "demandes" && isHSV && (
-          <DemandQueue pool={pool} overAllocGrid={dashboard?.overAllocGrid || {}}
+        {tab === "demandes" && can.viewDemandQueue && (
+          <DemandQueue pool={pool} overAllocGrid={dashboard?.overAllocGrid || {}} canManageAllocations={can.manageAllocations}
             onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }}
             onAllocated={() => { refreshProjects(); refreshDashboard(); }}
           />
         )}
 
-        {tab === "pool" && isHSV && (
+        {tab === "pool" && can.managePool && (
           <PoolView pool={pool} overAllocGrid={dashboard?.overAllocGrid || {}} periods={periods.map((p) => p.id)}
             onChanged={() => { refreshPool(); refreshDashboard(); }} />
         )}
 
-        {tab === "roles" && isHSV && (
-          <RolesView svoUsers={svoUsers} pool={pool}
+        {tab === "roles" && can.manageRoles && (
+          <RolesView svoUsers={svoUsers} pool={pool} isHSV={isHSV}
             onChanged={() => { refreshSvoUsers(); refreshProjects(); }} />
         )}
       </div>

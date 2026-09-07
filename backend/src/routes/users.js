@@ -2,7 +2,8 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const { z } = require("zod");
 const prisma = require("../lib/prisma");
-const { authenticate, requireRole } = require("../middleware/auth");
+const { authenticate, requireRole, requirePermission } = require("../middleware/auth");
+const { PERMISSION_KEYS } = require("../lib/permissions");
 
 const router = express.Router();
 router.use(authenticate);
@@ -23,11 +24,31 @@ router.get("/", async (req, res) => {
       role: u.role,
       hasPassword: !!u.passwordHash,
       projectCount: u._count.projects,
+      permissions: u.permissions || [],
     }))
   );
 });
 
-router.use(requireRole("hsv"));
+// Granting/revoking permissions is reserved for the actual hsv role — a delegated
+// svo with "manageRoles" can still manage accounts below, just not the permission
+// matrix itself (that would let them hand out capabilities, including to themselves).
+router.patch("/:id/permissions", requireRole("hsv"), async (req, res) => {
+  const schema = z.object({ permissions: z.array(z.enum(PERMISSION_KEYS)) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Permissions invalides." });
+
+  const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!target) return res.status(404).json({ error: "Compte introuvable." });
+  if (target.role !== "svo") return res.status(400).json({ error: "Seuls les comptes SVO ont des permissions personnalisables." });
+
+  const user = await prisma.user.update({
+    where: { id: req.params.id },
+    data: { permissions: [...new Set(parsed.data.permissions)] },
+  });
+  res.json({ id: user.id, permissions: user.permissions });
+});
+
+router.use(requirePermission("manageRoles"));
 
 // Create an SVO account by duplicating a pool member's name (CDC 2 — "dupliquer son
 // name depuis pool_members vers users"), or a standalone SVO not tied to the pool.

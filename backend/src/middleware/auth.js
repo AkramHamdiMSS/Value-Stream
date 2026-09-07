@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const prisma = require("../lib/prisma");
+const { hasPermission } = require("../lib/permissions");
 
 async function authenticate(req, res, next) {
   const header = req.headers.authorization || "";
@@ -26,4 +27,13 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { authenticate, requireRole };
+function requirePermission(key) {
+  return (req, res, next) => {
+    if (!req.user || !hasPermission(req.user, key)) {
+      return res.status(403).json({ error: "Accès refusé." });
+    }
+    next();
+  };
+}
+
+module.exports = { authenticate, requireRole, requirePermission };

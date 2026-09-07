@@ -1,7 +1,7 @@
 const express = require("express");
 const { z } = require("zod");
 const prisma = require("../lib/prisma");
-const { authenticate, requireRole } = require("../middleware/auth");
+const { authenticate, requirePermission } = require("../middleware/auth");
 
 const router = express.Router();
 router.use(authenticate);
@@ -11,7 +11,7 @@ router.get("/", async (req, res) => {
   res.json(pool);
 });
 
-router.use(requireRole("hsv"));
+router.use(requirePermission("managePool"));
 
 const memberSchema = z.object({
   name: z.string().trim().min(1),

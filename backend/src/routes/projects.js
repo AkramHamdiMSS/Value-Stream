@@ -1,14 +1,19 @@
 const express = require("express");
 const { z } = require("zod");
 const prisma = require("../lib/prisma");
-const { authenticate, requireRole } = require("../middleware/auth");
+const { authenticate, requirePermission } = require("../middleware/auth");
+const { hasPermission } = require("../lib/permissions");
 const { effective } = require("../lib/periods");
 
 const router = express.Router();
 router.use(authenticate);
 
+function canViewAllProjects(user) {
+  return hasPermission(user, "viewAllProjects") || hasPermission(user, "manageProjects") || hasPermission(user, "manageAllocations");
+}
+
 function canRead(req, project) {
-  return req.user.role === "hsv" || project.svoUserId === req.user.id;
+  return canViewAllProjects(req.user) || project.svoUserId === req.user.id;
 }
 
 function computeTotals(project) {
@@ -47,7 +52,7 @@ function serializeProject(project) {
 }
 
 router.get("/", async (req, res) => {
-  const where = req.user.role === "hsv" ? {} : { svoUserId: req.user.id };
+  const where = canViewAllProjects(req.user) ? {} : { svoUserId: req.user.id };
   const projects = await prisma.project.findMany({
     where,
     orderBy: { createdAt: "asc" },
@@ -60,7 +65,7 @@ router.get("/", async (req, res) => {
   res.json(projects.map((p) => ({ ...serializeProject(p), totals: computeTotals(p) })));
 });
 
-router.post("/", requireRole("hsv"), async (req, res) => {
+router.post("/", requirePermission("manageProjects"), async (req, res) => {
   const schema = z.object({
     name: z.string().trim().min(1).default("Nouveau projet"),
     svoUserId: z.string().uuid(),
@@ -115,9 +120,9 @@ router.patch("/:id", async (req, res) => {
   const project = await loadProjectOr404(req, res);
   if (!project) return;
 
-  const isHSV = req.user.role === "hsv";
+  const canManageAny = hasPermission(req.user, "manageProjects");
   const isOwner = project.svoUserId === req.user.id;
-  if (!isHSV && !isOwner) return res.status(403).json({ error: "Accès refusé." });
+  if (!canManageAny && !isOwner) return res.status(403).json({ error: "Accès refusé." });
 
   const schema = z.object({
     name: z.string().trim().min(1).optional(),
@@ -129,7 +134,7 @@ router.patch("/:id", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
 
   const data = { ...parsed.data };
-  if (!isHSV) {
+  if (!canManageAny) {
     // SVO cannot reassign the project's owner.
     delete data.svoUserId;
   } else if (data.svoUserId) {
@@ -145,7 +150,7 @@ router.patch("/:id", async (req, res) => {
   res.json({ ...serializeProject(updated), totals: computeTotals(updated) });
 });
 
-router.delete("/:id", requireRole("hsv"), async (req, res) => {
+router.delete("/:id", requirePermission("manageProjects"), async (req, res) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });
   if (!project) return res.status(404).json({ error: "Projet introuvable." });
   await prisma.project.delete({ where: { id: req.params.id } });
@@ -203,7 +208,7 @@ const allocationLineSchema = z.object({
   pct: z.number().min(0).max(2),
 });
 
-router.post("/:id/allocation-lines", requireRole("hsv"), async (req, res) => {
+router.post("/:id/allocation-lines", requirePermission("manageAllocations"), async (req, res) => {
   const project = await loadProjectOr404(req, res);
   if (!project) return;
 

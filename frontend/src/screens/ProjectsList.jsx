@@ -3,17 +3,17 @@ import { round1 } from "../lib/util";
 import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, CARD_SHADOW, inputStyle, btnPrimary, iconBtn } from "../styles";
 import { Th, Td, Badge } from "../components/ui";
 
-export default function ProjectsList({ projects, search, setSearch, isHSV, user, onSelect, onCreate, onDelete }) {
+export default function ProjectsList({ projects, search, setSearch, canViewAll, canManage, user, onSelect, onCreate, onDelete }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{isHSV ? "Tous les projets" : "Mes projets"}</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{canViewAll ? "Tous les projets" : "Mes projets"}</h1>
           <p style={{ color: MUTED, fontSize: 13, margin: "4px 0 0" }}>
-            {isHSV ? "Vue Head of Value Stream — tous les SVO." : `Projets dont vous êtes le SVO (${user.name}).`}
+            {canViewAll ? "Vue d'ensemble — tous les SVO." : `Projets dont vous êtes le SVO (${user.name}).`}
           </p>
         </div>
-        {isHSV && (
+        {canManage && (
           <button onClick={onCreate} style={btnPrimary}>
             <Plus size={15} /> Nouveau projet
           </button>
@@ -46,7 +46,7 @@ export default function ProjectsList({ projects, search, setSearch, isHSV, user,
                     ? <Badge color={GREEN} text="Soumise" />
                     : <Badge color={MUTED} text="Brouillon" />}
                 </Td>
-                {isHSV && (
+                {canManage && (
                   <Td>
                     <button onClick={(e) => { e.stopPropagation(); onDelete(p.id); }} style={iconBtn} aria-label="Supprimer">
                       <Trash2 size={14} />
@@ -57,7 +57,7 @@ export default function ProjectsList({ projects, search, setSearch, isHSV, user,
             ))}
             {projects.length === 0 && (
               <tr><td colSpan={7} style={{ padding: 24, textAlign: "center", color: MUTED }}>
-                {isHSV ? "Aucun projet." : "Aucun projet ne vous est encore assigné par le Head of Value Stream."}
+                {canViewAll ? "Aucun projet." : "Aucun projet ne vous est encore assigné par le Head of Value Stream."}
               </td></tr>
             )}
           </tbody>

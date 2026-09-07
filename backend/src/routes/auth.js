@@ -13,7 +13,7 @@ function issueToken(user) {
   });
 }
 function toPublicUser(user) {
-  return { id: user.id, name: user.name, role: user.role };
+  return { id: user.id, name: user.name, role: user.role, permissions: user.permissions || [] };
 }
 
 // Public: list of accounts for the login dropdown (no password data).
