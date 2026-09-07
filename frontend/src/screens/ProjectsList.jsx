@@ -1,6 +1,6 @@
 import { Plus, Search, Trash2 } from "lucide-react";
 import { round1 } from "../lib/util";
-import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, inputStyle, btnPrimary, iconBtn } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, CARD_SHADOW, inputStyle, btnPrimary, iconBtn } from "../styles";
 import { Th, Td, Badge } from "../components/ui";
 
 export default function ProjectsList({ projects, search, setSearch, isHSV, user, onSelect, onCreate, onDelete }) {
@@ -26,7 +26,7 @@ export default function ProjectsList({ projects, search, setSearch, isHSV, user,
           style={{ ...inputStyle, paddingLeft: 32, width: "100%" }} />
       </div>
 
-      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", boxShadow: CARD_SHADOW }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>

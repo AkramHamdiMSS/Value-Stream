@@ -90,8 +90,8 @@ export default function Dashboard({ data }) {
                     return (
                       <td key={p} style={{
                         textAlign: "center", padding: "3px 6px", borderBottom: `1px solid ${BORDER}`,
-                        background: over ? "rgba(239,68,68,0.25)" : v > 0 ? "rgba(16,185,129,0.15)" : "transparent",
-                        color: over ? "#fca5a5" : v > 0 ? "#6ee7b7" : MUTED, fontWeight: over ? 700 : 400,
+                        background: over ? `color-mix(in srgb, ${RED} 22%, transparent)` : v > 0 ? `color-mix(in srgb, ${GREEN} 15%, transparent)` : "transparent",
+                        color: over ? RED : v > 0 ? GREEN : MUTED, fontWeight: over ? 700 : 400,
                       }}>
                         {v > 0 ? `${Math.round(v * 100)}%` : "—"}
                       </td>

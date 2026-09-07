@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { SURFACE, SURFACE2, BORDER, TEXT, MUTED, ACCENT, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { SURFACE, SURFACE2, BORDER, TEXT, MUTED, ACCENT, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td } from "./ui";
 
 // Locally-buffered editable table: keystrokes update local state instantly, and

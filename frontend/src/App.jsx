@@ -3,7 +3,7 @@ import {
   LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2,
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
-import { NAVY, TEXT, MUTED, BORDER, FONT_BODY, btnGhost } from "./styles";
+import { NAVY, TEXT, MUTED, FONT_BODY, SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_MUTED, btnGhostSidebar } from "./styles";
 import { NavItem, BrandHeader } from "./components/ui";
 import LoginScreen from "./screens/LoginScreen";
 import ChangePasswordModal from "./screens/ChangePasswordModal";
@@ -109,19 +109,19 @@ export default function App() {
 
   return (
     <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex" }}>
-      <div style={{ width: 210, borderRight: `1px solid ${BORDER}`, padding: "20px 12px", flexShrink: 0 }}>
+      <div style={{ width: 220, background: SIDEBAR_BG, borderRight: `1px solid ${SIDEBAR_BORDER}`, padding: "20px 12px", flexShrink: 0 }}>
         <div style={{ marginBottom: 16 }}>
           <BrandHeader />
         </div>
 
         <div style={{ padding: "0 8px 16px" }}>
-          <div style={{ fontSize: 10.5, color: MUTED, fontWeight: 600, marginBottom: 5, textTransform: "uppercase" }}>Connecté en tant que</div>
-          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 8 }}>{user.name}</div>
+          <div style={{ fontSize: 10.5, color: SIDEBAR_MUTED, fontWeight: 600, marginBottom: 5, textTransform: "uppercase" }}>Connecté en tant que</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 8, color: "#ffffff" }}>{user.name}</div>
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => setShowAccount(true)} style={{ ...btnGhost, fontSize: 11.5, padding: "5px 8px", flex: 1 }}>
+            <button onClick={() => setShowAccount(true)} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px", flex: 1 }}>
               <KeyRound size={13} /> Mot de passe
             </button>
-            <button onClick={handleLogout} style={{ ...btnGhost, fontSize: 11.5, padding: "5px 8px" }} aria-label="Se déconnecter">
+            <button onClick={handleLogout} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px" }} aria-label="Se déconnecter">
               <LogOut size={13} />
             </button>
           </div>

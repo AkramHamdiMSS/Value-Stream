@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, KeyRound, Trash2 } from "lucide-react";
 import { api } from "../api";
-import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, AMBER, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, AMBER, RED, CARD_SHADOW, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
 import { Th, Td, Badge } from "../components/ui";
 
 export default function RolesView({ svoUsers, pool, onChanged }) {
@@ -64,7 +64,7 @@ export default function RolesView({ svoUsers, pool, onChanged }) {
         le changer lui-même depuis sa propre session ("Mot de passe" dans la sidebar).
       </p>
 
-      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
+      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", marginBottom: 16, boxShadow: CARD_SHADOW }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
@@ -126,7 +126,7 @@ export default function RolesView({ svoUsers, pool, onChanged }) {
           Tout le monde dans le pool est déjà SVO. Ajoutez d'abord une personne dans l'onglet Pool.
         </div>
       )}
-      {error && <div style={{ color: "#fca5a5", fontSize: 12.5, marginTop: 6 }}>{error}</div>}
+      {error && <div style={{ color: RED, fontSize: 12.5, marginTop: 6 }}>{error}</div>}
     </div>
   );
 }

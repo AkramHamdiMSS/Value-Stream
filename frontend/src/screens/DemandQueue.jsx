@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "../api";
-import { SURFACE, SURFACE2, BORDER, MUTED, ACCENT, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, ACCENT, GREEN, RED, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td } from "../components/ui";
 
 export default function DemandQueue({ pool, overAllocGrid, onOpenProject, onAllocated, refreshKey }) {
@@ -48,9 +48,9 @@ export default function DemandQueue({ pool, overAllocGrid, onOpenProject, onAllo
         Masquer les besoins déjà entièrement couverts
       </label>
 
-      {error && <div style={{ color: "#fca5a5", fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+      {error && <div style={{ color: RED, fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
 
-      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", boxShadow: CARD_SHADOW }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
@@ -67,7 +67,7 @@ export default function DemandQueue({ pool, overAllocGrid, onOpenProject, onAllo
                   <Td>{row.profile}</Td>
                   <Td>{row.demanded}</Td>
                   <Td>{row.allocated}</Td>
-                  <Td><span style={{ color: row.ecart < -0.001 ? "#fca5a5" : "#6ee7b7", fontWeight: 600 }}>{row.ecart}</span></Td>
+                  <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
                   <Td>
                     <button onClick={() => { setOpenRow(openRow === row.key ? null : row.key); setPick({ poolMemberId: "", pct: 100 }); }} style={btnGhost}>
                       {openRow === row.key ? "Fermer" : "Affecter"}

@@ -1,22 +1,31 @@
-import { MUTED, SURFACE, BORDER, TEXT, SURFACE2, ACCENT, FONT_DISPLAY, inputStyle } from "../styles";
+import {
+  MUTED, SURFACE, BORDER, TEXT, ACCENT, FONT_DISPLAY, inputStyle,
+  SIDEBAR_TEXT, SIDEBAR_MUTED, SIDEBAR_ACTIVE, CARD_SHADOW,
+} from "../styles";
 
-// Small geometric mark echoing the MS Solutions brand motif (nested diamonds).
+// MS Solutions' actual header mark (mssolutions-group.com), redrawn from its
+// site SVG so the color follows our theme's accent instead of a fixed hex.
 export function BrandMark({ size = 22 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 1 L23 12 L12 23 L1 12 Z" stroke={ACCENT} strokeWidth="1.4" />
-      <path d="M12 7 L17 12 L12 17 L7 12 Z" fill={ACCENT} />
+    <svg width={size} height={size} viewBox="0 0 41 40" fill="none" role="img" aria-label="MS Solutions">
+      <path d="M40.013 5.77826L39.4414 17.72H37.3164V11.948L28.065 2.69652L22.293 2.69652V0.571612L34.2347 0L40.013 5.77826Z" fill={ACCENT} />
+      <path d="M5.77826 0L17.72 0.571613V2.69652H11.948L2.69652 11.948V17.72H0.571613L0 5.77826L5.77826 0Z" fill={ACCENT} />
+      <path d="M0 34.2347L0.571612 22.293H2.69652L2.69652 28.065L11.948 37.3165H17.72L17.72 39.4414L5.77826 40.013L0 34.2347Z" fill={ACCENT} />
+      <path d="M34.2347 40.013L22.293 39.4414V37.3165H28.065L37.3165 28.065V22.293H39.4414L40.013 34.2347L34.2347 40.013Z" fill={ACCENT} />
+      <path d="M21.2399 13.7188C22.6767 15.6345 24.3786 17.3362 26.2943 18.7729V21.2401C24.3786 22.6769 22.6767 24.3786 21.2399 26.2943H18.7729C17.3362 24.3786 15.6344 22.6769 13.7188 21.2401V18.7729C15.6344 17.3362 17.3362 15.6344 18.7729 13.7188H21.2399Z" fill={ACCENT} />
     </svg>
   );
 }
 
+// Sidebar chrome is always dark regardless of the (light) content palette, so
+// these two use the dedicated SIDEBAR_* tokens rather than TEXT/MUTED.
 export function BrandHeader() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 8px 4px" }}>
       <BrandMark />
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, fontFamily: FONT_DISPLAY, color: TEXT, letterSpacing: "0.01em" }}>MS Solutions</div>
-        <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em" }}>Pilotage ressources</div>
+        <div style={{ fontSize: 12, fontWeight: 600, fontFamily: FONT_DISPLAY, color: SIDEBAR_TEXT, letterSpacing: "0.01em" }}>MS Solutions</div>
+        <div style={{ fontSize: 10, color: SIDEBAR_MUTED, textTransform: "uppercase", letterSpacing: "0.06em" }}>Pilotage ressources</div>
       </div>
     </div>
   );
@@ -26,8 +35,8 @@ export function NavItem({ icon, label, active, onClick }) {
   return (
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 10px",
-      background: active ? SURFACE2 : "transparent", border: "none", borderRadius: 8,
-      color: active ? TEXT : MUTED, fontSize: 13.5, fontWeight: active ? 600 : 500,
+      background: active ? SIDEBAR_ACTIVE : "transparent", border: "none", borderRadius: 8,
+      color: active ? SIDEBAR_TEXT : SIDEBAR_MUTED, fontSize: 13.5, fontWeight: active ? 600 : 500,
       cursor: "pointer", marginBottom: 2, textAlign: "left",
     }}>
       {icon} {label}
@@ -37,16 +46,20 @@ export function NavItem({ icon, label, active, onClick }) {
 
 export function Kpi({ label, value, accent }) {
   return (
-    <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "14px 16px", flex: 1, minWidth: 140 }}>
-      <div style={{ fontSize: 11.5, color: MUTED, fontWeight: 600, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: accent || TEXT }}>{value}</div>
+    <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "16px 18px", flex: 1, minWidth: 140, boxShadow: CARD_SHADOW }}>
+      <div style={{ fontSize: 11.5, color: MUTED, fontWeight: 600, marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, color: accent || TEXT }}>{value}</div>
     </div>
   );
 }
 
 export function Badge({ color, text }) {
   return (
-    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, color, background: `${color}22`, border: `1px solid ${color}55` }}>
+    <span style={{
+      fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20, color,
+      background: `color-mix(in srgb, ${color} 14%, transparent)`,
+      border: `1px solid color-mix(in srgb, ${color} 40%, transparent)`,
+    }}>
       {text}
     </span>
   );

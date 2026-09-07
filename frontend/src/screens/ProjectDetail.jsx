@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { api } from "../api";
 import { round1, effective } from "../lib/util";
-import { MUTED, ACCENT, GREEN, AMBER, SURFACE, SURFACE2, BORDER, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td, Field, SectionTitle } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 
@@ -57,7 +57,7 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
     return <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, padding: 40 }}><Loader2 className="animate-spin" size={18} /> Chargement…</div>;
   }
   if (error || !project) {
-    return <div style={{ color: "#fca5a5", padding: 24 }}>{error || "Projet introuvable."}</div>;
+    return <div style={{ color: RED, padding: 24 }}>{error || "Projet introuvable."}</div>;
   }
 
   const isMySvo = !isHSV && user.id === project.svoUserId;
@@ -203,10 +203,10 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
           padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13,
-          background: project.demandSubmitted ? "rgba(16,185,129,0.12)" : "rgba(59,130,246,0.12)",
+          background: project.demandSubmitted ? `color-mix(in srgb, ${GREEN} 12%, transparent)` : `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
           border: `1px solid ${project.demandSubmitted ? GREEN : ACCENT}`,
         }}>
-          <span style={{ fontWeight: 600, color: project.demandSubmitted ? "#6ee7b7" : "#93c5fd" }}>
+          <span style={{ fontWeight: 600, color: project.demandSubmitted ? GREEN : ACCENT }}>
             {project.demandSubmitted ? "Demande soumise au Head of Value Stream ✓" : "Demande en brouillon — pas encore visible du HSV"}
           </span>
           <button onClick={() => patchProject("demandSubmitted", !project.demandSubmitted)} style={project.demandSubmitted ? btnGhost : btnPrimary}>
@@ -215,15 +215,15 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
         </div>
       )}
       {isHSV && !project.demandSubmitted && (
-        <div style={{ padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13, color: MUTED, border: `1px dashed ${MUTED}55` }}>
+        <div style={{ padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13, color: MUTED, border: `1px dashed color-mix(in srgb, ${MUTED} 40%, transparent)` }}>
           Le SVO ({project.svo?.name}) n'a pas encore soumis sa demande pour ce projet.
         </div>
       )}
 
       <div style={{
         padding: "10px 14px", borderRadius: 10, marginBottom: 20, fontSize: 13, fontWeight: 600,
-        background: totalReste > 0.001 ? "rgba(245,158,11,0.15)" : "rgba(16,185,129,0.15)",
-        color: totalReste > 0.001 ? "#fbbf24" : "#6ee7b7",
+        background: totalReste > 0.001 ? `color-mix(in srgb, ${AMBER} 15%, transparent)` : `color-mix(in srgb, ${GREEN} 15%, transparent)`,
+        color: totalReste > 0.001 ? AMBER : GREEN,
         border: `1px solid ${totalReste > 0.001 ? AMBER : GREEN}`,
       }}>
         {totalReste > 0.001
@@ -256,13 +256,13 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
         <div style={{
           display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8,
           padding: "10px 12px", marginBottom: 10, borderRadius: 10,
-          background: "rgba(245,158,11,0.1)", border: `1px solid ${AMBER}55`,
+          background: `color-mix(in srgb, ${AMBER} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${AMBER} 40%, transparent)`,
         }}>
-          <span style={{ fontSize: 12, color: "#fbbf24", fontWeight: 600 }}>Semaines demandées par le SVO, pas encore affectées :</span>
+          <span style={{ fontSize: 12, color: AMBER, fontWeight: 600 }}>Semaines demandées par le SVO, pas encore affectées :</span>
           {pendingAllocPeriods.map((p) => (
             <button key={p.id} onClick={() => addAllocationLine(p.id)} style={{
-              background: "rgba(245,158,11,0.15)", border: `1px solid ${AMBER}88`, borderRadius: 20,
-              color: "#fbbf24", fontSize: 11.5, fontWeight: 600, padding: "4px 10px", cursor: "pointer",
+              background: `color-mix(in srgb, ${AMBER} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${AMBER} 55%, transparent)`, borderRadius: 20,
+              color: AMBER, fontSize: 11.5, fontWeight: 600, padding: "4px 10px", cursor: "pointer",
             }}>
               {p.label} <span style={{ fontWeight: 400, opacity: 0.8 }}>({p.missing.join(", ")})</span>
             </button>
@@ -287,7 +287,7 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
       {relevantPeriods.length > 0 && (
         <>
           <SectionTitle style={{ marginTop: 28 }}>Synthèse : demandé vs alloué</SectionTitle>
-          <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
+          <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", marginBottom: 12, boxShadow: CARD_SHADOW }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
               <thead>
                 <tr style={{ background: SURFACE2 }}>
@@ -307,7 +307,7 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
                         <Fragment key={sq}>
                           <Td>{round1(row[sq].dem)}</Td>
                           <Td>{round1(row[sq].alloc)}</Td>
-                          <Td><span style={{ color: ecart < 0 ? "#fca5a5" : "#6ee7b7", fontWeight: 600 }}>{ecart}</span></Td>
+                          <Td><span style={{ color: ecart < 0 ? RED : GREEN, fontWeight: 600 }}>{ecart}</span></Td>
                         </Fragment>
                       );
                     })}

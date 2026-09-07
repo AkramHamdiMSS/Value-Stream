@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "../api";
-import { SURFACE, SURFACE2, BORDER, MUTED, inputStyle, btnPrimary, iconBtn } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, RED, CARD_SHADOW, inputStyle, btnPrimary, iconBtn } from "../styles";
 import { Th, Td } from "../components/ui";
 
 export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
@@ -53,9 +53,9 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
         <button onClick={addPerson} style={btnPrimary}><Plus size={15} /> Ajouter une personne</button>
       </div>
 
-      {error && <div style={{ color: "#fca5a5", fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+      {error && <div style={{ color: RED, fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
 
-      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", boxShadow: CARD_SHADOW }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
@@ -79,7 +79,7 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
                   <Td><input value={draftValue(p, "roleTitle")} onChange={(e) => setDraft(p.id, "roleTitle", e.target.value)}
                     onBlur={(e) => patchPerson(p.id, "roleTitle", e.target.value)} style={inputStyle} /></Td>
                   <Td>
-                    <span style={{ color: peak > 1.001 ? "#fca5a5" : peak > 0 ? "#6ee7b7" : MUTED, fontWeight: 600 }}>
+                    <span style={{ color: peak > 1.001 ? RED : peak > 0 ? GREEN : MUTED, fontWeight: 600 }}>
                       {Math.round(peak * 100)}%
                     </span>
                   </Td>

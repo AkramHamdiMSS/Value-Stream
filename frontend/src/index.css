@@ -4,3 +4,25 @@
 body {
   margin: 0;
 }
+
+/* Light SaaS-dashboard palette (per the Inntegrate-style reference): a light
+   lavender-gray canvas, white cards, dark sidebar, purple accent. */
+:root {
+  --bg: #f4f5fa;
+  --surface: #ffffff;
+  --surface-2: #f1f1fa;
+  --border: #e6e7f2;
+  --accent: #787aea;
+  --accent-2: #5b5fd6;
+  --text: #14173a;
+  --muted: #6b6f93;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #f43f5e;
+
+  --sidebar-bg: #0c144e;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-text: #ffffff;
+  --sidebar-muted: rgba(255, 255, 255, 0.55);
+  --sidebar-active: rgba(135, 136, 255, 0.22);
+}

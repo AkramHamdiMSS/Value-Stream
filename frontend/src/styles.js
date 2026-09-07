@@ -1,34 +1,49 @@
-// MS Solutions brand palette (mssolutions-group.com): deep indigo/navy ground,
-// a single purple accent, Funnel Display/Sans typefaces.
-export const NAVY = "#0c144e";
-export const SURFACE = "#141c5e";
-export const SURFACE2 = "#1c2570";
-export const BORDER = "rgba(135, 136, 255, 0.24)";
-export const ACCENT = "#8788ff";
-export const ACCENT2 = "#a5a6ff";
-export const GREEN = "#10b981";
-export const AMBER = "#f59e0b";
-export const RED = "#ef4444";
-export const TEXT = "#f7f7fb";
-export const MUTED = "#9496c4";
+// Light SaaS-dashboard look (Inntegrate-style reference): light canvas, white
+// cards with soft shadows, dark sidebar, purple accent, pill buttons.
+export const NAVY = "var(--bg)";
+export const SURFACE = "var(--surface)";
+export const SURFACE2 = "var(--surface-2)";
+export const BORDER = "var(--border)";
+export const ACCENT = "var(--accent)";
+export const ACCENT2 = "var(--accent-2)";
+export const GREEN = "var(--success)";
+export const AMBER = "var(--warning)";
+export const RED = "var(--danger)";
+export const TEXT = "var(--text)";
+export const MUTED = "var(--muted)";
+
+export const SIDEBAR_BG = "var(--sidebar-bg)";
+export const SIDEBAR_BORDER = "var(--sidebar-border)";
+export const SIDEBAR_TEXT = "var(--sidebar-text)";
+export const SIDEBAR_MUTED = "var(--sidebar-muted)";
+export const SIDEBAR_ACTIVE = "var(--sidebar-active)";
+
+export const CARD_SHADOW = "0 1px 2px rgba(20, 23, 58, 0.04), 0 4px 16px rgba(20, 23, 58, 0.06)";
 
 export const FONT_BODY = "'Funnel Sans', system-ui, -apple-system, sans-serif";
 export const FONT_DISPLAY = "'Funnel Display', 'Funnel Sans', system-ui, sans-serif";
 
 export const inputStyle = {
-  background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 6, color: TEXT,
-  fontSize: 12.5, padding: "5px 8px", outline: "none", fontFamily: FONT_BODY,
+  background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 8, color: TEXT,
+  fontSize: 12.5, padding: "6px 10px", outline: "none", fontFamily: FONT_BODY,
 };
 export const btnPrimary = {
-  display: "flex", alignItems: "center", gap: 6, background: ACCENT, color: "#0c144e", border: "none",
-  borderRadius: 6, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
-  fontFamily: FONT_BODY, textTransform: "uppercase", letterSpacing: "0.02em",
+  display: "flex", alignItems: "center", gap: 6, background: ACCENT, color: "#ffffff", border: "none",
+  borderRadius: 999, padding: "9px 16px", fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+  fontFamily: FONT_BODY, boxShadow: "0 2px 8px rgba(120, 122, 234, 0.35)",
 };
 export const btnGhost = {
-  display: "flex", alignItems: "center", gap: 6, background: "transparent", color: MUTED,
-  border: `1px solid ${BORDER}`, borderRadius: 6, padding: "7px 12px", fontSize: 12.5, fontWeight: 500, cursor: "pointer",
-  fontFamily: FONT_BODY, textTransform: "uppercase", letterSpacing: "0.02em",
+  display: "flex", alignItems: "center", gap: 6, background: SURFACE, color: MUTED,
+  border: `1px solid ${BORDER}`, borderRadius: 999, padding: "8px 14px", fontSize: 12.5, fontWeight: 500, cursor: "pointer",
+  fontFamily: FONT_BODY,
 };
 export const iconBtn = {
   background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex",
+};
+
+// For controls rendered on the dark sidebar (always dark, unlike the light content area).
+export const btnGhostSidebar = {
+  display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.06)", color: SIDEBAR_MUTED,
+  border: `1px solid ${SIDEBAR_BORDER}`, borderRadius: 999, padding: "8px 14px", fontSize: 12.5, fontWeight: 500, cursor: "pointer",
+  fontFamily: FONT_BODY,
 };

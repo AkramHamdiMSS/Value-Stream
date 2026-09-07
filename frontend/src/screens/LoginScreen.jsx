@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import { NAVY, SURFACE, BORDER, TEXT, MUTED, FONT_BODY, FONT_DISPLAY, inputStyle, btnPrimary } from "../styles";
+import { NAVY, SURFACE, BORDER, TEXT, MUTED, RED, FONT_BODY, FONT_DISPLAY, inputStyle, btnPrimary } from "../styles";
 import { BrandMark } from "../components/ui";
 
 export default function LoginScreen({ onLogin }) {
@@ -64,7 +64,7 @@ export default function LoginScreen({ onLogin }) {
             style={{ ...inputStyle, width: "100%" }} />
         </div>
 
-        {error && <div style={{ color: "#fca5a5", fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+        {error && <div style={{ color: RED, fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
 
         <button onClick={submit} disabled={busy} style={{ ...btnPrimary, width: "100%", justifyContent: "center", opacity: busy ? 0.6 : 1 }}>
           {busy ? "Connexion…" : "Se connecter"}
