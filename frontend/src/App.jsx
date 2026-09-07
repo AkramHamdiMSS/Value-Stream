@@ -3,7 +3,7 @@ import {
   LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2, Sun, Moon,
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
-import { NAVY, TEXT, MUTED, FONT_BODY, SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_MUTED, btnGhostSidebar } from "./styles";
+import { NAVY, TEXT, MUTED, FONT_BODY, SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_MUTED, btnGhostSidebar, themeToggleBtnSidebar } from "./styles";
 import { getInitialTheme, applyTheme } from "./lib/theme";
 import { NavItem, BrandHeader } from "./components/ui";
 import LoginScreen from "./screens/LoginScreen";
@@ -113,8 +113,9 @@ export default function App() {
   };
 
   return (
-    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex" }}>
-      <div style={{ width: 220, background: SIDEBAR_BG, borderRight: `1px solid ${SIDEBAR_BORDER}`, padding: "20px 12px", flexShrink: 0 }}>
+    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex", position: "relative" }}>
+      <div className="ambient-bg" />
+      <div style={{ width: 220, background: SIDEBAR_BG, borderRight: `1px solid ${SIDEBAR_BORDER}`, padding: "20px 12px", flexShrink: 0, position: "relative", zIndex: 1 }}>
         <div style={{ marginBottom: 16 }}>
           <BrandHeader />
         </div>
@@ -126,8 +127,8 @@ export default function App() {
             <button onClick={() => setShowAccount(true)} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px", flex: 1 }}>
               <KeyRound size={13} /> Mot de passe
             </button>
-            <button onClick={toggleTheme} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px" }} aria-label="Changer de thème">
-              {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
+            <button onClick={toggleTheme} style={themeToggleBtnSidebar} aria-label="Changer de thème">
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
             </button>
             <button onClick={handleLogout} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px" }} aria-label="Se déconnecter">
               <LogOut size={13} />
@@ -148,7 +149,7 @@ export default function App() {
         )}
       </div>
 
-      <div style={{ flex: 1, padding: 24, overflowX: "auto" }}>
+      <div style={{ flex: 1, padding: 24, overflowX: "auto", position: "relative", zIndex: 1 }}>
         {tab === "dashboard" && <Dashboard data={dashboard} />}
 
         {tab === "projects" && !selectedId && (

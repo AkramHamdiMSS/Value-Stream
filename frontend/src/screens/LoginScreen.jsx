@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Sun, Moon } from "lucide-react";
 import { api } from "../api";
-import { NAVY, SURFACE, BORDER, TEXT, MUTED, RED, FONT_BODY, FONT_DISPLAY, inputStyle, btnPrimary, iconBtn } from "../styles";
+import { NAVY, SURFACE, BORDER, TEXT, MUTED, RED, FONT_BODY, FONT_DISPLAY, CARD_SHADOW, inputStyle, btnPrimary, themeToggleBtn } from "../styles";
 import { BrandMark } from "../components/ui";
 
 export default function LoginScreen({ onLogin, theme, onToggleTheme }) {
@@ -39,12 +39,13 @@ export default function LoginScreen({ onLogin, theme, onToggleTheme }) {
 
   return (
     <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+      <div className="ambient-bg" />
       {onToggleTheme && (
-        <button onClick={onToggleTheme} style={{ ...iconBtn, position: "absolute", top: 20, right: 20, border: `1px solid ${BORDER}`, borderRadius: 999, padding: 8 }} aria-label="Changer de thème">
+        <button onClick={onToggleTheme} style={{ ...themeToggleBtn, position: "absolute", top: 20, right: 20, zIndex: 1 }} aria-label="Changer de thème">
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
         </button>
       )}
-      <div style={{ width: 340, background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 28 }}>
+      <div style={{ width: 340, background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 28, position: "relative", zIndex: 1, boxShadow: CARD_SHADOW }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <BrandMark size={20} />
           <div style={{ fontSize: 17, fontWeight: 600, fontFamily: FONT_DISPLAY }}>Pilotage ressources</div>

@@ -5,48 +5,77 @@ body {
   margin: 0;
 }
 
-/* Light SaaS-dashboard palette (per the Inntegrate-style reference): a light
-   lavender-gray canvas, white cards, dark sidebar, purple accent. */
+/* Palette lifted from the Banxy/MS Solutions report theme: deep navy/purple,
+   teal secondary accent, glass-like translucent surfaces over an ambient
+   gradient background. Toggled via [data-theme] on <html> — see lib/theme.js. */
 :root {
-  --bg: #f4f5fa;
-  --surface: #ffffff;
-  --surface-2: #f1f1fa;
-  --border: #e6e7f2;
-  --accent: #787aea;
-  --accent-2: #5b5fd6;
-  --text: #14173a;
-  --muted: #6b6f93;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --danger: #f43f5e;
+  --bg: #f3f4fb;
+  --bg-2: #ffffff;
+  --bg-3: #e8eaf6;
+  --surface: rgba(255, 255, 255, 0.85);
+  --surface-2: rgba(245, 246, 252, 0.9);
+  --text: #0c144e;
+  --text-2: #2a3270;
+  --muted: #5a6290;
+  --border: rgba(12, 20, 78, 0.15);
+  --accent: #5251d9;
+  --accent-2: #118aa8;
+  --success: #00c48c;
+  --warning: #ffc94d;
+  --danger: #ff4a6b;
+  --card-shadow: 0 4px 20px rgba(12, 20, 78, 0.1);
+  --glow: rgba(82, 81, 217, 0.25);
 
   --sidebar-bg: #0c144e;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-text: #ffffff;
   --sidebar-muted: rgba(255, 255, 255, 0.55);
   --sidebar-active: rgba(135, 136, 255, 0.22);
-  --card-shadow: 0 1px 2px rgba(20, 23, 58, 0.04), 0 4px 16px rgba(20, 23, 58, 0.06);
 }
 
-/* Dark mode — toggled via [data-theme="dark"] on <html>. The sidebar goes a
-   shade darker than the content canvas so the two areas stay legible apart. */
 :root[data-theme="dark"] {
-  --bg: #0c144e;
-  --surface: #141c5e;
-  --surface-2: #1c2570;
-  --border: rgba(135, 136, 255, 0.24);
+  --bg: #04061a;
+  --bg-2: #06091c;
+  --bg-3: #0a1140;
+  --surface: rgba(18, 27, 87, 0.55);
+  --surface-2: rgba(15, 23, 71, 0.35);
+  --text: #ffffff;
+  --muted: #9aa1b8;
+  --border: rgba(135, 136, 255, 0.22);
   --accent: #8788ff;
-  --accent-2: #a5a6ff;
-  --text: #f7f7fb;
-  --muted: #9496c4;
-  --success: #6ee7b7;
-  --warning: #fbbf24;
-  --danger: #fca5a5;
+  --accent-2: #5ee7f5;
+  --success: #00c48c;
+  --warning: #ffc94d;
+  --danger: #ff4a6b;
+  --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  --glow: rgba(135, 136, 255, 0.35);
 
-  --sidebar-bg: #080b2e;
+  --sidebar-bg: #020310;
   --sidebar-border: rgba(255, 255, 255, 0.06);
   --sidebar-text: #ffffff;
   --sidebar-muted: rgba(255, 255, 255, 0.5);
   --sidebar-active: rgba(135, 136, 255, 0.25);
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* Fixed ambient gradient + faint grid, behind everything, echoing the
+   report's .bg-ambient/.grid-lines treatment. */
+.ambient-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 15% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 55%),
+    radial-gradient(ellipse at 85% 20%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 50%);
+}
+.ambient-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 60px 60px;
+  opacity: 0.35;
+  mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.8), transparent 70%);
 }
