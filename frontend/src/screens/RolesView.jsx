@@ -1,0 +1,132 @@
+import { useState } from "react";
+import { Plus, KeyRound, Trash2 } from "lucide-react";
+import { api } from "../api";
+import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, AMBER, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
+import { Th, Td, Badge } from "../components/ui";
+
+export default function RolesView({ svoUsers, pool, onChanged }) {
+  const [newPersonId, setNewPersonId] = useState("");
+  const [error, setError] = useState("");
+  const [pwDrafts, setPwDrafts] = useState({});
+  const [names, setNames] = useState({});
+
+  const availablePool = pool.filter((p) => !svoUsers.some((s) => s.name.toLowerCase() === p.name.toLowerCase()));
+
+  const addSvo = async () => {
+    if (!newPersonId) { setError("Choisissez une personne dans la liste avant d'ajouter."); return; }
+    try {
+      await api.post("/users", { poolMemberId: newPersonId, role: "svo" });
+      setNewPersonId("");
+      setError("");
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const renameSvo = async (id) => {
+    const name = (names[id] ?? "").trim();
+    if (!name) return;
+    try {
+      await api.patch(`/users/${id}`, { name });
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const removeSvo = async (id) => {
+    try {
+      await api.delete(`/users/${id}`);
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const setPassword = async (id) => {
+    const draft = (pwDrafts[id] || "").trim();
+    if (draft.length < 4) return;
+    try {
+      await api.post(`/users/${id}/set-password`, { password: draft });
+      setPwDrafts({ ...pwDrafts, [id]: "" });
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  return (
+    <div>
+      <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px" }}>Gestion des rôles</h1>
+      <p style={{ color: MUTED, fontSize: 13, margin: "0 0 20px", maxWidth: 620 }}>
+        Réservé au Head of Value Stream. Créez ici le mot de passe initial de chaque SVO — chacun pourra ensuite
+        le changer lui-même depuis sa propre session ("Mot de passe" dans la sidebar).
+      </p>
+
+      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: SURFACE2 }}>
+              <Th>SVO</Th><Th>Projets</Th><Th>Compte</Th><Th>Définir / réinitialiser le mot de passe</Th><Th></Th>
+            </tr>
+          </thead>
+          <tbody>
+            {svoUsers.map((s) => (
+              <tr key={s.id} style={{ borderTop: `1px solid ${BORDER}` }}>
+                <Td>
+                  <input value={names[s.id] ?? s.name} onChange={(e) => setNames({ ...names, [s.id]: e.target.value })}
+                    onBlur={() => renameSvo(s.id)} style={inputStyle} />
+                </Td>
+                <Td><span style={{ color: MUTED }}>{s.projectCount}</span></Td>
+                <Td>
+                  {s.hasPassword ? <Badge color={GREEN} text="Actif" /> : <Badge color={AMBER} text="Sans mot de passe" />}
+                </Td>
+                <Td>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input type="text" placeholder="Nouveau mot de passe" value={pwDrafts[s.id] || ""}
+                      onChange={(e) => setPwDrafts({ ...pwDrafts, [s.id]: e.target.value })}
+                      style={{ ...inputStyle, width: 150 }} />
+                    <button onClick={() => setPassword(s.id)} disabled={(pwDrafts[s.id] || "").trim().length < 4}
+                      style={{ ...btnGhost, opacity: (pwDrafts[s.id] || "").trim().length < 4 ? 0.4 : 1 }}>
+                      <KeyRound size={13} /> Définir
+                    </button>
+                  </div>
+                </Td>
+                <Td>
+                  <button onClick={() => removeSvo(s.id)} disabled={s.projectCount > 0}
+                    title={s.projectCount > 0 ? "Réaffectez d'abord ses projets à un autre SVO" : "Retirer"}
+                    style={{ ...iconBtn, opacity: s.projectCount > 0 ? 0.35 : 1, cursor: s.projectCount > 0 ? "not-allowed" : "pointer" }}>
+                    <Trash2 size={14} />
+                  </button>
+                </Td>
+              </tr>
+            ))}
+            {svoUsers.length === 0 && (
+              <tr><td colSpan={5} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun SVO.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>
+        Ajouter un SVO depuis le pool
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", maxWidth: 420 }}>
+        <select value={newPersonId} onChange={(e) => { setNewPersonId(e.target.value); setError(""); }} style={{ ...inputStyle, flex: 1 }}>
+          <option value="">Choisir une personne du pool…</option>
+          {availablePool.map((p) => (
+            <option key={p.id} value={p.id}>{p.name} — {p.squad}, {p.roleTitle}</option>
+          ))}
+        </select>
+        <button onClick={addSvo} style={btnPrimary}><Plus size={15} /> Ajouter</button>
+      </div>
+      {availablePool.length === 0 && (
+        <div style={{ color: MUTED, fontSize: 12.5, marginTop: 6 }}>
+          Tout le monde dans le pool est déjà SVO. Ajoutez d'abord une personne dans l'onglet Pool.
+        </div>
+      )}
+      {error && <div style={{ color: "#fca5a5", fontSize: 12.5, marginTop: 6 }}>{error}</div>}
+    </div>
+  );
+}

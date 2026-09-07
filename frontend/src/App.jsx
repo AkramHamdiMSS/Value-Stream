@@ -1,0 +1,189 @@
+import { useEffect, useState } from "react";
+import {
+  LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2,
+} from "lucide-react";
+import { api, getToken, setToken } from "./api";
+import { NAVY, TEXT, MUTED, BORDER, btnGhost } from "./styles";
+import { NavItem } from "./components/ui";
+import LoginScreen from "./screens/LoginScreen";
+import ChangePasswordModal from "./screens/ChangePasswordModal";
+import Dashboard from "./screens/Dashboard";
+import ProjectsList from "./screens/ProjectsList";
+import ProjectDetail from "./screens/ProjectDetail";
+import DemandQueue from "./screens/DemandQueue";
+import PoolView from "./screens/PoolView";
+import RolesView from "./screens/RolesView";
+
+export default function App() {
+  const [authLoading, setAuthLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [hasPassword, setHasPassword] = useState(false);
+
+  const [periods, setPeriods] = useState([]);
+  const [pool, setPool] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [dashboard, setDashboard] = useState(null);
+  const [svoUsers, setSvoUsers] = useState([]);
+
+  const [tab, setTab] = useState("dashboard");
+  const [selectedId, setSelectedId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [showAccount, setShowAccount] = useState(false);
+
+  const isHSV = user?.role === "hsv";
+
+  useEffect(() => {
+    if (!getToken()) { setAuthLoading(false); return; }
+    api.get("/auth/me")
+      .then(async (me) => {
+        setUser(me);
+        const acc = await api.get("/auth/accounts");
+        setHasPassword(!!acc.find((a) => a.id === me.id)?.hasPassword);
+      })
+      .catch(() => setToken(null))
+      .finally(() => setAuthLoading(false));
+  }, []);
+
+  const refreshPool = () => api.get("/pool").then(setPool);
+  const refreshProjects = () => api.get("/projects").then(setProjects);
+  const refreshDashboard = () => api.get("/dashboard").then(setDashboard);
+  const refreshSvoUsers = () => api.get("/users?role=svo").then(setSvoUsers);
+  const refreshAll = () => Promise.all([refreshPool(), refreshProjects(), refreshDashboard(), refreshSvoUsers()]);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get("/periods").then(setPeriods);
+    refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  useEffect(() => {
+    if (!isHSV && ["pool", "demandes", "roles"].includes(tab)) { setTab("projects"); setSelectedId(null); }
+  }, [isHSV, tab]);
+
+  const handleLogin = async (name, password) => {
+    const { token, user: loggedInUser } = await api.post("/auth/login", { name, password });
+    setToken(token);
+    setUser(loggedInUser);
+    const acc = await api.get("/auth/accounts");
+    setHasPassword(!!acc.find((a) => a.id === loggedInUser.id)?.hasPassword);
+  };
+
+  const handleLogout = () => {
+    setToken(null);
+    setUser(null);
+    setPool([]); setProjects([]); setDashboard(null); setSvoUsers([]);
+    setTab("dashboard"); setSelectedId(null);
+  };
+
+  if (authLoading) {
+    return (
+      <div style={{ background: NAVY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontFamily: "system-ui, sans-serif" }}>
+        <Loader2 className="animate-spin" size={20} style={{ marginRight: 8 }} /> Chargement…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  const filteredProjects = projects
+    .filter((p) => isHSV || p.svoUserId === user.id)
+    .filter((p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) || (p.svo?.name || "").toLowerCase().includes(search.toLowerCase())
+    );
+
+  const createProject = async () => {
+    const svoUserId = isHSV ? svoUsers[0]?.id : user.id;
+    if (!svoUserId) return;
+    const project = await api.post("/projects", { name: "Nouveau projet", svoUserId, status: "Cadrage" });
+    await refreshProjects();
+    setSelectedId(project.id);
+  };
+  const deleteProject = async (id) => {
+    await api.delete(`/projects/${id}`);
+    await Promise.all([refreshProjects(), refreshDashboard()]);
+    if (selectedId === id) setSelectedId(null);
+  };
+
+  return (
+    <div style={{ background: NAVY, color: TEXT, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh", display: "flex" }}>
+      <div style={{ width: 210, borderRight: `1px solid ${BORDER}`, padding: "20px 12px", flexShrink: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: MUTED, padding: "0 8px 16px" }}>
+          PILOTAGE RESSOURCES
+        </div>
+
+        <div style={{ padding: "0 8px 16px" }}>
+          <div style={{ fontSize: 10.5, color: MUTED, fontWeight: 600, marginBottom: 5, textTransform: "uppercase" }}>Connecté en tant que</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 8 }}>{user.name}</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => setShowAccount(true)} style={{ ...btnGhost, fontSize: 11.5, padding: "5px 8px", flex: 1 }}>
+              <KeyRound size={13} /> Mot de passe
+            </button>
+            <button onClick={handleLogout} style={{ ...btnGhost, fontSize: 11.5, padding: "5px 8px" }} aria-label="Se déconnecter">
+              <LogOut size={13} />
+            </button>
+          </div>
+        </div>
+
+        <NavItem icon={<LayoutDashboard size={16} />} label="Dashboard" active={tab === "dashboard"} onClick={() => { setTab("dashboard"); setSelectedId(null); }} />
+        <NavItem icon={<FolderKanban size={16} />} label={isHSV ? "Tous les projets" : "Mes projets"} active={tab === "projects"} onClick={() => setTab("projects")} />
+        {isHSV && (
+          <NavItem icon={<ClipboardList size={16} />} label="Demandes à affecter" active={tab === "demandes"} onClick={() => { setTab("demandes"); setSelectedId(null); }} />
+        )}
+        {isHSV && (
+          <NavItem icon={<Users size={16} />} label="Pool" active={tab === "pool"} onClick={() => { setTab("pool"); setSelectedId(null); }} />
+        )}
+        {isHSV && (
+          <NavItem icon={<ShieldCheck size={16} />} label="Rôles" active={tab === "roles"} onClick={() => { setTab("roles"); setSelectedId(null); }} />
+        )}
+      </div>
+
+      <div style={{ flex: 1, padding: 24, overflowX: "auto" }}>
+        {tab === "dashboard" && <Dashboard data={dashboard} />}
+
+        {tab === "projects" && !selectedId && (
+          <ProjectsList projects={filteredProjects} search={search} setSearch={setSearch}
+            isHSV={isHSV} user={user}
+            onSelect={setSelectedId}
+            onCreate={createProject}
+            onDelete={deleteProject}
+          />
+        )}
+
+        {tab === "projects" && selectedId && (
+          <ProjectDetail
+            projectId={selectedId}
+            isHSV={isHSV} user={user}
+            svoUsers={svoUsers} pool={pool} periods={periods}
+            onBack={() => setSelectedId(null)}
+            onProjectsChanged={() => { refreshProjects(); refreshDashboard(); }}
+          />
+        )}
+
+        {tab === "demandes" && isHSV && (
+          <DemandQueue pool={pool} overAllocGrid={dashboard?.overAllocGrid || {}}
+            onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }}
+            onAllocated={() => { refreshProjects(); refreshDashboard(); }}
+          />
+        )}
+
+        {tab === "pool" && isHSV && (
+          <PoolView pool={pool} overAllocGrid={dashboard?.overAllocGrid || {}} periods={periods.map((p) => p.id)}
+            onChanged={() => { refreshPool(); refreshDashboard(); }} />
+        )}
+
+        {tab === "roles" && isHSV && (
+          <RolesView svoUsers={svoUsers} pool={pool}
+            onChanged={() => { refreshSvoUsers(); refreshProjects(); }} />
+        )}
+      </div>
+
+      {showAccount && (
+        <ChangePasswordModal user={user} hasPassword={hasPassword}
+          onClose={() => { setShowAccount(false); setHasPassword(true); }} />
+      )}
+    </div>
+  );
+}

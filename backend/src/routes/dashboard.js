@@ -1,0 +1,77 @@
+const express = require("express");
+const prisma = require("../lib/prisma");
+const { authenticate } = require("../middleware/auth");
+const { effective, generatePeriods } = require("../lib/periods");
+
+const router = express.Router();
+router.use(authenticate);
+
+function round1(n) {
+  return Math.round((n + Number.EPSILON) * 10) / 10;
+}
+
+router.get("/", async (req, res) => {
+  const periods = generatePeriods();
+  const [pool, projects, allocationLines] = await Promise.all([
+    prisma.poolMember.findMany(),
+    prisma.project.findMany({ include: { demandLines: true } }),
+    prisma.allocationLine.findMany({ select: { poolMemberId: true, period: true, pct: true } }),
+  ]);
+
+  const map = Object.fromEntries(periods.map((p) => [p, { period: p, Mobile: 0, TPE: 0, Digital: 0 }]));
+  let besoinMobile = 0, besoinTpe = 0, besoinDigital = 0;
+  for (const proj of projects) {
+    for (const l of proj.demandLines) {
+      const eff = effective(l.count, l.pct);
+      if (l.profile === "Mobile") besoinMobile += eff;
+      else if (l.profile === "TPE") besoinTpe += eff;
+      else if (l.profile === "Digital") besoinDigital += eff;
+      if (map[l.period]) map[l.period][l.profile] = round1(map[l.period][l.profile] + eff);
+    }
+  }
+  const demandByMonth = periods.map((p) => map[p]);
+
+  const capMobile = pool.filter((p) => p.squad === "Mobile").length;
+  const capTpe = pool.filter((p) => p.squad === "TPE").length;
+  const capDigital = pool.filter((p) => p.squad === "Digital").length;
+
+  const overAllocGrid = {};
+  for (const res of pool) overAllocGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
+  for (const l of allocationLines) {
+    if (!overAllocGrid[l.poolMemberId] || !(l.period in overAllocGrid[l.poolMemberId])) continue;
+    overAllocGrid[l.poolMemberId][l.period] += Number(l.pct) || 0;
+  }
+
+  let alertCount = 0;
+  for (const res of pool) {
+    for (const p of periods) {
+      if ((overAllocGrid[res.id]?.[p] || 0) > 1.001) alertCount++;
+    }
+  }
+
+  res.json({
+    periods,
+    totals: {
+      besoinMobile: round1(besoinMobile),
+      besoinTpe: round1(besoinTpe),
+      besoinDigital: round1(besoinDigital),
+      besoinTotal: round1(besoinMobile + besoinTpe + besoinDigital),
+      capMobile,
+      capTpe,
+      capDigital,
+      capTotal: capMobile + capTpe + capDigital,
+    },
+    bySquad: [
+      { name: "Mobile", besoin: round1(besoinMobile), capacite: capMobile },
+      { name: "TPE", besoin: round1(besoinTpe), capacite: capTpe },
+      { name: "Digital", besoin: round1(besoinDigital), capacite: capDigital },
+    ],
+    demandByMonth,
+    pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad })),
+    overAllocGrid,
+    alertCount,
+    projectsCount: projects.length,
+  });
+});
+
+module.exports = router;

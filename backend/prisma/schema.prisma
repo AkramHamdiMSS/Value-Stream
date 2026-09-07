@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  svo
+  hsv
+}
+
+enum Squad {
+  Mobile
+  TPE
+  Digital
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  role         Role
+  passwordHash String?  @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  projects        Project[]        @relation("ProjectSvo")
+  allocationLines AllocationLine[] @relation("AllocationCreatedBy")
+
+  @@map("users")
+}
+
+model PoolMember {
+  id         String @id @default(uuid())
+  name       String
+  squad      Squad
+  sousEquipe String @map("sous_equipe")
+  roleTitle  String @map("role_title")
+
+  allocationLines AllocationLine[]
+
+  @@map("pool_members")
+}
+
+model Project {
+  id               String   @id @default(uuid())
+  name             String
+  svoUserId        String   @map("svo_user_id")
+  svo              User     @relation("ProjectSvo", fields: [svoUserId], references: [id])
+  status           String
+  demandSubmitted  Boolean  @default(false) @map("demand_submitted")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  demandLines     DemandLine[]
+  allocationLines AllocationLine[]
+
+  @@map("projects")
+}
+
+model DemandLine {
+  id        String  @id @default(uuid())
+  projectId String  @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  period    String
+  profile   Squad
+  count     Decimal @db.Decimal(10, 2)
+  pct       Decimal? @db.Decimal(6, 4)
+
+  @@index([projectId])
+  @@map("demand_lines")
+}
+
+model AllocationLine {
+  id           String     @id @default(uuid())
+  projectId    String     @map("project_id")
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  period       String
+  poolMemberId String     @map("pool_member_id")
+  poolMember   PoolMember @relation(fields: [poolMemberId], references: [id])
+  pct          Decimal    @db.Decimal(6, 4)
+  createdById  String     @map("created_by")
+  createdBy    User       @relation("AllocationCreatedBy", fields: [createdById], references: [id])
+
+  @@index([poolMemberId, period])
+  @@index([projectId])
+  @@map("allocation_lines")
+}

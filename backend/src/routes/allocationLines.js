@@ -1,0 +1,35 @@
+const express = require("express");
+const { z } = require("zod");
+const prisma = require("../lib/prisma");
+const { authenticate, requireRole } = require("../middleware/auth");
+
+const router = express.Router();
+router.use(authenticate, requireRole("hsv"));
+
+const patchSchema = z.object({
+  period: z.string().trim().min(1).optional(),
+  poolMemberId: z.string().uuid().optional(),
+  pct: z.number().min(0).max(2).optional(),
+});
+
+router.patch("/:id", async (req, res) => {
+  const parsed = patchSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
+  const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id } });
+  if (!line) return res.status(404).json({ error: "Ligne introuvable." });
+  const updated = await prisma.allocationLine.update({
+    where: { id: req.params.id },
+    data: parsed.data,
+    include: { poolMember: true },
+  });
+  res.json(updated);
+});
+
+router.delete("/:id", async (req, res) => {
+  const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id } });
+  if (!line) return res.status(404).json({ error: "Ligne introuvable." });
+  await prisma.allocationLine.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
+
+module.exports = router;
