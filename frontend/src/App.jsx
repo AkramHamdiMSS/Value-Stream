@@ -3,8 +3,8 @@ import {
   LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2,
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
-import { NAVY, TEXT, MUTED, BORDER, btnGhost } from "./styles";
-import { NavItem } from "./components/ui";
+import { NAVY, TEXT, MUTED, BORDER, FONT_BODY, btnGhost } from "./styles";
+import { NavItem, BrandHeader } from "./components/ui";
 import LoginScreen from "./screens/LoginScreen";
 import ChangePasswordModal from "./screens/ChangePasswordModal";
 import Dashboard from "./screens/Dashboard";
@@ -78,7 +78,7 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div style={{ background: NAVY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontFamily: "system-ui, sans-serif" }}>
+      <div style={{ background: NAVY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontFamily: FONT_BODY }}>
         <Loader2 className="animate-spin" size={20} style={{ marginRight: 8 }} /> Chargement…
       </div>
     );
@@ -108,10 +108,10 @@ export default function App() {
   };
 
   return (
-    <div style={{ background: NAVY, color: TEXT, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh", display: "flex" }}>
+    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex" }}>
       <div style={{ width: 210, borderRight: `1px solid ${BORDER}`, padding: "20px 12px", flexShrink: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.04em", color: MUTED, padding: "0 8px 16px" }}>
-          PILOTAGE RESSOURCES
+        <div style={{ marginBottom: 16 }}>
+          <BrandHeader />
         </div>
 
         <div style={{ padding: "0 8px 16px" }}>

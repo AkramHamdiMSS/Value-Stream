@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Lock } from "lucide-react";
 import { api } from "../api";
-import { NAVY, SURFACE, BORDER, TEXT, MUTED, ACCENT, inputStyle, btnPrimary } from "../styles";
+import { NAVY, SURFACE, BORDER, TEXT, MUTED, FONT_BODY, FONT_DISPLAY, inputStyle, btnPrimary } from "../styles";
+import { BrandMark } from "../components/ui";
 
 export default function LoginScreen({ onLogin }) {
   const [accounts, setAccounts] = useState([]);
@@ -37,13 +37,13 @@ export default function LoginScreen({ onLogin }) {
   };
 
   return (
-    <div style={{ background: NAVY, color: TEXT, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: 340, background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <Lock size={18} color={ACCENT} />
-          <div style={{ fontSize: 16, fontWeight: 700 }}>Pilotage ressources</div>
+          <BrandMark size={20} />
+          <div style={{ fontSize: 17, fontWeight: 600, fontFamily: FONT_DISPLAY }}>Pilotage ressources</div>
         </div>
-        <p style={{ color: MUTED, fontSize: 12.5, margin: "0 0 20px" }}>Connectez-vous pour accéder à votre espace.</p>
+        <p style={{ color: MUTED, fontSize: 12.5, margin: "0 0 20px" }}>MS Solutions — connectez-vous pour accéder à votre espace.</p>
 
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Compte</div>

@@ -2,7 +2,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { Loader2 } from "lucide-react";
-import { SURFACE, BORDER, MUTED, ACCENT, ACCENT2, GREEN, RED } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, ACCENT, ACCENT2, GREEN, RED } from "../styles";
 import { Kpi } from "../components/ui";
 
 export default function Dashboard({ data }) {
@@ -40,7 +40,7 @@ export default function Dashboard({ data }) {
               <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
               <XAxis dataKey="period" stroke={MUTED} fontSize={10} interval={1} />
               <YAxis stroke={MUTED} fontSize={11} />
-              <Tooltip contentStyle={{ background: "#1a2235", border: `1px solid ${BORDER}`, fontSize: 12 }} />
+              <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Line type="monotone" dataKey="Mobile" stroke={ACCENT2} strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="TPE" stroke={GREEN} strokeWidth={2} dot={false} />
@@ -56,7 +56,7 @@ export default function Dashboard({ data }) {
               <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
               <XAxis dataKey="name" stroke={MUTED} fontSize={11} />
               <YAxis stroke={MUTED} fontSize={11} />
-              <Tooltip contentStyle={{ background: "#1a2235", border: `1px solid ${BORDER}`, fontSize: 12 }} />
+              <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="besoin" fill={ACCENT} radius={[4, 4, 0, 0]} />
               <Bar dataKey="capacite" fill={GREEN} radius={[4, 4, 0, 0]} />

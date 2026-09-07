@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "../api";
-import { SURFACE, SURFACE2, BORDER, MUTED, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, ACCENT, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td } from "../components/ui";
 
 export default function DemandQueue({ pool, overAllocGrid, onOpenProject, onAllocated, refreshKey }) {
@@ -61,7 +61,7 @@ export default function DemandQueue({ pool, overAllocGrid, onOpenProject, onAllo
             {visibleRows.map((row) => (
               <>
                 <tr key={row.key} style={{ borderTop: `1px solid ${BORDER}` }}>
-                  <Td><button onClick={() => onOpenProject(row.projectId)} style={{ background: "none", border: "none", color: "#3b82f6", cursor: "pointer", fontSize: 13, padding: 0 }}>{row.projectName}</button></Td>
+                  <Td><button onClick={() => onOpenProject(row.projectId)} style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 13, padding: 0 }}>{row.projectName}</button></Td>
                   <Td>{row.svo}</Td>
                   <Td>{row.period}</Td>
                   <Td>{row.profile}</Td>

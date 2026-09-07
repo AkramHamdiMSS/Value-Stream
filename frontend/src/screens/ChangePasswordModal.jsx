@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-import { SURFACE, BORDER, TEXT, MUTED, inputStyle, btnPrimary, btnGhost } from "../styles";
+import { SURFACE, BORDER, TEXT, MUTED, FONT_BODY, inputStyle, btnPrimary, btnGhost } from "../styles";
 
 export default function ChangePasswordModal({ user, hasPassword, onClose }) {
   const [current, setCurrent] = useState("");
@@ -27,7 +27,7 @@ export default function ChangePasswordModal({ user, hasPassword, onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-      <div style={{ width: 320, background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, color: TEXT, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div style={{ width: 320, background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, color: TEXT, fontFamily: FONT_BODY }}>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Mot de passe — {user.name}</div>
         {done ? (
           <>

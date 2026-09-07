@@ -1,4 +1,26 @@
-import { MUTED, SURFACE, BORDER, TEXT, SURFACE2, inputStyle } from "../styles";
+import { MUTED, SURFACE, BORDER, TEXT, SURFACE2, ACCENT, FONT_DISPLAY, inputStyle } from "../styles";
+
+// Small geometric mark echoing the MS Solutions brand motif (nested diamonds).
+export function BrandMark({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 1 L23 12 L12 23 L1 12 Z" stroke={ACCENT} strokeWidth="1.4" />
+      <path d="M12 7 L17 12 L12 17 L7 12 Z" fill={ACCENT} />
+    </svg>
+  );
+}
+
+export function BrandHeader() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 8px 4px" }}>
+      <BrandMark />
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, fontFamily: FONT_DISPLAY, color: TEXT, letterSpacing: "0.01em" }}>MS Solutions</div>
+        <div style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em" }}>Pilotage ressources</div>
+      </div>
+    </div>
+  );
+}
 
 export function NavItem({ icon, label, active, onClick }) {
   return (

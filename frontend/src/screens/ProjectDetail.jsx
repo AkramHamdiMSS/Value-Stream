@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { api } from "../api";
 import { round1, effective } from "../lib/util";
-import { MUTED, ACCENT, GREEN, AMBER, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { MUTED, ACCENT, GREEN, AMBER, SURFACE, SURFACE2, BORDER, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td, Field, SectionTitle } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 
@@ -287,10 +287,10 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
       {relevantPeriods.length > 0 && (
         <>
           <SectionTitle style={{ marginTop: 28 }}>Synthèse : demandé vs alloué</SectionTitle>
-          <div style={{ background: "#111827", border: "1px solid #1e2d45", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
+          <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
               <thead>
-                <tr style={{ background: "#1a2235" }}>
+                <tr style={{ background: SURFACE2 }}>
                   <Th>Période</Th>
                   <Th>Dem. Mobile</Th><Th>All. Mobile</Th><Th>Écart</Th>
                   <Th>Dem. TPE</Th><Th>All. TPE</Th><Th>Écart</Th>
@@ -299,16 +299,16 @@ export default function ProjectDetail({ projectId, isHSV, user, svoUsers, pool, 
               </thead>
               <tbody>
                 {synthesis.map((row) => (
-                  <tr key={row.period} style={{ borderTop: "1px solid #1e2d45" }}>
+                  <tr key={row.period} style={{ borderTop: `1px solid ${BORDER}` }}>
                     <Td>{row.period}</Td>
                     {["Mobile", "TPE", "Digital"].map((sq) => {
                       const ecart = round1(row[sq].alloc - row[sq].dem);
                       return (
-                        <>
-                          <Td key={sq + "-dem"}>{round1(row[sq].dem)}</Td>
-                          <Td key={sq + "-alloc"}>{round1(row[sq].alloc)}</Td>
-                          <Td key={sq + "-ecart"}><span style={{ color: ecart < 0 ? "#fca5a5" : "#6ee7b7", fontWeight: 600 }}>{ecart}</span></Td>
-                        </>
+                        <Fragment key={sq}>
+                          <Td>{round1(row[sq].dem)}</Td>
+                          <Td>{round1(row[sq].alloc)}</Td>
+                          <Td><span style={{ color: ecart < 0 ? "#fca5a5" : "#6ee7b7", fontWeight: 600 }}>{ecart}</span></Td>
+                        </Fragment>
                       );
                     })}
                   </tr>
