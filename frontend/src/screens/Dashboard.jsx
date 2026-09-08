@@ -223,13 +223,17 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                     {periods.map((p) => {
                       const v = overAllocGrid[res.id]?.[p] || 0;
                       const over = v > 1.001;
+                      const pillColor = over ? RED : v > 0 ? GREEN : MUTED;
                       return (
-                        <td key={p} style={{
-                          textAlign: "center", padding: "3px 6px", borderBottom: `1px solid ${BORDER}`,
-                          background: over ? `color-mix(in srgb, ${RED} 22%, transparent)` : v > 0 ? `color-mix(in srgb, ${GREEN} 15%, transparent)` : "transparent",
-                          color: over ? RED : v > 0 ? GREEN : MUTED, fontWeight: over ? 700 : 400,
-                        }}>
-                          {v > 0 ? `${Math.round(v * 100)}%` : "—"}
+                        <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
+                          <span style={{
+                            display: "inline-block", minWidth: 40, padding: "3px 6px", borderRadius: 999,
+                            border: `1px solid ${v > 0 ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
+                            background: v > 0 ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
+                            color: pillColor, fontWeight: over ? 700 : 500,
+                          }}>
+                            {v > 0 ? `${Math.round(v * 100)}%` : "—"}
+                          </span>
                         </td>
                       );
                     })}

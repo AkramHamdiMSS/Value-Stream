@@ -1,7 +1,7 @@
-// Theme lifted from the TeamPulse (hr-dashboard-kit) reference: flat mint-white
-// canvas, white cards with a subtle border (no heavy shadow/glass), teal primary
-// accent, rounded-lg/xl radii, Nunito Sans throughout. Toggled via [data-theme]
-// on <html> — see index.css and lib/theme.js.
+// Structure lifted from the TeamPulse (hr-dashboard-kit) reference: flat
+// canvas, white cards with a subtle border (no heavy shadow/glass),
+// rounded-lg/xl radii, Nunito Sans throughout — accent kept as the app's own
+// mauve/indigo. Toggled via [data-theme] on <html> — see index.css and lib/theme.js.
 export const NAVY = "var(--bg)";
 export const SURFACE = "var(--surface)";
 export const SURFACE2 = "var(--surface-2)";

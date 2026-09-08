@@ -5,51 +5,52 @@ body {
   margin: 0;
 }
 
-/* Palette lifted from the TeamPulse (hr-dashboard-kit) reference: flat mint-white
-   canvas, white cards on a subtle border (no heavy shadow/glass), teal primary
-   accent, Nunito Sans. Toggled via [data-theme] on <html> — see lib/theme.js. */
+/* Structure (flat cards, subtle border instead of glass/shadow, Nunito Sans,
+   rounded-pill data cells) lifted from the TeamPulse (hr-dashboard-kit)
+   reference; accent kept as the app's own mauve/indigo rather than the
+   reference's teal. Toggled via [data-theme] on <html> — see lib/theme.js. */
 :root {
-  --bg: #f4faf8;
+  --bg: #f5f5fc;
   --surface: #ffffff;
-  --surface-2: #ebf2f0;
-  --text: #0f1d1e;
-  --muted: #455a59;
-  --border: #dce3e2;
-  --accent: #008674;
-  --accent-2: #3a77a8;
-  --accent-tint: #e1efea;
-  --success: #05893e;
+  --surface-2: #efeef9;
+  --text: #14142b;
+  --muted: #5b5d7a;
+  --border: #e1e0f0;
+  --accent: #5251d9;
+  --accent-2: #118aa8;
+  --accent-tint: #e6e5f7;
+  --success: #00c48c;
   --warning: #b07100;
   --danger: #df2225;
-  --card-shadow: 0 1px 2px rgba(15, 29, 30, 0.04);
-  --glow: rgba(0, 134, 116, 0.22);
+  --card-shadow: 0 1px 2px rgba(20, 20, 43, 0.05);
+  --glow: rgba(82, 81, 217, 0.22);
 
-  --sidebar-bg: #f0f7f5;
-  --sidebar-border: #dce3e2;
-  --sidebar-text: #0f1d1e;
-  --sidebar-muted: #455a59;
-  --sidebar-active: #deebe7;
+  --sidebar-bg: #f2f1fa;
+  --sidebar-border: #e1e0f0;
+  --sidebar-text: #14142b;
+  --sidebar-muted: #5b5d7a;
+  --sidebar-active: #e6e5f7;
 }
 
 :root[data-theme="dark"] {
-  --bg: #081111;
-  --surface: #0e1b1b;
-  --surface-2: #1b2a29;
-  --text: #eaf0ef;
-  --muted: #8b9c9b;
-  --border: #1f2f2e;
-  --accent: #3bb5a1;
-  --accent-2: #5fa3d6;
-  --accent-tint: #172a29;
-  --success: #4cb86a;
+  --bg: #0a0a1a;
+  --surface: #12122a;
+  --surface-2: #1a1a35;
+  --text: #f1f1fb;
+  --muted: #9a9ac0;
+  --border: #29294f;
+  --accent: #8788ff;
+  --accent-2: #5ee7f5;
+  --accent-tint: #201f45;
+  --success: #00c48c;
   --warning: #dca331;
   --danger: #ff6467;
-  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --glow: rgba(59, 181, 161, 0.28);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --glow: rgba(135, 136, 255, 0.3);
 
-  --sidebar-bg: #0a1616;
-  --sidebar-border: #1f2f2e;
-  --sidebar-text: #eaf0ef;
-  --sidebar-muted: #8b9c9b;
-  --sidebar-active: #172a29;
+  --sidebar-bg: #0c0c22;
+  --sidebar-border: #29294f;
+  --sidebar-text: #f1f1fb;
+  --sidebar-muted: #9a9ac0;
+  --sidebar-active: #201f45;
 }
