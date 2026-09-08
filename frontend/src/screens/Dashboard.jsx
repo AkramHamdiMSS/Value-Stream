@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle } from "lucide-react";
 import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, RED, CARD_SHADOW } from "../styles";
 import { Kpi, Th, Td, Badge } from "../components/ui";
 
@@ -42,11 +42,11 @@ function OwnDashboard({ data, labelFor, onOpenProject }) {
       </p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <Kpi label="Mes projets" value={projectsCount} />
-        <Kpi label="Besoin exprimé (pers.)" value={totals.besoinTotal} accent={ACCENT} />
-        <Kpi label="Alloué (pers.)" value={totals.allocTotal} accent={GREEN} />
-        <Kpi label="Écart" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} />
-        <Kpi label="Demandes en brouillon" value={draftCount} accent={draftCount > 0 ? undefined : GREEN} />
+        <Kpi label="Mes projets" value={projectsCount} icon={<FolderKanban size={18} />} />
+        <Kpi label="Besoin exprimé (pers.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />} />
+        <Kpi label="Alloué (pers.)" value={totals.allocTotal} accent={GREEN} icon={<Users size={18} />} />
+        <Kpi label="Écart" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
+        <Kpi label="Demandes en brouillon" value={draftCount} accent={draftCount > 0 ? undefined : GREEN} icon={<ClipboardList size={18} />} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginBottom: 20 }}>
@@ -132,10 +132,10 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
       </p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <Kpi label="Projets" value={projectsCount} />
-        <Kpi label="Besoin total (pers.)" value={totals.besoinTotal} accent={ACCENT} />
-        <Kpi label="Capacité pool" value={totals.capTotal} accent={GREEN} />
-        <Kpi label="Ressources en sur-allocation" value={alertCount} accent={alertCount > 0 ? RED : GREEN} />
+        <Kpi label="Projets" value={projectsCount} icon={<FolderKanban size={18} />} />
+        <Kpi label="Besoin total (pers.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />} />
+        <Kpi label="Capacité pool" value={totals.capTotal} accent={GREEN} icon={<Users size={18} />} />
+        <Kpi label="Ressources en sur-allocation" value={alertCount} accent={alertCount > 0 ? RED : GREEN} icon={<AlertTriangle size={18} />} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginBottom: 20 }}>

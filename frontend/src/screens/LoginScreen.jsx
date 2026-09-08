@@ -39,7 +39,6 @@ export default function LoginScreen({ onLogin, theme, onToggleTheme }) {
 
   return (
     <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-      <div className="ambient-bg" />
       {onToggleTheme && (
         <button onClick={onToggleTheme} style={{ ...themeToggleBtn, position: "absolute", top: 20, right: 20, zIndex: 1 }} aria-label="Changer de thème">
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}

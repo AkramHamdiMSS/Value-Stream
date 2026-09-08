@@ -1,6 +1,6 @@
 import {
-  MUTED, SURFACE, BORDER, TEXT, ACCENT, FONT_DISPLAY, inputStyle,
-  SIDEBAR_TEXT, SIDEBAR_MUTED, SIDEBAR_ACTIVE, CARD_SHADOW,
+  MUTED, SURFACE, BORDER, TEXT, ACCENT, ACCENT_TINT, FONT_DISPLAY, inputStyle,
+  SIDEBAR_TEXT, SIDEBAR_MUTED, SIDEBAR_ACTIVE, CARD_SHADOW, CONTROL_RADIUS,
 } from "../styles";
 
 // MS Solutions' actual header mark (mssolutions-group.com), redrawn from its
@@ -35,8 +35,8 @@ export function NavItem({ icon, label, active, onClick }) {
   return (
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 10px",
-      background: active ? SIDEBAR_ACTIVE : "transparent", border: "none", borderRadius: 8,
-      color: active ? SIDEBAR_TEXT : SIDEBAR_MUTED, fontSize: 13.5, fontWeight: active ? 600 : 500,
+      background: active ? SIDEBAR_ACTIVE : "transparent", border: "none", borderRadius: CONTROL_RADIUS,
+      color: active ? ACCENT : SIDEBAR_MUTED, fontSize: 13.5, fontWeight: active ? 600 : 500,
       cursor: "pointer", marginBottom: 2, textAlign: "left",
     }}>
       {icon} {label}
@@ -44,11 +44,21 @@ export function NavItem({ icon, label, active, onClick }) {
   );
 }
 
-export function Kpi({ label, value, accent }) {
+// Icon-badge + big number + label, per the reference's KPI cards (icon in a
+// tinted rounded-square badge, value bold, label muted below).
+export function Kpi({ label, value, accent, icon }) {
   return (
-    <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "16px 18px", flex: 1, minWidth: 140, boxShadow: CARD_SHADOW }}>
-      <div style={{ fontSize: 11.5, color: MUTED, fontWeight: 600, marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: accent || TEXT }}>{value}</div>
+    <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, flex: 1, minWidth: 140, boxShadow: CARD_SHADOW }}>
+      {icon && (
+        <div style={{
+          width: 36, height: 36, borderRadius: CONTROL_RADIUS, background: ACCENT_TINT,
+          color: accent || ACCENT, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12,
+        }}>
+          {icon}
+        </div>
+      )}
+      <div style={{ fontSize: 24, fontWeight: 700, color: accent || TEXT, letterSpacing: "-0.02em" }}>{value}</div>
+      <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2 }}>{label}</div>
     </div>
   );
 }
@@ -80,7 +90,7 @@ export function Field({ label, value, onChange, onBlur, width, disabled }) {
 }
 
 export function Th({ children }) {
-  return <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: MUTED, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.02em" }}>{children}</th>;
+  return <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 12.5, color: MUTED, fontWeight: 600 }}>{children}</th>;
 }
 export function Td({ children, style, ...rest }) {
   return <td style={{ padding: "6px 12px", verticalAlign: "middle", ...style }} {...rest}>{children}</td>;

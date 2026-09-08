@@ -3,7 +3,7 @@ import {
   LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2, Sun, Moon,
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
-import { NAVY, TEXT, MUTED, FONT_BODY, SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_MUTED, btnGhostSidebar, themeToggleBtnSidebar } from "./styles";
+import { NAVY, TEXT, MUTED, FONT_BODY, SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_TEXT, SIDEBAR_MUTED, btnGhostSidebar, themeToggleBtnSidebar } from "./styles";
 import { getInitialTheme, applyTheme } from "./lib/theme";
 import { NavItem, BrandHeader } from "./components/ui";
 import LoginScreen from "./screens/LoginScreen";
@@ -128,16 +128,15 @@ export default function App() {
   };
 
   return (
-    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex", position: "relative" }}>
-      <div className="ambient-bg" />
-      <div style={{ width: 220, background: SIDEBAR_BG, borderRight: `1px solid ${SIDEBAR_BORDER}`, padding: "20px 12px", flexShrink: 0, position: "relative", zIndex: 1 }}>
+    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex" }}>
+      <div style={{ width: 220, background: SIDEBAR_BG, borderRight: `1px solid ${SIDEBAR_BORDER}`, padding: "20px 12px", flexShrink: 0 }}>
         <div style={{ marginBottom: 16 }}>
           <BrandHeader />
         </div>
 
         <div style={{ padding: "0 8px 16px" }}>
           <div style={{ fontSize: 10.5, color: SIDEBAR_MUTED, fontWeight: 600, marginBottom: 5, textTransform: "uppercase" }}>Connecté en tant que</div>
-          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 8, color: "#ffffff" }}>{user.name}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 8, color: SIDEBAR_TEXT }}>{user.name}</div>
           <div style={{ display: "flex", gap: 6 }}>
             <button onClick={() => setShowAccount(true)} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px", flex: 1 }}>
               <KeyRound size={13} /> Mot de passe
@@ -166,7 +165,7 @@ export default function App() {
         )}
       </div>
 
-      <div style={{ flex: 1, padding: 24, overflowX: "auto", position: "relative", zIndex: 1 }}>
+      <div style={{ flex: 1, padding: 24, overflowX: "auto" }}>
         {tab === "dashboard" && (
           <Dashboard data={dashboard} periods={periods} onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }} />
         )}

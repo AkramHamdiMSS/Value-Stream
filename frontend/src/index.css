@@ -5,77 +5,51 @@ body {
   margin: 0;
 }
 
-/* Palette lifted from the Banxy/MS Solutions report theme: deep navy/purple,
-   teal secondary accent, glass-like translucent surfaces over an ambient
-   gradient background. Toggled via [data-theme] on <html> — see lib/theme.js. */
+/* Palette lifted from the TeamPulse (hr-dashboard-kit) reference: flat mint-white
+   canvas, white cards on a subtle border (no heavy shadow/glass), teal primary
+   accent, Nunito Sans. Toggled via [data-theme] on <html> — see lib/theme.js. */
 :root {
-  --bg: #f3f4fb;
-  --bg-2: #ffffff;
-  --bg-3: #e8eaf6;
-  --surface: rgba(255, 255, 255, 0.85);
-  --surface-2: rgba(245, 246, 252, 0.9);
-  --text: #0c144e;
-  --text-2: #2a3270;
-  --muted: #5a6290;
-  --border: rgba(12, 20, 78, 0.15);
-  --accent: #5251d9;
-  --accent-2: #118aa8;
-  --success: #00c48c;
-  --warning: #ffc94d;
-  --danger: #ff4a6b;
-  --card-shadow: 0 4px 20px rgba(12, 20, 78, 0.1);
-  --glow: rgba(82, 81, 217, 0.25);
+  --bg: #f4faf8;
+  --surface: #ffffff;
+  --surface-2: #ebf2f0;
+  --text: #0f1d1e;
+  --muted: #455a59;
+  --border: #dce3e2;
+  --accent: #008674;
+  --accent-2: #3a77a8;
+  --accent-tint: #e1efea;
+  --success: #05893e;
+  --warning: #b07100;
+  --danger: #df2225;
+  --card-shadow: 0 1px 2px rgba(15, 29, 30, 0.04);
+  --glow: rgba(0, 134, 116, 0.22);
 
-  --sidebar-bg: #0c144e;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-text: #ffffff;
-  --sidebar-muted: rgba(255, 255, 255, 0.55);
-  --sidebar-active: rgba(135, 136, 255, 0.22);
+  --sidebar-bg: #f0f7f5;
+  --sidebar-border: #dce3e2;
+  --sidebar-text: #0f1d1e;
+  --sidebar-muted: #455a59;
+  --sidebar-active: #deebe7;
 }
 
 :root[data-theme="dark"] {
-  --bg: #04061a;
-  --bg-2: #06091c;
-  --bg-3: #0a1140;
-  --surface: rgba(18, 27, 87, 0.55);
-  --surface-2: rgba(15, 23, 71, 0.35);
-  --text: #ffffff;
-  --muted: #9aa1b8;
-  --border: rgba(135, 136, 255, 0.22);
-  --accent: #8788ff;
-  --accent-2: #5ee7f5;
-  --success: #00c48c;
-  --warning: #ffc94d;
-  --danger: #ff4a6b;
-  --card-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
-  --glow: rgba(135, 136, 255, 0.35);
+  --bg: #081111;
+  --surface: #0e1b1b;
+  --surface-2: #1b2a29;
+  --text: #eaf0ef;
+  --muted: #8b9c9b;
+  --border: #1f2f2e;
+  --accent: #3bb5a1;
+  --accent-2: #5fa3d6;
+  --accent-tint: #172a29;
+  --success: #4cb86a;
+  --warning: #dca331;
+  --danger: #ff6467;
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --glow: rgba(59, 181, 161, 0.28);
 
-  --sidebar-bg: #020310;
-  --sidebar-border: rgba(255, 255, 255, 0.06);
-  --sidebar-text: #ffffff;
-  --sidebar-muted: rgba(255, 255, 255, 0.5);
-  --sidebar-active: rgba(135, 136, 255, 0.25);
-}
-
-/* Fixed ambient gradient + faint grid, behind everything, echoing the
-   report's .bg-ambient/.grid-lines treatment. */
-.ambient-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse at 15% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 55%),
-    radial-gradient(ellipse at 85% 20%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 50%);
-}
-.ambient-bg::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 60px 60px;
-  opacity: 0.35;
-  mask-image: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.8), transparent 70%);
+  --sidebar-bg: #0a1616;
+  --sidebar-border: #1f2f2e;
+  --sidebar-text: #eaf0ef;
+  --sidebar-muted: #8b9c9b;
+  --sidebar-active: #172a29;
 }
