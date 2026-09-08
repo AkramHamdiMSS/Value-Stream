@@ -1,0 +1,40 @@
+name: Deploy
+
+# Runs on a self-hosted runner installed directly on the target machine
+# (172.16.100.17) — see the runbook for one-time setup. The runner makes an
+# outbound connection to GitHub to pick up jobs, so this works even though
+# that machine only has a private LAN address GitHub's own cloud runners
+# could never reach.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Backend — install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Backend — apply database migrations
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Backend — generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Frontend — install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend — build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Restart services
+        run: pm2 startOrRestart ecosystem.config.cjs --update-env
