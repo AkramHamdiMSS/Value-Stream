@@ -1,11 +1,14 @@
+import { Fragment, useState } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Loader2 } from "lucide-react";
-import { SURFACE, SURFACE2, BORDER, MUTED, ACCENT, ACCENT2, GREEN, RED } from "../styles";
+import { Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, RED } from "../styles";
 import { Kpi } from "../components/ui";
 
-export default function Dashboard({ data, onOpenProject }) {
+export default function Dashboard({ data, periods: periodDefs, onOpenProject }) {
+  const [expanded, setExpanded] = useState(null);
+
   if (!data) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, padding: 40 }}>
@@ -16,7 +19,8 @@ export default function Dashboard({ data, onOpenProject }) {
 
   const { totals, bySquad, demandByMonth, pool, overAllocGrid, overAllocProjects, alertCount, projectsCount, periods } = data;
   const chartWeeks = demandByMonth.slice(0, 16);
-  const periodLabel = Object.fromEntries(periods.map((p, i) => [p, p]));
+  const periodLabel = Object.fromEntries((periodDefs || []).map((p) => [p.id, p.label]));
+  const labelFor = (p) => periodLabel[p] || p;
 
   return (
     <div>
@@ -68,7 +72,8 @@ export default function Dashboard({ data, onOpenProject }) {
       <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Charge par ressource et par semaine (52 semaines)</div>
         <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
-          Rouge = plus de 100% cette semaine-là, tous projets confondus. Survolez une cellule pour voir les projets, cliquez pour ouvrir (si un seul). Défilement horizontal pour voir toute l'année.
+          Rouge = plus de 100% cette semaine-là, tous projets confondus. Cliquez sur une ressource pour voir le détail
+          des projets sur lesquels elle travaille. Défilement horizontal pour voir toute l'année.
         </div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ borderCollapse: "collapse", fontSize: 11.5, width: "100%" }}>
@@ -76,35 +81,67 @@ export default function Dashboard({ data, onOpenProject }) {
               <tr>
                 <th style={{ position: "sticky", left: 0, background: SURFACE, textAlign: "left", padding: "4px 8px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}` }}>Ressource</th>
                 {periods.map((p) => (
-                  <th key={p} style={{ padding: "4px 6px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}`, minWidth: 40, whiteSpace: "nowrap" }}>{periodLabel[p]}</th>
+                  <th key={p} style={{ padding: "4px 6px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}`, minWidth: 40, whiteSpace: "nowrap" }}>{labelFor(p)}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {pool.map((res) => (
-                <tr key={res.id}>
-                  <td style={{ position: "sticky", left: 0, background: SURFACE, padding: "3px 8px", whiteSpace: "nowrap", borderBottom: `1px solid ${BORDER}` }}>{res.name}</td>
-                  {periods.map((p) => {
-                    const v = overAllocGrid[res.id]?.[p] || 0;
-                    const over = v > 1.001;
-                    const cellProjects = overAllocProjects?.[`${res.id}:${p}`] || [];
-                    const title = cellProjects.map((cp) => `${cp.projectName} (${Math.round(cp.pct * 100)}%)`).join("\n");
-                    const singleProjectId = cellProjects.length === 1 ? cellProjects[0].projectId : null;
-                    return (
-                      <td key={p} title={title || undefined}
-                        onClick={() => singleProjectId && onOpenProject?.(singleProjectId)}
+              {pool.map((res) => {
+                const isOpen = expanded === res.id;
+                const detail = periods
+                  .map((p) => ({ period: p, entries: overAllocProjects?.[`${res.id}:${p}`] || [] }))
+                  .filter((row) => row.entries.length > 0);
+                return (
+                  <Fragment key={res.id}>
+                    <tr>
+                      <td onClick={() => setExpanded(isOpen ? null : res.id)}
                         style={{
-                          textAlign: "center", padding: "3px 6px", borderBottom: `1px solid ${BORDER}`,
-                          background: over ? `color-mix(in srgb, ${RED} 22%, transparent)` : v > 0 ? `color-mix(in srgb, ${GREEN} 15%, transparent)` : "transparent",
-                          color: over ? RED : v > 0 ? GREEN : MUTED, fontWeight: over ? 700 : 400,
-                          cursor: singleProjectId ? "pointer" : "default",
+                          position: "sticky", left: 0, background: SURFACE, padding: "3px 8px", whiteSpace: "nowrap",
+                          borderBottom: `1px solid ${BORDER}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                          color: isOpen ? ACCENT : TEXT, fontWeight: isOpen ? 600 : 400,
                         }}>
-                        {v > 0 ? `${Math.round(v * 100)}%` : "—"}
+                        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {res.name}
                       </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                      {periods.map((p) => {
+                        const v = overAllocGrid[res.id]?.[p] || 0;
+                        const over = v > 1.001;
+                        return (
+                          <td key={p} style={{
+                            textAlign: "center", padding: "3px 6px", borderBottom: `1px solid ${BORDER}`,
+                            background: over ? `color-mix(in srgb, ${RED} 22%, transparent)` : v > 0 ? `color-mix(in srgb, ${GREEN} 15%, transparent)` : "transparent",
+                            color: over ? RED : v > 0 ? GREEN : MUTED, fontWeight: over ? 700 : 400,
+                          }}>
+                            {v > 0 ? `${Math.round(v * 100)}%` : "—"}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={periods.length + 1} style={{ background: SURFACE2, padding: "10px 12px", borderBottom: `1px solid ${BORDER}` }}>
+                          {detail.length === 0 ? (
+                            <span style={{ color: MUTED, fontSize: 12 }}>Aucune affectation pour {res.name}.</span>
+                          ) : (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {detail.map((row) => row.entries.map((e) => (
+                                <button key={row.period + e.projectId} onClick={() => onOpenProject?.(e.projectId)} style={{
+                                  background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 20,
+                                  color: TEXT, fontSize: 11.5, padding: "4px 10px", cursor: "pointer",
+                                  display: "flex", alignItems: "center", gap: 6,
+                                }}>
+                                  <span style={{ color: MUTED }}>{labelFor(row.period)}</span>
+                                  <span style={{ fontWeight: 600 }}>{e.projectName}</span>
+                                  <span style={{ color: ACCENT }}>{Math.round(e.pct * 100)}%</span>
+                                </button>
+                              )))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
