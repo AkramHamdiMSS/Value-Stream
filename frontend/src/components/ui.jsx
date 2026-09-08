@@ -82,6 +82,6 @@ export function Field({ label, value, onChange, onBlur, width, disabled }) {
 export function Th({ children }) {
   return <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, color: MUTED, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.02em" }}>{children}</th>;
 }
-export function Td({ children }) {
-  return <td style={{ padding: "6px 12px", verticalAlign: "middle" }}>{children}</td>;
+export function Td({ children, style, ...rest }) {
+  return <td style={{ padding: "6px 12px", verticalAlign: "middle", ...style }} {...rest}>{children}</td>;
 }

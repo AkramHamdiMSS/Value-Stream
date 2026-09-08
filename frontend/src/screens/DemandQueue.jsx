@@ -23,6 +23,21 @@ export default function DemandQueue({ pool, overAllocGrid, canManageAllocations,
   const visibleRows = hideCovered ? rows.filter((r) => r.ecart < -0.001) : rows;
   const candidatesFor = (row) => pool.filter((r) => r.squad === row.profile);
 
+  // One "demande" is submitted per project+période, with one line per profile —
+  // group them back into a single row so the queue reflects that, instead of
+  // showing what looks like 3 unrelated demands for PALM PAY / 2026-W38.
+  const groups = [];
+  const groupIndexByKey = {};
+  for (const row of visibleRows) {
+    const gKey = `${row.projectId}:${row.period}`;
+    if (!(gKey in groupIndexByKey)) {
+      groupIndexByKey[gKey] = groups.length;
+      groups.push({ key: gKey, projectId: row.projectId, projectName: row.projectName, svo: row.svo, period: row.period, rows: [] });
+    }
+    groups[groupIndexByKey[gKey]].rows.push(row);
+  }
+  groups.sort((a, b) => Math.min(...a.rows.map((r) => r.ecart)) - Math.min(...b.rows.map((r) => r.ecart)));
+
   const submitAllocation = async (row) => {
     if (!pick.poolMemberId) return;
     await api.post(`/projects/${row.projectId}/allocation-lines`, {
@@ -58,50 +73,60 @@ export default function DemandQueue({ pool, overAllocGrid, canManageAllocations,
             </tr>
           </thead>
           <tbody>
-            {visibleRows.map((row) => (
-              <Fragment key={row.key}>
-                <tr key={row.key} style={{ borderTop: `1px solid ${BORDER}` }}>
-                  <Td><button onClick={() => onOpenProject(row.projectId)} style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 13, padding: 0 }}>{row.projectName}</button></Td>
-                  <Td>{row.svo}</Td>
-                  <Td>{row.period}</Td>
-                  <Td>{row.profile}</Td>
-                  <Td>{row.demanded}</Td>
-                  <Td>{row.allocated}</Td>
-                  <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
-                  <Td>
-                    {canManageAllocations && (
-                      <button onClick={() => { setOpenRow(openRow === row.key ? null : row.key); setPick({ poolMemberId: "", pct: 100 }); }} style={btnGhost}>
-                        {openRow === row.key ? "Fermer" : "Affecter"}
-                      </button>
+            {groups.map((g) => (
+              <Fragment key={g.key}>
+                {g.rows.map((row, i) => (
+                  <Fragment key={row.key}>
+                    <tr style={{ borderTop: i === 0 ? `1px solid ${BORDER}` : "none" }}>
+                      {i === 0 && (
+                        <>
+                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>
+                            <button onClick={() => onOpenProject(g.projectId)} style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 13, padding: 0 }}>{g.projectName}</button>
+                          </Td>
+                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.svo}</Td>
+                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.period}</Td>
+                        </>
+                      )}
+                      <Td>{row.profile}</Td>
+                      <Td>{row.demanded}</Td>
+                      <Td>{row.allocated}</Td>
+                      <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
+                      <Td>
+                        {canManageAllocations && (
+                          <button onClick={() => { setOpenRow(openRow === row.key ? null : row.key); setPick({ poolMemberId: "", pct: 100 }); }} style={btnGhost}>
+                            {openRow === row.key ? "Fermer" : "Affecter"}
+                          </button>
+                        )}
+                      </Td>
+                    </tr>
+                    {canManageAllocations && openRow === row.key && (
+                      <tr style={{ background: SURFACE2 }}>
+                        <td colSpan={8} style={{ padding: "12px 14px" }}>
+                          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                            <select value={pick.poolMemberId} onChange={(e) => setPick({ ...pick, poolMemberId: e.target.value })} style={{ ...inputStyle, width: 320 }}>
+                              <option value="">Choisir une ressource {row.profile}…</option>
+                              {candidatesFor(row).map((r) => {
+                                const load2 = overAllocGrid[r.id]?.[row.period] || 0;
+                                return (
+                                  <option key={r.id} value={r.id}>
+                                    {r.name} — déjà {Math.round(load2 * 100)}% cette semaine-là{load2 > 1.001 ? " ⚠" : ""}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <input type="number" min="0" max="200" value={pick.pct} onChange={(e) => setPick({ ...pick, pct: Number(e.target.value) })}
+                              style={{ ...inputStyle, width: 80 }} />
+                            <span style={{ fontSize: 12.5, color: MUTED }}>%</span>
+                            <button disabled={!pick.poolMemberId} onClick={() => submitAllocation(row)}
+                              style={{ ...btnPrimary, opacity: pick.poolMemberId ? 1 : 0.5, cursor: pick.poolMemberId ? "pointer" : "not-allowed" }}>
+                              Ajouter l'affectation
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                     )}
-                  </Td>
-                </tr>
-                {canManageAllocations && openRow === row.key && (
-                  <tr key={row.key + "-form"} style={{ background: SURFACE2 }}>
-                    <td colSpan={8} style={{ padding: "12px 14px" }}>
-                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                        <select value={pick.poolMemberId} onChange={(e) => setPick({ ...pick, poolMemberId: e.target.value })} style={{ ...inputStyle, width: 320 }}>
-                          <option value="">Choisir une ressource {row.profile}…</option>
-                          {candidatesFor(row).map((r) => {
-                            const load2 = overAllocGrid[r.id]?.[row.period] || 0;
-                            return (
-                              <option key={r.id} value={r.id}>
-                                {r.name} — déjà {Math.round(load2 * 100)}% cette semaine-là{load2 > 1.001 ? " ⚠" : ""}
-                              </option>
-                            );
-                          })}
-                        </select>
-                        <input type="number" min="0" max="200" value={pick.pct} onChange={(e) => setPick({ ...pick, pct: Number(e.target.value) })}
-                          style={{ ...inputStyle, width: 80 }} />
-                        <span style={{ fontSize: 12.5, color: MUTED }}>%</span>
-                        <button disabled={!pick.poolMemberId} onClick={() => submitAllocation(row)}
-                          style={{ ...btnPrimary, opacity: pick.poolMemberId ? 1 : 0.5, cursor: pick.poolMemberId ? "pointer" : "not-allowed" }}>
-                          Ajouter l'affectation
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )}
+                  </Fragment>
+                ))}
               </Fragment>
             ))}
             {visibleRows.length === 0 && (
