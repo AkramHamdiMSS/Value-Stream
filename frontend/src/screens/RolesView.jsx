@@ -11,6 +11,12 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
   const [pwDrafts, setPwDrafts] = useState({});
   const [names, setNames] = useState({});
   const [openPermsFor, setOpenPermsFor] = useState(null);
+  // Optimistic override so rapid successive toggles each build on the latest
+  // known value instead of the (possibly stale) svoUsers prop — without this,
+  // two clicks fired before the refetch resolves both read the same base
+  // permissions and the second PATCH silently clobbers the first.
+  const [permsLocal, setPermsLocal] = useState({});
+  const effectivePerms = (user) => permsLocal[user.id] ?? user.permissions ?? [];
 
   const availablePool = pool.filter((p) => !svoUsers.some((s) => s.name.toLowerCase() === p.name.toLowerCase()));
 
@@ -59,13 +65,15 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
   };
 
   const togglePermission = async (user, key) => {
-    const current = user.permissions || [];
+    const current = effectivePerms(user);
     const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key];
+    setPermsLocal((prev) => ({ ...prev, [user.id]: next }));
     try {
       await api.patch(`/users/${user.id}/permissions`, { permissions: next });
       onChanged();
     } catch (e) {
       setError(e.message);
+      setPermsLocal((prev) => ({ ...prev, [user.id]: current }));
     }
   };
 
@@ -113,8 +121,8 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
                   {isHSV && (
                     <Td>
                       <button onClick={() => setOpenPermsFor(openPermsFor === s.id ? null : s.id)}
-                        style={{ ...btnGhost, fontSize: 11.5, color: (s.permissions || []).length > 0 ? ACCENT : MUTED }}>
-                        <ShieldCheck size={13} /> {(s.permissions || []).length > 0 ? `${s.permissions.length} accordée(s)` : "Aucune"}
+                        style={{ ...btnGhost, fontSize: 11.5, color: effectivePerms(s).length > 0 ? ACCENT : MUTED }}>
+                        <ShieldCheck size={13} /> {effectivePerms(s).length > 0 ? `${effectivePerms(s).length} accordée(s)` : "Aucune"}
                       </button>
                     </Td>
                   )}
@@ -135,7 +143,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 20px" }}>
                         {PERMISSIONS.map((perm) => (
                           <label key={perm.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, cursor: "pointer" }}>
-                            <input type="checkbox" checked={(s.permissions || []).includes(perm.key)}
+                            <input type="checkbox" checked={effectivePerms(s).includes(perm.key)}
                               onChange={() => togglePermission(s, perm.key)} />
                             {perm.label}
                           </label>
