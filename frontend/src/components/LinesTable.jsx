@@ -64,21 +64,27 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
 
   const renderCell = (c, line) => (
     !editable ? (
-      <span style={{ color: c.type === "select" ? TEXT : MUTED }}>
-        {c.type === "percent"
-          ? (line[c.key] === "" || line[c.key] === undefined || line[c.key] === null ? "100%" : `${Math.round(Number(line[c.key]) * 100)}%`)
-          : displayLabel(c, line)}
-      </span>
+      <div>
+        <span style={{ color: c.type === "select" ? TEXT : MUTED }}>
+          {c.type === "percent"
+            ? (line[c.key] === "" || line[c.key] === undefined || line[c.key] === null ? "100%" : `${Math.round(Number(line[c.key]) * 100)}%`)
+            : displayLabel(c, line)}
+        </span>
+        {c.type === "select" && c.hint && c.hint(line)}
+      </div>
     ) : c.type === "select" ? (
-      <select value={line[c.key] ?? ""} onChange={(e) => {
-        setLocalValue(line.id, c.key, e.target.value);
-        onPatch(line.id, c.key, e.target.value);
-      }} style={{ ...inputStyle, width: c.width }}>
-        <option value="">—</option>
-        {c.options.map((opt, i) => (
-          <option key={opt} value={opt}>{c.optionLabels ? c.optionLabels[i] : opt}</option>
-        ))}
-      </select>
+      <div>
+        <select value={line[c.key] ?? ""} onChange={(e) => {
+          setLocalValue(line.id, c.key, e.target.value);
+          onPatch(line.id, c.key, e.target.value);
+        }} style={{ ...inputStyle, width: c.width }}>
+          <option value="">—</option>
+          {c.options.map((opt, i) => (
+            <option key={opt} value={opt}>{c.optionLabels ? c.optionLabels[i] : opt}</option>
+          ))}
+        </select>
+        {c.hint && c.hint(line)}
+      </div>
     ) : c.type === "percent" ? (
       <input type="number" min="0" max="200" placeholder="100"
         value={line[c.key] === "" || line[c.key] === undefined || line[c.key] === null ? "" : Math.round(Number(line[c.key]) * 100)}

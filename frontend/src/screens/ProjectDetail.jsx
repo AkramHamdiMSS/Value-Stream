@@ -6,7 +6,7 @@ import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADO
 import { Th, Td, Field, SectionTitle } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 
-export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, user, svoUsers, pool, periods, onBack, onProjectsChanged }) {
+export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, user, svoUsers, pool, periods, overAllocProjects, onBack, onProjectsChanged }) {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -275,7 +275,25 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         editable={canEditAlloc}
         columns={[
           { key: "period", label: "Période", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
-          { key: "poolMemberId", label: "Ressource", type: "select", options: pool.map((r) => r.id), optionLabels: pool.map((r) => `${r.name} (${r.squad})`), width: 220 },
+          {
+            key: "poolMemberId", label: "Ressource", type: "select", options: pool.map((r) => r.id), optionLabels: pool.map((r) => `${r.name} (${r.squad})`), width: 220,
+            // Recap of the resource's OTHER assignments for that same période, so the
+            // picker doesn't need to be cross-checked against every other project.
+            hint: (line) => {
+              if (!line.poolMemberId || !line.period) return null;
+              const entries = (overAllocProjects?.[`${line.poolMemberId}:${line.period}`] || []).filter((e) => e.projectId !== project.id);
+              if (entries.length === 0) return null;
+              return (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                  {entries.map((e) => (
+                    <span key={e.projectId} style={{ fontSize: 10.5, color: MUTED, background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 999, padding: "2px 8px" }}>
+                      {e.projectName} · {Math.round(e.pct * 100)}%
+                    </span>
+                  ))}
+                </div>
+              );
+            },
+          },
           { key: "pct", label: "Allocation %", type: "percent", width: 100 },
         ]}
         addLabel="Ajouter une période"

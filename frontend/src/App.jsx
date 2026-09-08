@@ -184,7 +184,7 @@ export default function App() {
             projectId={selectedId}
             canViewAll={can.viewAllProjects} canManageProjects={can.manageProjects} canManageAllocations={can.manageAllocations}
             user={user}
-            svoUsers={svoUsers} pool={pool} periods={periods}
+            svoUsers={svoUsers} pool={pool} periods={periods} overAllocProjects={dashboard?.overAllocProjects || {}}
             onBack={() => setSelectedId(null)}
             onProjectsChanged={() => { refreshProjects(); refreshDashboard(); }}
           />
