@@ -163,7 +163,9 @@ export default function App() {
       </div>
 
       <div style={{ flex: 1, padding: 24, overflowX: "auto", position: "relative", zIndex: 1 }}>
-        {tab === "dashboard" && <Dashboard data={dashboard} />}
+        {tab === "dashboard" && (
+          <Dashboard data={dashboard} onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }} />
+        )}
 
         {tab === "projects" && !selectedId && (
           <ProjectsList projects={filteredProjects} search={search} setSearch={setSearch}

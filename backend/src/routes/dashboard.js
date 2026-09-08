@@ -15,7 +15,9 @@ router.get("/", async (req, res) => {
   const [pool, projects, allocationLines] = await Promise.all([
     prisma.poolMember.findMany(),
     prisma.project.findMany({ include: { demandLines: true } }),
-    prisma.allocationLine.findMany({ select: { poolMemberId: true, period: true, pct: true } }),
+    prisma.allocationLine.findMany({
+      select: { poolMemberId: true, period: true, pct: true, project: { select: { id: true, name: true } } },
+    }),
   ]);
 
   const map = Object.fromEntries(periods.map((p) => [p, { period: p, Mobile: 0, TPE: 0, Digital: 0 }]));
@@ -35,11 +37,18 @@ router.get("/", async (req, res) => {
   const capTpe = pool.filter((p) => p.squad === "TPE").length;
   const capDigital = pool.filter((p) => p.squad === "Digital").length;
 
+  // overAllocProjects mirrors overAllocGrid but lists which project(s) make up
+  // each cell's total, so the dashboard can show "Projet A: 40% · Projet B: 20%"
+  // instead of just the summed percentage.
   const overAllocGrid = {};
+  const overAllocProjects = {};
   for (const res of pool) overAllocGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
   for (const l of allocationLines) {
     if (!overAllocGrid[l.poolMemberId] || !(l.period in overAllocGrid[l.poolMemberId])) continue;
     overAllocGrid[l.poolMemberId][l.period] += Number(l.pct) || 0;
+    const key = `${l.poolMemberId}:${l.period}`;
+    if (!overAllocProjects[key]) overAllocProjects[key] = [];
+    overAllocProjects[key].push({ projectId: l.project.id, projectName: l.project.name, pct: round1(Number(l.pct) || 0) });
   }
 
   let alertCount = 0;
@@ -69,6 +78,7 @@ router.get("/", async (req, res) => {
     demandByMonth,
     pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad })),
     overAllocGrid,
+    overAllocProjects,
     alertCount,
     projectsCount: projects.length,
   });
