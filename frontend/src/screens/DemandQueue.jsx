@@ -1,10 +1,10 @@
 import { Fragment, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "../api";
-import { SURFACE, SURFACE2, BORDER, MUTED, ACCENT, GREEN, RED, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, GREEN, RED, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td } from "../components/ui";
 
-export default function DemandQueue({ pool, overAllocGrid, canManageAllocations, onOpenProject, onAllocated, refreshKey }) {
+export default function DemandQueue({ pool, overAllocGrid, overAllocProjects, canManageAllocations, onOpenProject, onAllocated, refreshKey }) {
   const [rows, setRows] = useState(null);
   const [openRow, setOpenRow] = useState(null);
   const [pick, setPick] = useState({ poolMemberId: "", pct: 100 });
@@ -102,18 +102,48 @@ export default function DemandQueue({ pool, overAllocGrid, canManageAllocations,
                     {canManageAllocations && openRow === row.key && (
                       <tr style={{ background: SURFACE2 }}>
                         <td colSpan={8} style={{ padding: "12px 14px" }}>
+                          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
+                            Choisissez une ressource {row.profile} — sa charge sur ses autres projets cette semaine-là est affichée pour vous aider à décider.
+                          </div>
+                          <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 10, maxHeight: 220, overflowY: "auto", marginBottom: 10 }}>
+                            {candidatesFor(row).map((r) => {
+                              const load2 = overAllocGrid[r.id]?.[row.period] || 0;
+                              const over = load2 > 1.001;
+                              const entries = overAllocProjects?.[`${r.id}:${row.period}`] || [];
+                              const selected = pick.poolMemberId === r.id;
+                              return (
+                                <div key={r.id} onClick={() => setPick({ ...pick, poolMemberId: r.id })} style={{
+                                  padding: "8px 10px", borderTop: `1px solid ${BORDER}`, cursor: "pointer",
+                                  background: selected ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : "transparent",
+                                }}>
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                    <span style={{ fontSize: 12.5, fontWeight: selected ? 700 : 600, color: selected ? ACCENT : TEXT }}>{r.name}</span>
+                                    <span style={{
+                                      fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
+                                      color: over ? RED : load2 > 0 ? GREEN : MUTED,
+                                      border: `1px solid ${load2 > 0 ? `color-mix(in srgb, ${over ? RED : GREEN} 45%, transparent)` : BORDER}`,
+                                      background: load2 > 0 ? `color-mix(in srgb, ${over ? RED : GREEN} 12%, transparent)` : "transparent",
+                                    }}>
+                                      {load2 > 0 ? `${Math.round(load2 * 100)}%${over ? " ⚠" : ""}` : "Disponible"}
+                                    </span>
+                                  </div>
+                                  {entries.length > 0 && (
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                                      {entries.map((e) => (
+                                        <span key={e.projectId} style={{ fontSize: 10.5, color: MUTED, background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 999, padding: "2px 8px" }}>
+                                          {e.projectName} · {Math.round(e.pct * 100)}%
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {candidatesFor(row).length === 0 && (
+                              <div style={{ padding: 10, fontSize: 12, color: MUTED }}>Aucune ressource {row.profile} dans le pool.</div>
+                            )}
+                          </div>
                           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                            <select value={pick.poolMemberId} onChange={(e) => setPick({ ...pick, poolMemberId: e.target.value })} style={{ ...inputStyle, width: 320 }}>
-                              <option value="">Choisir une ressource {row.profile}…</option>
-                              {candidatesFor(row).map((r) => {
-                                const load2 = overAllocGrid[r.id]?.[row.period] || 0;
-                                return (
-                                  <option key={r.id} value={r.id}>
-                                    {r.name} — déjà {Math.round(load2 * 100)}% cette semaine-là{load2 > 1.001 ? " ⚠" : ""}
-                                  </option>
-                                );
-                              })}
-                            </select>
                             <input type="number" min="0" max="200" value={pick.pct} onChange={(e) => setPick({ ...pick, pct: Number(e.target.value) })}
                               style={{ ...inputStyle, width: 80 }} />
                             <span style={{ fontSize: 12.5, color: MUTED }}>%</span>
