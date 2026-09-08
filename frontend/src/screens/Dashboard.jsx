@@ -215,10 +215,12 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                     <td onClick={() => setExpanded(isOpen ? null : res.id)}
                       style={{
                         position: "sticky", left: 0, background: SURFACE, padding: "3px 8px", whiteSpace: "nowrap",
-                        borderBottom: `1px solid ${BORDER}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                        borderBottom: `1px solid ${BORDER}`, cursor: "pointer",
                         color: isOpen ? ACCENT : TEXT, fontWeight: isOpen ? 600 : 400,
                       }}>
-                      {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {res.name}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {res.name}
+                      </div>
                     </td>
                     {periods.map((p) => {
                       const v = overAllocGrid[res.id]?.[p] || 0;
