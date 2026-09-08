@@ -1,6 +1,6 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
-const { authenticate } = require("../middleware/auth");
+const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { effective, generatePeriods } = require("../lib/periods");
 
@@ -48,7 +48,7 @@ async function buildResourceLoad(periods) {
   return { pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad })), overAllocGrid, overAllocProjects, alertCount };
 }
 
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   const periods = generatePeriods();
   const resourceLoad = await buildResourceLoad(periods);
 

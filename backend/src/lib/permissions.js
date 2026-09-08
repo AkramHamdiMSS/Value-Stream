@@ -1,8 +1,9 @@
 // Fixed set of extra capabilities the HSV (super admin) can grant to an
-// individual SVO user, on top of their base access (own dashboard + own
-// projects' demand). The hsv role always has every capability implicitly —
-// permissions only ever extend an svo account, never restrict an hsv one.
+// individual SVO user, on top of their base access (own projects' demand).
+// The hsv role always has every capability implicitly — permissions only
+// ever extend an svo account, never restrict an hsv one.
 const PERMISSIONS = [
+  { key: "viewDashboard", label: "Voir le Dashboard" },
   { key: "viewAllProjects", label: "Voir tous les projets (pas seulement les siens)" },
   { key: "manageProjects", label: "Créer / supprimer des projets, réaffecter le SVO" },
   { key: "manageAllocations", label: "Éditer l'affectation des ressources sur tous les projets" },

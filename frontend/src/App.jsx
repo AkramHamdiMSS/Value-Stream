@@ -35,6 +35,7 @@ export default function App() {
   const isHSV = user?.role === "hsv";
   const has = (key) => isHSV || !!user?.permissions?.includes(key);
   const can = {
+    viewDashboard: has("viewDashboard"),
     viewAllProjects: has("viewAllProjects") || has("manageProjects") || has("manageAllocations"),
     manageProjects: has("manageProjects"),
     manageAllocations: has("manageAllocations"),
@@ -60,7 +61,7 @@ export default function App() {
 
   const refreshPool = () => api.get("/pool").then(setPool);
   const refreshProjects = () => api.get("/projects").then(setProjects);
-  const refreshDashboard = () => api.get("/dashboard").then(setDashboard);
+  const refreshDashboard = () => (can.viewDashboard ? api.get("/dashboard").then(setDashboard) : Promise.resolve());
   const refreshSvoUsers = () => api.get("/users?role=svo").then(setSvoUsers);
   const refreshAll = () => Promise.all([refreshPool(), refreshProjects(), refreshDashboard(), refreshSvoUsers()]);
 
@@ -72,6 +73,7 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    if (tab === "dashboard" && !can.viewDashboard) { setTab("projects"); setSelectedId(null); }
     if (tab === "demandes" && !can.viewDemandQueue) { setTab("projects"); setSelectedId(null); }
     if (tab === "pool" && !can.managePool) { setTab("projects"); setSelectedId(null); }
     if (tab === "roles" && !can.manageRoles) { setTab("projects"); setSelectedId(null); }
@@ -149,7 +151,9 @@ export default function App() {
           </div>
         </div>
 
-        <NavItem icon={<LayoutDashboard size={16} />} label="Dashboard" active={tab === "dashboard"} onClick={() => { setTab("dashboard"); setSelectedId(null); }} />
+        {can.viewDashboard && (
+          <NavItem icon={<LayoutDashboard size={16} />} label="Dashboard" active={tab === "dashboard"} onClick={() => { setTab("dashboard"); setSelectedId(null); }} />
+        )}
         <NavItem icon={<FolderKanban size={16} />} label={can.viewAllProjects ? "Tous les projets" : "Mes projets"} active={tab === "projects"} onClick={() => setTab("projects")} />
         {can.viewDemandQueue && (
           <NavItem icon={<ClipboardList size={16} />} label="Demandes à affecter" active={tab === "demandes"} onClick={() => { setTab("demandes"); setSelectedId(null); }} />
