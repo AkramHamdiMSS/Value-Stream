@@ -26,9 +26,10 @@ export default function Dashboard({ data, periods: periodDefs, onOpenProject }) 
 // ---------------------------------------------------------------- SVO view
 // Scoped to the projects they own: is what I asked for actually covered,
 // and which of my projects still need attention — not the org-wide pool
-// picture, which they can't act on anyway.
+// picture, which they can't act on anyway. The resource-load grid below
+// is still shown though, same shared context every user gets.
 
-function OwnDashboard({ data, onOpenProject }) {
+function OwnDashboard({ data, labelFor, onOpenProject }) {
   const { totals, bySquad, demandByMonth, projectsCount, draftCount, submittedCount, myProjects } = data;
   const chartWeeks = demandByMonth.slice(0, 16);
   const ecart = totals.ecartTotal;
@@ -81,7 +82,7 @@ function OwnDashboard({ data, onOpenProject }) {
         </div>
       </div>
 
-      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
+      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW, marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Mes projets ({projectsCount})</div>
         <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
           {submittedCount} soumis(e) · {draftCount} en brouillon. Cliquez sur un projet pour l'ouvrir.
@@ -111,6 +112,8 @@ function OwnDashboard({ data, onOpenProject }) {
           </tbody>
         </table>
       </div>
+
+      <ResourceLoadGrid data={data} labelFor={labelFor} onOpenProject={onOpenProject} />
     </div>
   );
 }
@@ -118,8 +121,7 @@ function OwnDashboard({ data, onOpenProject }) {
 // ---------------------------------------------------------------- HSV / global view
 
 function AllDashboard({ data, labelFor, onOpenProject }) {
-  const [expanded, setExpanded] = useState(null);
-  const { totals, bySquad, demandByMonth, pool, overAllocGrid, overAllocProjects, alertCount, projectsCount, periods } = data;
+  const { totals, bySquad, demandByMonth, alertCount, projectsCount } = data;
   const chartWeeks = demandByMonth.slice(0, 16);
 
   return (
@@ -169,82 +171,97 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
         </div>
       </div>
 
-      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Charge par ressource et par semaine (52 semaines)</div>
-        <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
-          Rouge = plus de 100% cette semaine-là, tous projets confondus. Cliquez sur une ressource pour voir le détail
-          des projets sur lesquels elle travaille. Défilement horizontal pour voir toute l'année.
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "collapse", fontSize: 11.5, width: "100%" }}>
-            <thead>
-              <tr>
-                <th style={{ position: "sticky", left: 0, background: SURFACE, textAlign: "left", padding: "4px 8px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}` }}>Ressource</th>
-                {periods.map((p) => (
-                  <th key={p} style={{ padding: "4px 6px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}`, minWidth: 40, whiteSpace: "nowrap" }}>{labelFor(p)}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {pool.map((res) => {
-                const isOpen = expanded === res.id;
-                const detail = periods
-                  .map((p) => ({ period: p, entries: overAllocProjects?.[`${res.id}:${p}`] || [] }))
-                  .filter((row) => row.entries.length > 0);
-                return (
-                  <Fragment key={res.id}>
-                    <tr>
-                      <td onClick={() => setExpanded(isOpen ? null : res.id)}
-                        style={{
-                          position: "sticky", left: 0, background: SURFACE, padding: "3px 8px", whiteSpace: "nowrap",
-                          borderBottom: `1px solid ${BORDER}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
-                          color: isOpen ? ACCENT : TEXT, fontWeight: isOpen ? 600 : 400,
+      <ResourceLoadGrid data={data} labelFor={labelFor} onOpenProject={onOpenProject} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- shared: resource load grid
+// "Charge par ressource et par semaine" — shown to every authenticated user
+// (HSV and SVO alike), since knowing who's already loaded is useful context
+// regardless of what you personally manage. Click a resource to expand the
+// projects behind their load, per week.
+
+function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
+  const [expanded, setExpanded] = useState(null);
+  const { pool, overAllocGrid, overAllocProjects, periods } = data;
+
+  return (
+    <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Charge par ressource et par semaine (52 semaines)</div>
+      <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
+        Rouge = plus de 100% cette semaine-là, tous projets confondus. Cliquez sur une ressource pour voir le détail
+        des projets sur lesquels elle travaille. Défilement horizontal pour voir toute l'année.
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 11.5, width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ position: "sticky", left: 0, background: SURFACE, textAlign: "left", padding: "4px 8px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}` }}>Ressource</th>
+              {periods.map((p) => (
+                <th key={p} style={{ padding: "4px 6px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}`, minWidth: 40, whiteSpace: "nowrap" }}>{labelFor(p)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pool.map((res) => {
+              const isOpen = expanded === res.id;
+              const detail = periods
+                .map((p) => ({ period: p, entries: overAllocProjects?.[`${res.id}:${p}`] || [] }))
+                .filter((row) => row.entries.length > 0);
+              return (
+                <Fragment key={res.id}>
+                  <tr>
+                    <td onClick={() => setExpanded(isOpen ? null : res.id)}
+                      style={{
+                        position: "sticky", left: 0, background: SURFACE, padding: "3px 8px", whiteSpace: "nowrap",
+                        borderBottom: `1px solid ${BORDER}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                        color: isOpen ? ACCENT : TEXT, fontWeight: isOpen ? 600 : 400,
+                      }}>
+                      {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {res.name}
+                    </td>
+                    {periods.map((p) => {
+                      const v = overAllocGrid[res.id]?.[p] || 0;
+                      const over = v > 1.001;
+                      return (
+                        <td key={p} style={{
+                          textAlign: "center", padding: "3px 6px", borderBottom: `1px solid ${BORDER}`,
+                          background: over ? `color-mix(in srgb, ${RED} 22%, transparent)` : v > 0 ? `color-mix(in srgb, ${GREEN} 15%, transparent)` : "transparent",
+                          color: over ? RED : v > 0 ? GREEN : MUTED, fontWeight: over ? 700 : 400,
                         }}>
-                        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {res.name}
-                      </td>
-                      {periods.map((p) => {
-                        const v = overAllocGrid[res.id]?.[p] || 0;
-                        const over = v > 1.001;
-                        return (
-                          <td key={p} style={{
-                            textAlign: "center", padding: "3px 6px", borderBottom: `1px solid ${BORDER}`,
-                            background: over ? `color-mix(in srgb, ${RED} 22%, transparent)` : v > 0 ? `color-mix(in srgb, ${GREEN} 15%, transparent)` : "transparent",
-                            color: over ? RED : v > 0 ? GREEN : MUTED, fontWeight: over ? 700 : 400,
-                          }}>
-                            {v > 0 ? `${Math.round(v * 100)}%` : "—"}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                    {isOpen && (
-                      <tr>
-                        <td colSpan={periods.length + 1} style={{ background: SURFACE2, padding: "10px 12px", borderBottom: `1px solid ${BORDER}` }}>
-                          {detail.length === 0 ? (
-                            <span style={{ color: MUTED, fontSize: 12 }}>Aucune affectation pour {res.name}.</span>
-                          ) : (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                              {detail.map((row) => row.entries.map((e) => (
-                                <button key={row.period + e.projectId} onClick={() => onOpenProject?.(e.projectId)} style={{
-                                  background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 20,
-                                  color: TEXT, fontSize: 11.5, padding: "4px 10px", cursor: "pointer",
-                                  display: "flex", alignItems: "center", gap: 6,
-                                }}>
-                                  <span style={{ color: MUTED }}>{labelFor(row.period)}</span>
-                                  <span style={{ fontWeight: 600 }}>{e.projectName}</span>
-                                  <span style={{ color: ACCENT }}>{Math.round(e.pct * 100)}%</span>
-                                </button>
-                              )))}
-                            </div>
-                          )}
+                          {v > 0 ? `${Math.round(v * 100)}%` : "—"}
                         </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      );
+                    })}
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={periods.length + 1} style={{ background: SURFACE2, padding: "10px 12px", borderBottom: `1px solid ${BORDER}` }}>
+                        {detail.length === 0 ? (
+                          <span style={{ color: MUTED, fontSize: 12 }}>Aucune affectation pour {res.name}.</span>
+                        ) : (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {detail.map((row) => row.entries.map((e) => (
+                              <button key={row.period + e.projectId} onClick={() => onOpenProject?.(e.projectId)} style={{
+                                background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 20,
+                                color: TEXT, fontSize: 11.5, padding: "4px 10px", cursor: "pointer",
+                                display: "flex", alignItems: "center", gap: 6,
+                              }}>
+                                <span style={{ color: MUTED }}>{labelFor(row.period)}</span>
+                                <span style={{ fontWeight: 600 }}>{e.projectName}</span>
+                                <span style={{ color: ACCENT }}>{Math.round(e.pct * 100)}%</span>
+                              </button>
+                            )))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

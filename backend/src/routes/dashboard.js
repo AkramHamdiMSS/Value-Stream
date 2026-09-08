@@ -15,41 +15,18 @@ function canViewAllProjects(user) {
   return hasPermission(user, "viewAllProjects") || hasPermission(user, "manageProjects") || hasPermission(user, "manageAllocations");
 }
 
-router.get("/", async (req, res) => {
-  const periods = generatePeriods();
-
-  if (!canViewAllProjects(req.user)) {
-    return res.json(await buildOwnDashboard(req.user, periods));
-  }
-
-  const [pool, projects, allocationLines] = await Promise.all([
+// Resource-load grid (who's on what, per week) — shared context every
+// authenticated user sees regardless of scope, same as the original
+// prototype's dashboard: knowing who's already loaded is useful context
+// even for an SVO who can only act on their own projects.
+async function buildResourceLoad(periods) {
+  const [pool, allocationLines] = await Promise.all([
     prisma.poolMember.findMany(),
-    prisma.project.findMany({ include: { demandLines: true } }),
     prisma.allocationLine.findMany({
       select: { poolMemberId: true, period: true, pct: true, project: { select: { id: true, name: true } } },
     }),
   ]);
 
-  const map = Object.fromEntries(periods.map((p) => [p, { period: p, Mobile: 0, TPE: 0, Digital: 0 }]));
-  let besoinMobile = 0, besoinTpe = 0, besoinDigital = 0;
-  for (const proj of projects) {
-    for (const l of proj.demandLines) {
-      const eff = effective(l.count, l.pct);
-      if (l.profile === "Mobile") besoinMobile += eff;
-      else if (l.profile === "TPE") besoinTpe += eff;
-      else if (l.profile === "Digital") besoinDigital += eff;
-      if (map[l.period]) map[l.period][l.profile] = round1(map[l.period][l.profile] + eff);
-    }
-  }
-  const demandByMonth = periods.map((p) => map[p]);
-
-  const capMobile = pool.filter((p) => p.squad === "Mobile").length;
-  const capTpe = pool.filter((p) => p.squad === "TPE").length;
-  const capDigital = pool.filter((p) => p.squad === "Digital").length;
-
-  // overAllocProjects mirrors overAllocGrid but lists which project(s) make up
-  // each cell's total, so the dashboard can show "Projet A: 40% · Projet B: 20%"
-  // instead of just the summed percentage.
   const overAllocGrid = {};
   const overAllocProjects = {};
   for (const res of pool) overAllocGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
@@ -67,6 +44,39 @@ router.get("/", async (req, res) => {
       if ((overAllocGrid[res.id]?.[p] || 0) > 1.001) alertCount++;
     }
   }
+
+  return { pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad })), overAllocGrid, overAllocProjects, alertCount };
+}
+
+router.get("/", async (req, res) => {
+  const periods = generatePeriods();
+  const resourceLoad = await buildResourceLoad(periods);
+
+  if (!canViewAllProjects(req.user)) {
+    const own = await buildOwnDashboard(req.user, periods);
+    return res.json({ ...own, ...resourceLoad, periods });
+  }
+
+  const [projects] = await Promise.all([
+    prisma.project.findMany({ include: { demandLines: true } }),
+  ]);
+
+  const map = Object.fromEntries(periods.map((p) => [p, { period: p, Mobile: 0, TPE: 0, Digital: 0 }]));
+  let besoinMobile = 0, besoinTpe = 0, besoinDigital = 0;
+  for (const proj of projects) {
+    for (const l of proj.demandLines) {
+      const eff = effective(l.count, l.pct);
+      if (l.profile === "Mobile") besoinMobile += eff;
+      else if (l.profile === "TPE") besoinTpe += eff;
+      else if (l.profile === "Digital") besoinDigital += eff;
+      if (map[l.period]) map[l.period][l.profile] = round1(map[l.period][l.profile] + eff);
+    }
+  }
+  const demandByMonth = periods.map((p) => map[p]);
+
+  const capMobile = resourceLoad.pool.filter((p) => p.squad === "Mobile").length;
+  const capTpe = resourceLoad.pool.filter((p) => p.squad === "TPE").length;
+  const capDigital = resourceLoad.pool.filter((p) => p.squad === "Digital").length;
 
   res.json({
     scope: "all",
@@ -87,16 +97,14 @@ router.get("/", async (req, res) => {
       { name: "Digital", besoin: round1(besoinDigital), capacite: capDigital },
     ],
     demandByMonth,
-    pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad })),
-    overAllocGrid,
-    overAllocProjects,
-    alertCount,
+    ...resourceLoad,
     projectsCount: projects.length,
   });
 });
 
 // SVO view: scoped to the projects they own — how well is MY expressed need
 // covered, not the whole org's pool/capacity picture (which they can't act on).
+// The shared resource-load grid (see buildResourceLoad) is merged in on top.
 async function buildOwnDashboard(user, periods) {
   const projects = await prisma.project.findMany({
     where: { svoUserId: user.id },
@@ -150,7 +158,6 @@ async function buildOwnDashboard(user, periods) {
 
   return {
     scope: "own",
-    periods,
     totals: {
       besoinMobile: round1(besoinMobile),
       besoinTpe: round1(besoinTpe),
