@@ -45,6 +45,10 @@ export default function App() {
     manageRoles: has("manageRoles"),
     viewActivity: has("viewActivity"),
   };
+  // Team/Tech leads: viewDashboard granted and nothing else beyond base SVO
+  // access — they only need the org-wide resource-load grid, not their own
+  // project KPIs/charts (those still live under "Mes projets" as usual).
+  const minimalDashboard = !isHSV && user?.permissions?.length === 1 && user.permissions[0] === "viewDashboard";
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
@@ -173,7 +177,7 @@ export default function App() {
 
       <div style={{ flex: 1, padding: 24, overflowX: "auto" }}>
         {tab === "dashboard" && (
-          <Dashboard data={dashboard} periods={periods} onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }} />
+          <Dashboard data={dashboard} periods={periods} minimalDashboard={minimalDashboard} onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }} />
         )}
 
         {tab === "projects" && !selectedId && (

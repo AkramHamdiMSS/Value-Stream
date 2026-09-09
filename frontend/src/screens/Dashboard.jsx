@@ -6,7 +6,7 @@ import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, 
 import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, RED, CARD_SHADOW } from "../styles";
 import { Kpi, Th, Td, Badge } from "../components/ui";
 
-export default function Dashboard({ data, periods: periodDefs, onOpenProject }) {
+export default function Dashboard({ data, periods: periodDefs, onOpenProject, minimalDashboard }) {
   if (!data) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, padding: 40 }}>
@@ -19,7 +19,7 @@ export default function Dashboard({ data, periods: periodDefs, onOpenProject }) 
   const labelFor = (p) => periodLabel[p] || p;
 
   return data.scope === "own"
-    ? <OwnDashboard data={data} labelFor={labelFor} onOpenProject={onOpenProject} />
+    ? <OwnDashboard data={data} labelFor={labelFor} onOpenProject={onOpenProject} minimalDashboard={minimalDashboard} />
     : <AllDashboard data={data} labelFor={labelFor} onOpenProject={onOpenProject} />;
 }
 
@@ -29,7 +29,7 @@ export default function Dashboard({ data, periods: periodDefs, onOpenProject }) 
 // picture, which they can't act on anyway. The resource-load grid below
 // is still shown though, same shared context every user gets.
 
-function OwnDashboard({ data, labelFor, onOpenProject }) {
+function OwnDashboard({ data, labelFor, onOpenProject, minimalDashboard }) {
   const { totals, bySquad, demandByMonth, projectsCount, draftCount, submittedCount, myProjects } = data;
   const chartWeeks = demandByMonth.slice(0, 16);
   const ecart = totals.ecartTotal;
@@ -38,80 +38,86 @@ function OwnDashboard({ data, labelFor, onOpenProject }) {
     <div>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px" }}>Dashboard</h1>
       <p style={{ color: MUTED, fontSize: 13, margin: "0 0 20px" }}>
-        Calculé en direct à partir de vos projets — aucune saisie ici.
+        {minimalDashboard
+          ? "Charge des ressources, tous projets confondus — aucune saisie ici."
+          : "Calculé en direct à partir de vos projets — aucune saisie ici."}
       </p>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <Kpi label="Mes projets" value={projectsCount} icon={<FolderKanban size={18} />} />
-        <Kpi label="Besoin exprimé (pers.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />} />
-        <Kpi label="Alloué (pers.)" value={totals.allocTotal} accent={GREEN} icon={<Users size={18} />} />
-        <Kpi label="Écart" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
-        <Kpi label="Demandes en brouillon" value={draftCount} accent={draftCount > 0 ? undefined : GREEN} icon={<ClipboardList size={18} />} />
-      </div>
+      {!minimalDashboard && (
+        <>
+          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+            <Kpi label="Mes projets" value={projectsCount} icon={<FolderKanban size={18} />} />
+            <Kpi label="Besoin exprimé (pers.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />} />
+            <Kpi label="Alloué (pers.)" value={totals.allocTotal} accent={GREEN} icon={<Users size={18} />} />
+            <Kpi label="Écart" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
+            <Kpi label="Demandes en brouillon" value={draftCount} accent={draftCount > 0 ? undefined : GREEN} icon={<ClipboardList size={18} />} />
+          </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginBottom: 20 }}>
-        <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Mon besoin par semaine (16 premières semaines)</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={chartWeeks}>
-              <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-              <XAxis dataKey="period" stroke={MUTED} fontSize={10} interval={1} />
-              <YAxis stroke={MUTED} fontSize={11} />
-              <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="Mobile" stroke={ACCENT2} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="TPE" stroke={GREEN} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="Digital" stroke={ACCENT} strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginBottom: 20 }}>
+            <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Mon besoin par semaine (16 premières semaines)</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={chartWeeks}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                  <XAxis dataKey="period" stroke={MUTED} fontSize={10} interval={1} />
+                  <YAxis stroke={MUTED} fontSize={11} />
+                  <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line type="monotone" dataKey="Mobile" stroke={ACCENT2} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="TPE" stroke={GREEN} strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="Digital" stroke={ACCENT} strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
 
-        <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Besoin vs alloué par profil</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={bySquad}>
-              <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-              <XAxis dataKey="name" stroke={MUTED} fontSize={11} />
-              <YAxis stroke={MUTED} fontSize={11} />
-              <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="besoin" fill={ACCENT} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="alloue" fill={GREEN} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+            <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Besoin vs alloué par profil</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={bySquad}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+                  <XAxis dataKey="name" stroke={MUTED} fontSize={11} />
+                  <YAxis stroke={MUTED} fontSize={11} />
+                  <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="besoin" fill={ACCENT} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="alloue" fill={GREEN} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
-      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW, marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Mes projets ({projectsCount})</div>
-        <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
-          {submittedCount} soumis(e) · {draftCount} en brouillon. Cliquez sur un projet pour l'ouvrir.
-        </div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: SURFACE2 }}>
-              <Th>Projet</Th><Th>Statut</Th><Th>Besoin</Th><Th>Alloué</Th><Th>Écart</Th><Th>Demande</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {myProjects.map((p) => (
-              <tr key={p.id} style={{ borderTop: `1px solid ${BORDER}`, cursor: "pointer" }} onClick={() => onOpenProject?.(p.id)}>
-                <Td><span style={{ fontWeight: 600 }}>{p.name}</span></Td>
-                <Td><span style={{ color: MUTED }}>{p.status}</span></Td>
-                <Td>{p.demand}</Td>
-                <Td>{p.alloc}</Td>
-                <Td><span style={{ color: p.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{p.ecart}</span></Td>
-                <Td>
-                  {p.demandSubmitted ? <Badge color={GREEN} text="Soumise" /> : <Badge color={MUTED} text="Brouillon" />}
-                </Td>
-              </tr>
-            ))}
-            {myProjects.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: MUTED }}>Aucun projet ne vous est encore assigné.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+          <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW, marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Mes projets ({projectsCount})</div>
+            <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
+              {submittedCount} soumis(e) · {draftCount} en brouillon. Cliquez sur un projet pour l'ouvrir.
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: SURFACE2 }}>
+                  <Th>Projet</Th><Th>Statut</Th><Th>Besoin</Th><Th>Alloué</Th><Th>Écart</Th><Th>Demande</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {myProjects.map((p) => (
+                  <tr key={p.id} style={{ borderTop: `1px solid ${BORDER}`, cursor: "pointer" }} onClick={() => onOpenProject?.(p.id)}>
+                    <Td><span style={{ fontWeight: 600 }}>{p.name}</span></Td>
+                    <Td><span style={{ color: MUTED }}>{p.status}</span></Td>
+                    <Td>{p.demand}</Td>
+                    <Td>{p.alloc}</Td>
+                    <Td><span style={{ color: p.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{p.ecart}</span></Td>
+                    <Td>
+                      {p.demandSubmitted ? <Badge color={GREEN} text="Soumise" /> : <Badge color={MUTED} text="Brouillon" />}
+                    </Td>
+                  </tr>
+                ))}
+                {myProjects.length === 0 && (
+                  <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: MUTED }}>Aucun projet ne vous est encore assigné.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <ResourceLoadGrid data={data} labelFor={labelFor} onOpenProject={onOpenProject} />
     </div>
