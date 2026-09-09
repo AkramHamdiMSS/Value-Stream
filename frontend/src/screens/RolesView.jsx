@@ -7,6 +7,7 @@ import { Th, Td, Badge } from "../components/ui";
 
 export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
   const [newPersonId, setNewPersonId] = useState("");
+  const [standaloneName, setStandaloneName] = useState("");
   const [error, setError] = useState("");
   const [pwDrafts, setPwDrafts] = useState({});
   const [names, setNames] = useState({});
@@ -25,6 +26,22 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
     try {
       await api.post("/users", { poolMemberId: newPersonId, role: "svo" });
       setNewPersonId("");
+      setError("");
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  // For someone who needs an account but isn't a delivery-pool resource (e.g. a
+  // department head tracking activity, not doing dev work) — the pool represents
+  // squad capacity, so forcing them in there would skew capacity/allocation math.
+  const addStandaloneSvo = async () => {
+    const name = standaloneName.trim();
+    if (!name) { setError("Entrez un nom avant d'ajouter."); return; }
+    try {
+      await api.post("/users", { name, role: "svo" });
+      setStandaloneName("");
       setError("");
       onChanged();
     } catch (e) {
@@ -178,6 +195,16 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
           Tout le monde dans le pool est déjà SVO. Ajoutez d'abord une personne dans l'onglet Pool.
         </div>
       )}
+
+      <div style={{ fontSize: 11, color: MUTED, margin: "16px 0 6px", textTransform: "uppercase", fontWeight: 600 }}>
+        Ou créer un compte hors pool (ex. un manager sans profil de développement)
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", maxWidth: 420 }}>
+        <input value={standaloneName} onChange={(e) => { setStandaloneName(e.target.value); setError(""); }}
+          placeholder="Ex. Head of Payment Acceptance" style={{ ...inputStyle, flex: 1 }} />
+        <button onClick={addStandaloneSvo} style={btnPrimary}><Plus size={15} /> Ajouter</button>
+      </div>
+
       {error && <div style={{ color: RED, fontSize: 12.5, marginTop: 6 }}>{error}</div>}
     </div>
   );
