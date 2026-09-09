@@ -53,12 +53,13 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
     }
   };
 
-  const renameSvo = async (id) => {
+  const renameUser = async (id) => {
     const name = (names[id] ?? "").trim();
     if (!name) return;
     try {
       await api.patch(`/users/${id}`, { name });
       onChanged();
+      loadHsv();
     } catch (e) {
       setError(e.message);
     }
@@ -109,6 +110,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
       await api.post(`/users/${id}/set-password`, { password: draft });
       setPwDrafts({ ...pwDrafts, [id]: "" });
       onChanged();
+      loadHsv();
     } catch (e) {
       setError(e.message);
     }
@@ -151,7 +153,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
                 <tr style={{ borderTop: `1px solid ${BORDER}` }}>
                   <Td>
                     <input value={names[s.id] ?? s.name} onChange={(e) => setNames({ ...names, [s.id]: e.target.value })}
-                      onBlur={() => renameSvo(s.id)} style={inputStyle} />
+                      onBlur={() => renameUser(s.id)} style={inputStyle} />
                   </Td>
                   <Td><span style={{ color: MUTED }}>{s.projectCount}</span></Td>
                   <Td>
@@ -224,13 +226,30 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: SURFACE2 }}>
-                <Th>Head of Value Stream</Th><Th></Th>
+                <Th>Head of Value Stream</Th><Th>Compte</Th><Th>Définir / réinitialiser le mot de passe</Th><Th></Th>
               </tr>
             </thead>
             <tbody>
               {hsvUsers.map((h) => (
                 <tr key={h.id} style={{ borderTop: `1px solid ${BORDER}` }}>
-                  <Td><span style={{ fontWeight: 600 }}>{h.name}</span></Td>
+                  <Td>
+                    <input value={names[h.id] ?? h.name} onChange={(e) => setNames({ ...names, [h.id]: e.target.value })}
+                      onBlur={() => renameUser(h.id)} style={inputStyle} />
+                  </Td>
+                  <Td>
+                    {h.hasPassword ? <Badge color={GREEN} text="Actif" /> : <Badge color={AMBER} text="Sans mot de passe" />}
+                  </Td>
+                  <Td>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input type="text" placeholder="Nouveau mot de passe" value={pwDrafts[h.id] || ""}
+                        onChange={(e) => setPwDrafts({ ...pwDrafts, [h.id]: e.target.value })}
+                        style={{ ...inputStyle, width: 150 }} />
+                      <button onClick={() => setPassword(h.id)} disabled={(pwDrafts[h.id] || "").trim().length < 4}
+                        style={{ ...btnGhost, opacity: (pwDrafts[h.id] || "").trim().length < 4 ? 0.4 : 1 }}>
+                        <KeyRound size={13} /> Définir
+                      </button>
+                    </div>
+                  </Td>
                   <Td>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <button onClick={() => demoteToSvo(h.id)} disabled={hsvUsers.length <= 1}
@@ -248,7 +267,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
                 </tr>
               ))}
               {hsvUsers.length === 0 && (
-                <tr><td colSpan={2} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun compte Head of Value Stream.</td></tr>
+                <tr><td colSpan={4} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun compte Head of Value Stream.</td></tr>
               )}
             </tbody>
           </table>
