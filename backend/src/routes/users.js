@@ -50,6 +50,30 @@ router.patch("/:id/permissions", requireRole("hsv"), async (req, res) => {
   res.json({ id: user.id, permissions: user.permissions });
 });
 
+// Promoting/demoting between svo and hsv is as sensitive as the permission
+// matrix — reserved for the actual hsv role, same reasoning as above.
+router.patch("/:id/role", requireRole("hsv"), async (req, res) => {
+  const schema = z.object({ role: z.enum(["svo", "hsv"]) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Rôle invalide." });
+
+  const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!target) return res.status(404).json({ error: "Compte introuvable." });
+  if (target.role === parsed.data.role) return res.json({ id: target.id, role: target.role });
+
+  if (target.role === "hsv" && parsed.data.role === "svo") {
+    const hsvCount = await prisma.user.count({ where: { role: "hsv" } });
+    if (hsvCount <= 1) return res.status(409).json({ error: "Impossible de rétrograder le dernier compte Head of Value Stream." });
+  }
+
+  const user = await prisma.user.update({ where: { id: req.params.id }, data: { role: parsed.data.role } });
+  await logActivity({
+    user: req.user,
+    action: parsed.data.role === "hsv" ? `a promu ${user.name} Head of Value Stream` : `a rétrogradé ${user.name} en SVO`,
+  });
+  res.json({ id: user.id, name: user.name, role: user.role });
+});
+
 router.use(requirePermission("manageRoles"));
 
 // Create an SVO account by duplicating a pool member's name (CDC 2 — "dupliquer son
@@ -104,6 +128,13 @@ router.delete("/:id", async (req, res) => {
   if (!user) return res.status(404).json({ error: "Compte introuvable." });
   if (user._count.projects > 0) {
     return res.status(409).json({ error: "Réaffectez d'abord ses projets à un autre SVO." });
+  }
+  if (user.role === "hsv") {
+    // A delegated SVO with just "manageRoles" could otherwise delete the real
+    // admin account — deleting an hsv account is reserved for the actual hsv role.
+    if (req.user.role !== "hsv") return res.status(403).json({ error: "Accès refusé." });
+    const hsvCount = await prisma.user.count({ where: { role: "hsv" } });
+    if (hsvCount <= 1) return res.status(409).json({ error: "Impossible de supprimer le dernier compte Head of Value Stream." });
   }
   await prisma.user.delete({ where: { id: req.params.id } });
   await logActivity({ user: req.user, action: `a supprimé le compte ${user.name}` });

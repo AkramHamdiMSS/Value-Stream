@@ -1,5 +1,5 @@
-import { Fragment, useState } from "react";
-import { Plus, KeyRound, Trash2, ShieldCheck } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import { Plus, KeyRound, Trash2, ShieldCheck, ArrowUpCircle } from "lucide-react";
 import { api } from "../api";
 import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, AMBER, RED, ACCENT, CARD_SHADOW, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
 import { PERMISSIONS } from "../lib/permissions";
@@ -18,6 +18,10 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
   // permissions and the second PATCH silently clobbers the first.
   const [permsLocal, setPermsLocal] = useState({});
   const effectivePerms = (user) => permsLocal[user.id] ?? user.permissions ?? [];
+
+  const [hsvUsers, setHsvUsers] = useState([]);
+  const loadHsv = () => api.get("/users?role=hsv").then(setHsvUsers);
+  useEffect(() => { if (isHSV) loadHsv(); }, [isHSV]);
 
   const availablePool = pool.filter((p) => !svoUsers.some((s) => s.name.toLowerCase() === p.name.toLowerCase()));
 
@@ -64,6 +68,35 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
     try {
       await api.delete(`/users/${id}`);
       onChanged();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const promoteToHsv = async (id) => {
+    try {
+      await api.patch(`/users/${id}/role`, { role: "hsv" });
+      onChanged();
+      loadHsv();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const demoteToSvo = async (id) => {
+    try {
+      await api.patch(`/users/${id}/role`, { role: "svo" });
+      onChanged();
+      loadHsv();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const removeHsv = async (id) => {
+    try {
+      await api.delete(`/users/${id}`);
+      loadHsv();
     } catch (e) {
       setError(e.message);
     }
@@ -144,11 +177,19 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
                     </Td>
                   )}
                   <Td>
-                    <button onClick={() => removeSvo(s.id)} disabled={s.projectCount > 0}
-                      title={s.projectCount > 0 ? "Réaffectez d'abord ses projets à un autre SVO" : "Retirer"}
-                      style={{ ...iconBtn, opacity: s.projectCount > 0 ? 0.35 : 1, cursor: s.projectCount > 0 ? "not-allowed" : "pointer" }}>
-                      <Trash2 size={14} />
-                    </button>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {isHSV && (
+                        <button onClick={() => promoteToHsv(s.id)} title="Promouvoir en Head of Value Stream"
+                          style={iconBtn}>
+                          <ArrowUpCircle size={14} />
+                        </button>
+                      )}
+                      <button onClick={() => removeSvo(s.id)} disabled={s.projectCount > 0}
+                        title={s.projectCount > 0 ? "Réaffectez d'abord ses projets à un autre SVO" : "Retirer"}
+                        style={{ ...iconBtn, opacity: s.projectCount > 0 ? 0.35 : 1, cursor: s.projectCount > 0 ? "not-allowed" : "pointer" }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </Td>
                 </tr>
                 {isHSV && openPermsFor === s.id && (
@@ -177,6 +218,42 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
           </tbody>
         </table>
       </div>
+
+      {isHSV && (
+        <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", marginBottom: 16, boxShadow: CARD_SHADOW }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: SURFACE2 }}>
+                <Th>Head of Value Stream</Th><Th></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {hsvUsers.map((h) => (
+                <tr key={h.id} style={{ borderTop: `1px solid ${BORDER}` }}>
+                  <Td><span style={{ fontWeight: 600 }}>{h.name}</span></Td>
+                  <Td>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <button onClick={() => demoteToSvo(h.id)} disabled={hsvUsers.length <= 1}
+                        title={hsvUsers.length <= 1 ? "Impossible de rétrograder le dernier compte" : "Rétrograder en SVO"}
+                        style={{ ...btnGhost, fontSize: 11.5, opacity: hsvUsers.length <= 1 ? 0.4 : 1 }}>
+                        Rétrograder en SVO
+                      </button>
+                      <button onClick={() => removeHsv(h.id)} disabled={hsvUsers.length <= 1}
+                        title={hsvUsers.length <= 1 ? "Impossible de supprimer le dernier compte" : "Supprimer"}
+                        style={{ ...iconBtn, opacity: hsvUsers.length <= 1 ? 0.35 : 1, cursor: hsvUsers.length <= 1 ? "not-allowed" : "pointer" }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </Td>
+                </tr>
+              ))}
+              {hsvUsers.length === 0 && (
+                <tr><td colSpan={2} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun compte Head of Value Stream.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div style={{ fontSize: 11, color: MUTED, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>
         Ajouter un SVO depuis le pool
