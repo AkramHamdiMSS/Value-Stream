@@ -4,6 +4,7 @@ const { z } = require("zod");
 const prisma = require("../lib/prisma");
 const { authenticate, requireRole, requirePermission } = require("../middleware/auth");
 const { PERMISSION_KEYS } = require("../lib/permissions");
+const { logActivity } = require("../lib/activity");
 
 const router = express.Router();
 router.use(authenticate);
@@ -45,6 +46,7 @@ router.patch("/:id/permissions", requireRole("hsv"), async (req, res) => {
     where: { id: req.params.id },
     data: { permissions: [...new Set(parsed.data.permissions)] },
   });
+  await logActivity({ user: req.user, action: `a modifié les permissions de ${user.name}` });
   res.json({ id: user.id, permissions: user.permissions });
 });
 
@@ -74,6 +76,7 @@ router.post("/", async (req, res) => {
   if (existing) return res.status(409).json({ error: "Ce nom est déjà utilisé par un compte." });
 
   const user = await prisma.user.create({ data: { name, role } });
+  await logActivity({ user: req.user, action: `a créé le compte ${user.name} (${user.role})` });
   res.status(201).json({ id: user.id, name: user.name, role: user.role, hasPassword: false, projectCount: 0 });
 });
 
@@ -87,7 +90,9 @@ router.patch("/:id", async (req, res) => {
     return res.status(409).json({ error: "Ce nom est déjà utilisé par un compte." });
   }
 
+  const before = await prisma.user.findUnique({ where: { id: req.params.id } });
   const user = await prisma.user.update({ where: { id: req.params.id }, data: { name: parsed.data.name } });
+  if (before) await logActivity({ user: req.user, action: `a renommé le compte "${before.name}" en "${user.name}"` });
   res.json({ id: user.id, name: user.name, role: user.role });
 });
 
@@ -101,6 +106,7 @@ router.delete("/:id", async (req, res) => {
     return res.status(409).json({ error: "Réaffectez d'abord ses projets à un autre SVO." });
   }
   await prisma.user.delete({ where: { id: req.params.id } });
+  await logActivity({ user: req.user, action: `a supprimé le compte ${user.name}` });
   res.json({ ok: true });
 });
 
@@ -111,6 +117,8 @@ router.post("/:id/set-password", async (req, res) => {
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
   const user = await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
+  // Never log the password itself, just that it changed.
+  await logActivity({ user: req.user, action: `a défini un nouveau mot de passe pour ${user.name}` });
   res.json({ id: user.id, name: user.name, hasPassword: true });
 });
 

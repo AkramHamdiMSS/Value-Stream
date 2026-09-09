@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const { z } = require("zod");
 const prisma = require("../lib/prisma");
 const { authenticate } = require("../middleware/auth");
+const { logActivity } = require("../lib/activity");
 
 const router = express.Router();
 
@@ -44,6 +45,7 @@ router.post("/login", async (req, res) => {
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return res.status(401).json({ error: "Mot de passe incorrect." });
 
+  await logActivity({ user, action: "s'est connecté(e)" });
   res.json({ token: issueToken(user), user: toPublicUser(user) });
 });
 
@@ -66,6 +68,7 @@ router.post("/change-password", authenticate, async (req, res) => {
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash } });
+  await logActivity({ user: req.user, action: "a changé son mot de passe" });
   res.json({ ok: true });
 });
 
