@@ -21,8 +21,7 @@ export default function LoginScreen({ onLogin, theme, onToggleTheme }) {
       .catch(() => setError("Impossible de contacter le serveur."));
   }, []);
 
-  const svoAccounts = accounts.filter((a) => a.role === "svo");
-  const hsvAccounts = accounts.filter((a) => a.role === "hsv");
+  const sortedAccounts = [...accounts].sort((a, b) => a.name.localeCompare(b.name));
 
   const submit = async () => {
     if (!selected) { setError("Choisissez un compte."); return; }
@@ -54,12 +53,7 @@ export default function LoginScreen({ onLogin, theme, onToggleTheme }) {
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Compte</div>
           <select value={selected} onChange={(e) => { setSelected(e.target.value); setError(""); }} style={{ ...inputStyle, width: "100%" }}>
-            <optgroup label="SVO">
-              {svoAccounts.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-            </optgroup>
-            <optgroup label="Value Stream">
-              {hsvAccounts.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-            </optgroup>
+            {sortedAccounts.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
         </div>
 
