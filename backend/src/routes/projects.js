@@ -4,6 +4,7 @@ const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { effective } = require("../lib/periods");
+const { logActivity } = require("../lib/activity");
 
 const router = express.Router();
 router.use(authenticate);
@@ -81,6 +82,7 @@ router.post("/", requirePermission("manageProjects"), async (req, res) => {
     data: parsed.data,
     include: { svo: true, demandLines: true, allocationLines: { include: { poolMember: true } } },
   });
+  await logActivity({ user: req.user, action: "a créé le projet", project });
   res.status(201).json({ ...serializeProject(project), totals: computeTotals(project) });
 });
 
@@ -147,6 +149,14 @@ router.patch("/:id", async (req, res) => {
     data,
     include: { svo: true, demandLines: true, allocationLines: { include: { poolMember: true } } },
   });
+
+  let action = null;
+  if ("demandSubmitted" in data) action = data.demandSubmitted ? "a soumis la demande" : "a rouvert la demande pour modification";
+  else if ("svoUserId" in data) action = `a réaffecté le projet à ${updated.svo.name}`;
+  else if ("name" in data) action = `a renommé le projet en "${data.name}"`;
+  else if ("status" in data) action = `a changé le statut en "${data.status}"`;
+  if (action) await logActivity({ user: req.user, action, project: updated });
+
   res.json({ ...serializeProject(updated), totals: computeTotals(updated) });
 });
 
@@ -154,6 +164,7 @@ router.delete("/:id", requirePermission("manageProjects"), async (req, res) => {
   const project = await prisma.project.findUnique({ where: { id: req.params.id } });
   if (!project) return res.status(404).json({ error: "Projet introuvable." });
   await prisma.project.delete({ where: { id: req.params.id } });
+  await logActivity({ user: req.user, action: "a supprimé le projet", project });
   res.json({ ok: true });
 });
 
@@ -191,6 +202,7 @@ router.post("/:id/demand-lines", async (req, res) => {
       pct: parsed.data.pct ?? null,
     },
   });
+  await logActivity({ user: req.user, action: `a ajouté un besoin ${line.profile} (${line.period})`, project });
   res.status(201).json(line);
 });
 
@@ -226,6 +238,7 @@ router.post("/:id/allocation-lines", requirePermission("manageAllocations"), asy
     },
     include: { poolMember: true },
   });
+  await logActivity({ user: req.user, action: `a affecté ${line.poolMember.name} (${line.period})`, project });
   res.status(201).json(line);
 });
 

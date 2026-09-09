@@ -2,6 +2,7 @@ const express = require("express");
 const { z } = require("zod");
 const prisma = require("../lib/prisma");
 const { authenticate } = require("../middleware/auth");
+const { logActivity } = require("../lib/activity");
 
 const router = express.Router();
 router.use(authenticate);
@@ -37,6 +38,7 @@ router.patch("/:id", async (req, res) => {
   const parsed = patchSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
   const updated = await prisma.demandLine.update({ where: { id: line.id }, data: parsed.data });
+  await logActivity({ user: req.user, action: `a modifié le besoin ${line.profile} (${line.period})`, project: line.project });
   res.json(updated);
 });
 
@@ -44,6 +46,7 @@ router.delete("/:id", async (req, res) => {
   const line = await loadEditableLineOr404(req, res);
   if (!line) return;
   await prisma.demandLine.delete({ where: { id: line.id } });
+  await logActivity({ user: req.user, action: `a supprimé le besoin ${line.profile} (${line.period})`, project: line.project });
   res.json({ ok: true });
 });
 

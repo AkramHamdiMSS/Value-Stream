@@ -10,6 +10,7 @@ const PERMISSIONS = [
   { key: "viewDemandQueue", label: "Voir l'onglet Demandes à affecter" },
   { key: "managePool", label: "Voir et gérer le Pool de ressources" },
   { key: "manageRoles", label: "Voir et gérer l'onglet Rôles (comptes SVO, mots de passe)" },
+  { key: "viewActivity", label: "Voir le journal d'activité" },
 ];
 const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 

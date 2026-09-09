@@ -76,6 +76,22 @@ model DemandLine {
   @@map("demand_lines")
 }
 
+// Denormalized (no FKs) so history survives the user/project it refers to
+// being renamed or deleted later.
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id")
+  userName    String   @map("user_name")
+  action      String
+  projectId   String?  @map("project_id")
+  projectName String?  @map("project_name")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([userId])
+  @@map("activity_logs")
+}
+
 model AllocationLine {
   id           String     @id @default(uuid())
   projectId    String     @map("project_id")

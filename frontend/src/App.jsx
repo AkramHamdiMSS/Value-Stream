@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2, Sun, Moon,
+  LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2, Sun, Moon, History,
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
 import { NAVY, TEXT, MUTED, FONT_BODY, SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_TEXT, SIDEBAR_MUTED, btnGhostSidebar, themeToggleBtnSidebar } from "./styles";
@@ -14,6 +14,7 @@ import ProjectDetail from "./screens/ProjectDetail";
 import DemandQueue from "./screens/DemandQueue";
 import PoolView from "./screens/PoolView";
 import RolesView from "./screens/RolesView";
+import ActivityLog from "./screens/ActivityLog";
 
 export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
@@ -42,6 +43,7 @@ export default function App() {
     viewDemandQueue: has("viewDemandQueue"),
     managePool: has("managePool"),
     manageRoles: has("manageRoles"),
+    viewActivity: has("viewActivity"),
   };
 
   useEffect(() => { applyTheme(theme); }, [theme]);
@@ -77,6 +79,7 @@ export default function App() {
     if (tab === "demandes" && !can.viewDemandQueue) { setTab("projects"); setSelectedId(null); }
     if (tab === "pool" && !can.managePool) { setTab("projects"); setSelectedId(null); }
     if (tab === "roles" && !can.manageRoles) { setTab("projects"); setSelectedId(null); }
+    if (tab === "activity" && !can.viewActivity) { setTab("projects"); setSelectedId(null); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, user]);
 
@@ -163,6 +166,9 @@ export default function App() {
         {can.manageRoles && (
           <NavItem icon={<ShieldCheck size={16} />} label="Rôles" active={tab === "roles"} onClick={() => { setTab("roles"); setSelectedId(null); }} />
         )}
+        {can.viewActivity && (
+          <NavItem icon={<History size={16} />} label="Activité" active={tab === "activity"} onClick={() => { setTab("activity"); setSelectedId(null); }} />
+        )}
       </div>
 
       <div style={{ flex: 1, padding: 24, overflowX: "auto" }}>
@@ -205,6 +211,10 @@ export default function App() {
         {tab === "roles" && can.manageRoles && (
           <RolesView svoUsers={svoUsers} pool={pool} isHSV={isHSV}
             onChanged={() => { refreshSvoUsers(); refreshProjects(); }} />
+        )}
+
+        {tab === "activity" && can.viewActivity && (
+          <ActivityLog svoUsers={svoUsers} onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }} />
         )}
       </div>
 
