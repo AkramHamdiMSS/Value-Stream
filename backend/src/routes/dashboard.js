@@ -18,14 +18,17 @@ function canViewAllProjects(user) {
 // Resource-load grid (who's on what, per week) — shared context every
 // authenticated user sees regardless of scope, same as the original
 // prototype's dashboard: knowing who's already loaded is useful context
-// even for an SVO who can only act on their own projects.
-async function buildResourceLoad(periods) {
-  const [pool, allocationLines] = await Promise.all([
+// even for an SVO who can only act on their own projects. A Team/Tech Lead
+// (viewDashboard and nothing else) only gets their own sous-équipe, not the
+// whole org — see sousEquipeFilter below.
+async function buildResourceLoad(periods, sousEquipeFilter) {
+  const [allMembers, allocationLines] = await Promise.all([
     prisma.poolMember.findMany(),
     prisma.allocationLine.findMany({
       select: { poolMemberId: true, period: true, pct: true, project: { select: { id: true, name: true } } },
     }),
   ]);
+  const pool = sousEquipeFilter ? allMembers.filter((m) => m.sousEquipe === sousEquipeFilter) : allMembers;
 
   const overAllocGrid = {};
   const overAllocProjects = {};
@@ -50,7 +53,16 @@ async function buildResourceLoad(periods) {
 
 router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   const periods = generatePeriods();
-  const resourceLoad = await buildResourceLoad(periods);
+
+  // Same "minimal dashboard" cohort the frontend restricts to the grid-only
+  // view: viewDashboard granted and nothing else beyond base SVO access.
+  const isMinimal = req.user.role !== "hsv" && (req.user.permissions || []).length === 1 && req.user.permissions[0] === "viewDashboard";
+  let sousEquipeFilter = null;
+  if (isMinimal) {
+    const self = await prisma.poolMember.findFirst({ where: { name: req.user.name } });
+    if (self) sousEquipeFilter = self.sousEquipe;
+  }
+  const resourceLoad = await buildResourceLoad(periods, sousEquipeFilter);
 
   if (!canViewAllProjects(req.user)) {
     const own = await buildOwnDashboard(req.user, periods);
