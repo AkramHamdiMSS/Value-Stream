@@ -18,6 +18,15 @@ enum Squad {
   Digital
 }
 
+// A Team/Tech Lead with only "proposeAllocations" creates a pending line; it
+// doesn't count toward Alloué/capacity anywhere until the HSV (or a
+// manageAllocations delegate) approves it — which also happens automatically
+// the moment they edit it directly.
+enum AllocationStatus {
+  pending
+  approved
+}
+
 model User {
   id           String   @id @default(uuid())
   name         String   @unique
@@ -100,6 +109,7 @@ model AllocationLine {
   poolMemberId String     @map("pool_member_id")
   poolMember   PoolMember @relation(fields: [poolMemberId], references: [id])
   pct          Decimal    @db.Decimal(6, 4)
+  status       AllocationStatus @default(approved)
   createdById  String     @map("created_by")
   createdBy    User       @relation("AllocationCreatedBy", fields: [createdById], references: [id])
 

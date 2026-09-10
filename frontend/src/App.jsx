@@ -40,15 +40,18 @@ export default function App() {
     viewAllProjects: has("viewAllProjects") || has("manageProjects") || has("manageAllocations"),
     manageProjects: has("manageProjects"),
     manageAllocations: has("manageAllocations"),
+    proposeAllocations: has("proposeAllocations"),
     viewDemandQueue: has("viewDemandQueue"),
     managePool: has("managePool"),
     manageRoles: has("manageRoles"),
     viewActivity: has("viewActivity"),
   };
-  // Team/Tech leads: viewDashboard granted and nothing else beyond base SVO
-  // access — they only need the org-wide resource-load grid, not their own
-  // project KPIs/charts (those still live under "Mes projets" as usual).
-  const minimalDashboard = !isHSV && user?.permissions?.length === 1 && user.permissions[0] === "viewDashboard";
+  // Team/Tech leads: viewDashboard granted but no org-wide oversight
+  // permission — they only need their team's resource-load grid, not their
+  // own project KPIs/charts (those still live under "Mes projets" as usual).
+  // proposeAllocations (or any other non-oversight permission) doesn't pull
+  // them out of this — only the broader ones do.
+  const minimalDashboard = !isHSV && can.viewDashboard && !can.viewAllProjects && !can.manageProjects && !can.manageAllocations;
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
@@ -192,7 +195,7 @@ export default function App() {
         {tab === "projects" && selectedId && (
           <ProjectDetail
             projectId={selectedId}
-            canViewAll={can.viewAllProjects} canManageProjects={can.manageProjects} canManageAllocations={can.manageAllocations}
+            canViewAll={can.viewAllProjects} canManageProjects={can.manageProjects} canManageAllocations={can.manageAllocations} canProposeAllocations={can.proposeAllocations}
             user={user}
             svoUsers={svoUsers} pool={pool} periods={periods} overAllocProjects={dashboard?.overAllocProjects || {}}
             onBack={() => setSelectedId(null)}
