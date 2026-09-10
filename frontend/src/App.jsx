@@ -83,7 +83,7 @@ export default function App() {
 
   useEffect(() => {
     if (tab === "dashboard" && !can.viewDashboard) { setTab("projects"); setSelectedId(null); }
-    if (tab === "demandes" && !can.viewDemandQueue) { setTab("projects"); setSelectedId(null); }
+    if (tab === "demandes" && !can.viewDemandQueue && !can.proposeAllocations) { setTab("projects"); setSelectedId(null); }
     if (tab === "pool" && !can.managePool) { setTab("projects"); setSelectedId(null); }
     if (tab === "roles" && !can.manageRoles) { setTab("projects"); setSelectedId(null); }
     if (tab === "activity" && !can.viewActivity) { setTab("projects"); setSelectedId(null); }
@@ -164,8 +164,8 @@ export default function App() {
           <NavItem icon={<LayoutDashboard size={16} />} label="Dashboard" active={tab === "dashboard"} onClick={() => { setTab("dashboard"); setSelectedId(null); }} />
         )}
         <NavItem icon={<FolderKanban size={16} />} label={can.viewAllProjects ? "Tous les projets" : "Mes projets"} active={tab === "projects"} onClick={() => setTab("projects")} />
-        {can.viewDemandQueue && (
-          <NavItem icon={<ClipboardList size={16} />} label="Demandes à affecter" active={tab === "demandes"} onClick={() => { setTab("demandes"); setSelectedId(null); }} />
+        {(can.viewDemandQueue || can.proposeAllocations) && (
+          <NavItem icon={<ClipboardList size={16} />} label={can.viewDemandQueue ? "Demandes à affecter" : "Demandes de mon équipe"} active={tab === "demandes"} onClick={() => { setTab("demandes"); setSelectedId(null); }} />
         )}
         {can.managePool && (
           <NavItem icon={<Users size={16} />} label="Pool" active={tab === "pool"} onClick={() => { setTab("pool"); setSelectedId(null); }} />
@@ -197,14 +197,15 @@ export default function App() {
             projectId={selectedId}
             canViewAll={can.viewAllProjects} canManageProjects={can.manageProjects} canManageAllocations={can.manageAllocations} canProposeAllocations={can.proposeAllocations}
             user={user}
-            svoUsers={svoUsers} pool={pool} periods={periods} overAllocProjects={dashboard?.overAllocProjects || {}}
+            svoUsers={svoUsers} pool={pool} teamPool={dashboard?.pool || []} periods={periods} overAllocProjects={dashboard?.overAllocProjects || {}}
             onBack={() => setSelectedId(null)}
             onProjectsChanged={() => { refreshProjects(); refreshDashboard(); }}
           />
         )}
 
-        {tab === "demandes" && can.viewDemandQueue && (
-          <DemandQueue pool={pool} overAllocGrid={dashboard?.overAllocGrid || {}} overAllocProjects={dashboard?.overAllocProjects || {}} canManageAllocations={can.manageAllocations}
+        {tab === "demandes" && (can.viewDemandQueue || can.proposeAllocations) && (
+          <DemandQueue pool={pool} teamPool={dashboard?.pool || []} overAllocGrid={dashboard?.overAllocGrid || {}} overAllocProjects={dashboard?.overAllocProjects || {}}
+            canManageAllocations={can.manageAllocations} canProposeAllocations={can.proposeAllocations}
             onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }}
             onAllocated={() => { refreshProjects(); refreshDashboard(); }}
           />
