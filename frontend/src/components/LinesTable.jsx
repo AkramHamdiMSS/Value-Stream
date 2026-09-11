@@ -10,11 +10,17 @@ import { Th, Td } from "./ui";
 // periods that actually have lines show up, plus whichever one the user just picked
 // via "Ajouter une période". `maxPerGroup` hides a group's "+ ligne" once it's full
 // (e.g. the 3 fixed profiles for a demand period).
-export default function LinesTable({ lines, columns, addLabel, editable = true, onAdd, onPatch, onRemove, groupBy, maxPerGroup }) {
+// `editable` gates whether adding new lines is offered at all; `rowEditable(line)`
+// (optional, defaults to `editable`) governs whether a SPECIFIC existing row can be
+// edited/deleted — e.g. a Team Lead who can only touch their own pending proposals,
+// not lines someone else already approved.
+export default function LinesTable({ lines, columns, addLabel, editable = true, rowEditable, onAdd, onPatch, onRemove, groupBy, maxPerGroup }) {
   const [local, setLocal] = useState(lines);
   useEffect(() => setLocal(lines), [lines]);
   const [pickingPeriod, setPickingPeriod] = useState(false);
   const [periodChoice, setPeriodChoice] = useState("");
+
+  const isLineEditable = (line) => (rowEditable ? rowEditable(line) : editable);
 
   const setLocalValue = (id, key, value) => {
     setLocal((prev) => prev.map((l) => (l.id === id ? { ...l, [key]: value } : l)));
@@ -23,7 +29,12 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
   const displayLabel = (col, line) => {
     if (col.type !== "select") return line[col.key] === "" || line[col.key] === undefined || line[col.key] === null ? "—" : line[col.key];
     const idx = col.options.indexOf(line[col.key]);
-    if (idx === -1) return "—";
+    if (idx === -1) {
+      // `options` may be a restricted pick-list (e.g. a Team Lead's own
+      // team) — fall back to an unrestricted lookup so a read-only row for
+      // someone outside that list still shows its real label, not "—".
+      return col.fallbackLabel ? (col.fallbackLabel(line[col.key]) ?? "—") : "—";
+    }
     return col.optionLabels ? col.optionLabels[idx] : col.options[idx];
   };
 
@@ -62,10 +73,10 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
     setPeriodChoice("");
   };
 
-  const renderCell = (c, line) => (
+  const renderCell = (c, line, lineEditable) => (
     c.render ? (
       c.render(line)
-    ) : !editable ? (
+    ) : !lineEditable ? (
       <div>
         <span style={{ color: c.type === "select" ? TEXT : MUTED }}>
           {c.type === "percent"
@@ -101,16 +112,20 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
     )
   );
 
+  const renderDeleteCell = (line) => (
+    <Td>
+      {isLineEditable(line) && (
+        <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
+          <Trash2 size={14} />
+        </button>
+      )}
+    </Td>
+  );
+
   const renderRow = (line) => (
     <tr key={line.id} style={{ borderTop: `1px solid ${BORDER}` }}>
-      {visibleColumns.map((c) => <Td key={c.key}>{renderCell(c, line)}</Td>)}
-      {editable && (
-        <Td>
-          <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
-            <Trash2 size={14} />
-          </button>
-        </Td>
-      )}
+      {visibleColumns.map((c) => <Td key={c.key}>{renderCell(c, line, isLineEditable(line))}</Td>)}
+      {editable && renderDeleteCell(line)}
     </tr>
   );
 
@@ -146,14 +161,8 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
                     {g.lines.map((line) => (
                       <tr key={line.id} style={{ borderTop: `1px solid ${BORDER}` }}>
                         <Td></Td>
-                        {visibleColumns.map((c) => <Td key={c.key}>{renderCell(c, line)}</Td>)}
-                        {editable && (
-                          <Td>
-                            <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
-                              <Trash2 size={14} />
-                            </button>
-                          </Td>
-                        )}
+                        {visibleColumns.map((c) => <Td key={c.key}>{renderCell(c, line, isLineEditable(line))}</Td>)}
+                        {editable && renderDeleteCell(line)}
                       </tr>
                     ))}
                   </Fragment>

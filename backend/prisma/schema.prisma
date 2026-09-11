@@ -18,6 +18,15 @@ enum Squad {
   Digital
 }
 
+// A Team/Tech Lead with only "proposeAllocations" creates a pending line; it
+// doesn't count toward Alloué/capacity anywhere until the HSV (or a
+// manageAllocations delegate) approves it — which also happens automatically
+// the moment they edit it directly.
+enum AllocationStatus {
+  pending
+  approved
+}
+
 model User {
   id           String   @id @default(uuid())
   name         String   @unique
@@ -102,6 +111,7 @@ model AllocationLine {
   pct          Decimal    @db.Decimal(6, 4)
   createdById  String     @map("created_by")
   createdBy    User       @relation("AllocationCreatedBy", fields: [createdById], references: [id])
+  status       AllocationStatus @default(approved)
   // SVO-initiated: "this resource I already got approved is free for
   // something else" — the line stays real/counted until the HSV confirms
   // the release (which deletes it), so nothing frees up silently.

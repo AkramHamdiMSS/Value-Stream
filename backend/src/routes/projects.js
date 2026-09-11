@@ -26,7 +26,9 @@ function computeTotals(project) {
     else if (l.profile === "Digital") dDigital += eff;
   }
   let aMobile = 0, aTpe = 0, aDigital = 0;
+  // Pending (unapproved) proposals don't count as real capacity yet.
   for (const l of project.allocationLines) {
+    if (l.status !== "approved") continue;
     const pct = Number(l.pct) || 0;
     const squad = l.poolMember?.squad;
     if (squad === "Mobile") aMobile += pct;
@@ -86,7 +88,7 @@ router.post("/", requirePermission("manageProjects"), async (req, res) => {
   res.status(201).json({ ...serializeProject(project), totals: computeTotals(project) });
 });
 
-async function loadProjectOr404(req, res) {
+async function loadProjectOr404(req, res, { allowProposer = false } = {}) {
   const project = await prisma.project.findUnique({
     where: { id: req.params.id },
     include: { svo: true, demandLines: true, allocationLines: { include: { poolMember: true } } },
@@ -95,7 +97,11 @@ async function loadProjectOr404(req, res) {
     res.status(404).json({ error: "Projet introuvable." });
     return null;
   }
-  if (!canRead(req, project)) {
+  // A propose-only actor doesn't own most of the projects whose demand they
+  // see in their squad-scoped queue — let them act on any project with
+  // submitted demand, not just ones they happen to own.
+  const allowed = canRead(req, project) || (allowProposer && hasPermission(req.user, "proposeAllocations") && project.demandSubmitted);
+  if (!allowed) {
     res.status(403).json({ error: "Accès refusé." });
     return null;
   }
@@ -103,7 +109,9 @@ async function loadProjectOr404(req, res) {
 }
 
 router.get("/:id", async (req, res) => {
-  const project = await loadProjectOr404(req, res);
+  // A propose-only Team Lead can click through from their squad-scoped
+  // demand queue into projects they don't own — let them view it.
+  const project = await loadProjectOr404(req, res, { allowProposer: true });
   if (!project) return;
   res.json({
     ...serializeProject(project),
@@ -114,6 +122,8 @@ router.get("/:id", async (req, res) => {
       period: l.period,
       poolMemberId: l.poolMemberId,
       pct: l.pct,
+      status: l.status,
+      createdById: l.createdById,
       releaseRequested: l.releaseRequested,
       releaseNote: l.releaseNote,
     })),
@@ -222,14 +232,31 @@ const allocationLineSchema = z.object({
   pct: z.number().min(0).max(2),
 });
 
-router.post("/:id/allocation-lines", requirePermission("manageAllocations"), async (req, res) => {
-  const project = await loadProjectOr404(req, res);
+router.post("/:id/allocation-lines", async (req, res) => {
+  const canManage = hasPermission(req.user, "manageAllocations");
+  const canPropose = hasPermission(req.user, "proposeAllocations");
+  if (!canManage && !canPropose) return res.status(403).json({ error: "Accès refusé." });
+
+  const project = await loadProjectOr404(req, res, { allowProposer: true });
   if (!project) return;
 
   const parsed = allocationLineSchema.partial({ poolMemberId: true, pct: true }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
   if (!parsed.data.poolMemberId) return res.status(400).json({ error: "Ressource requise." });
 
+  // A propose-only actor can only put forward someone from their own
+  // sous-équipe — enforced here, not just hidden client-side.
+  if (!canManage) {
+    const [self, target] = await Promise.all([
+      prisma.poolMember.findFirst({ where: { name: req.user.name } }),
+      prisma.poolMember.findUnique({ where: { id: parsed.data.poolMemberId } }),
+    ]);
+    if (!self || !target || target.sousEquipe !== self.sousEquipe) {
+      return res.status(403).json({ error: "Vous ne pouvez proposer que des ressources de votre propre équipe." });
+    }
+  }
+
+  const status = canManage ? "approved" : "pending";
   const line = await prisma.allocationLine.create({
     data: {
       projectId: project.id,
@@ -237,10 +264,15 @@ router.post("/:id/allocation-lines", requirePermission("manageAllocations"), asy
       poolMemberId: parsed.data.poolMemberId,
       pct: parsed.data.pct ?? 1,
       createdById: req.user.id,
+      status,
     },
     include: { poolMember: true },
   });
-  await logActivity({ user: req.user, action: `a affecté ${line.poolMember.name} (${line.period})`, project });
+  await logActivity({
+    user: req.user,
+    action: status === "approved" ? `a affecté ${line.poolMember.name} (${line.period})` : `a proposé ${line.poolMember.name} (${line.period})`,
+    project,
+  });
   res.status(201).json(line);
 });
 

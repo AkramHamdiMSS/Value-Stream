@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2, Check } from "lucide-react";
 import { api } from "../api";
 import { round1, effective } from "../lib/util";
 import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td, Field, SectionTitle, Badge } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 
-export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, user, svoUsers, pool, periods, overAllocProjects, onBack, onProjectsChanged }) {
+export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, canProposeAllocations, user, svoUsers, pool, teamPool, periods, overAllocProjects, onBack, onProjectsChanged }) {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,7 +64,12 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
 
   const isOwner = user.id === project.svoUserId;
   const canEditDemand = isOwner && !project.demandSubmitted;
-  const canEditAlloc = canManageAllocations;
+  const canEditAlloc = canManageAllocations || canProposeAllocations;
+  const isLineOwnedByMe = (line) => canManageAllocations || (canProposeAllocations && line.status === "pending" && line.createdById === user.id);
+  // A propose-only viewer can only pick from their own team, not the whole
+  // org pool — falls back to the full pool if the team-scoped list isn't
+  // available yet (e.g. still loading).
+  const resourceOptions = canManageAllocations || !teamPool?.length ? pool : teamPool;
   const canEditNameStatus = canManageProjects || isOwner;
   const poolById = Object.fromEntries(pool.map((p) => [p.id, p]));
 
@@ -155,6 +160,11 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.filter((l) => l.id !== id) }));
     notifyChanged();
   };
+  const approveAllocationLine = async (line) => {
+    const updated = await api.post(`/allocation-lines/${line.id}/approve`);
+    setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.map((l) => (l.id === line.id ? { ...l, ...updated } : l)) }));
+    notifyChanged();
+  };
 
   // ---- SVO-initiated release: flag an already-approved line for the HSV to
   // free up, instead of the SVO removing it outright — the line stays real
@@ -184,7 +194,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     project.demandLines.filter((l) => l.period === period).forEach((l) => {
       row[l.profile].dem += effective(l.count, l.pct);
     });
-    project.allocationLines.filter((l) => l.period === period).forEach((l) => {
+    project.allocationLines.filter((l) => l.period === period && l.status === "approved").forEach((l) => {
       const res = poolById[l.poolMemberId];
       if (res) row[res.squad].alloc += Number(l.pct) || 0;
     });
@@ -298,10 +308,12 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
       <LinesTable
         lines={project.allocationLines}
         editable={canEditAlloc}
+        rowEditable={isLineOwnedByMe}
         columns={[
           { key: "period", label: "Période", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
           {
-            key: "poolMemberId", label: "Ressource", type: "select", options: pool.map((r) => r.id), optionLabels: pool.map((r) => `${r.name} (${r.squad})`), width: 220,
+            key: "poolMemberId", label: "Ressource", type: "select", options: resourceOptions.map((r) => r.id), optionLabels: resourceOptions.map((r) => `${r.name} (${r.squad})`), width: 220,
+            fallbackLabel: (id) => (poolById[id] ? `${poolById[id].name} (${poolById[id].squad})` : null),
             // Recap of the resource's OTHER assignments for that same période, so the
             // picker doesn't need to be cross-checked against every other project.
             hint: (line) => {
@@ -320,9 +332,25 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
             },
           },
           { key: "pct", label: "Allocation %", type: "percent", width: 100 },
+          ...(canManageAllocations || canProposeAllocations ? [{
+            key: "status", label: "Statut", width: 130,
+            render: (line) => (
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {line.status === "pending" ? <Badge color={AMBER} text="En attente" /> : <Badge color={GREEN} text="Confirmée" />}
+                {line.status === "pending" && canManageAllocations && (
+                  <button onClick={() => approveAllocationLine(line)} title="Valider" style={{ background: "transparent", border: "none", color: GREEN, cursor: "pointer", padding: 2, display: "flex" }}>
+                    <Check size={14} />
+                  </button>
+                )}
+              </div>
+            ),
+          }] : []),
           ...(isOwner || canManageAllocations ? [{
             key: "release", label: "Libération", width: 220,
             render: (line) => {
+              // Releasing only makes sense for an already-confirmed line —
+              // a pending proposal gets rejected/retracted instead (see Statut).
+              if (line.status === "pending") return null;
               if (line.releaseRequested) {
                 return (
                   <div>
@@ -363,7 +391,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
             },
           }] : []),
         ]}
-        addLabel="Ajouter une période"
+        addLabel={canManageAllocations ? "Ajouter une période" : "Proposer une affectation"}
         onAdd={addAllocationLine}
         onPatch={patchAllocationLine}
         onRemove={removeAllocationLine}
