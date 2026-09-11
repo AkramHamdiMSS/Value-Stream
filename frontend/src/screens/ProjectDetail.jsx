@@ -6,7 +6,7 @@ import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADO
 import { Th, Td, Field, SectionTitle } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 
-export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, canProposeAllocations, user, svoUsers, pool, periods, overAllocProjects, onBack, onProjectsChanged }) {
+export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, user, svoUsers, pool, periods, overAllocProjects, onBack, onProjectsChanged }) {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,8 +62,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
 
   const isOwner = user.id === project.svoUserId;
   const canEditDemand = isOwner && !project.demandSubmitted;
-  const canEditAlloc = canManageAllocations || canProposeAllocations;
-  const isLineOwnedByMe = (line) => canManageAllocations || (canProposeAllocations && line.status === "pending" && line.createdById === user.id);
+  const canEditAlloc = canManageAllocations;
   const canEditNameStatus = canManageProjects || isOwner;
   const poolById = Object.fromEntries(pool.map((p) => [p.id, p]));
 
@@ -154,18 +153,13 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.filter((l) => l.id !== id) }));
     notifyChanged();
   };
-  const approveAllocationLine = async (line) => {
-    const updated = await api.post(`/allocation-lines/${line.id}/approve`);
-    setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.map((l) => (l.id === line.id ? { ...l, ...updated } : l)) }));
-    notifyChanged();
-  };
 
   const synthesis = relevantPeriods.map((period) => {
     const row = { period, Mobile: { dem: 0, alloc: 0 }, TPE: { dem: 0, alloc: 0 }, Digital: { dem: 0, alloc: 0 } };
     project.demandLines.filter((l) => l.period === period).forEach((l) => {
       row[l.profile].dem += effective(l.count, l.pct);
     });
-    project.allocationLines.filter((l) => l.period === period && l.status === "approved").forEach((l) => {
+    project.allocationLines.filter((l) => l.period === period).forEach((l) => {
       const res = poolById[l.poolMemberId];
       if (res) row[res.squad].alloc += Number(l.pct) || 0;
     });
@@ -279,7 +273,6 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
       <LinesTable
         lines={project.allocationLines}
         editable={canEditAlloc}
-        rowEditable={isLineOwnedByMe}
         columns={[
           { key: "period", label: "Période", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
           {
@@ -302,11 +295,8 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
             },
           },
           { key: "pct", label: "Allocation %", type: "percent", width: 100 },
-          ...(canManageAllocations || canProposeAllocations
-            ? [{ key: "status", label: "Statut", type: "status", onApprove: canManageAllocations ? approveAllocationLine : undefined }]
-            : []),
         ]}
-        addLabel={canManageAllocations ? "Ajouter une période" : "Proposer une affectation"}
+        addLabel="Ajouter une période"
         onAdd={addAllocationLine}
         onPatch={patchAllocationLine}
         onRemove={removeAllocationLine}

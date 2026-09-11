@@ -23,7 +23,6 @@ router.get("/", async (req, res) => {
       const demanded = effective(line.count, line.pct);
       let allocated = 0;
       for (const a of proj.allocationLines) {
-        if (a.status !== "approved") continue;
         if (a.period !== line.period) continue;
         if (a.poolMember?.squad === line.profile) allocated += Number(a.pct) || 0;
       }

@@ -26,9 +26,7 @@ function computeTotals(project) {
     else if (l.profile === "Digital") dDigital += eff;
   }
   let aMobile = 0, aTpe = 0, aDigital = 0;
-  // Pending (unapproved) proposals don't count as real capacity yet.
   for (const l of project.allocationLines) {
-    if (l.status !== "approved") continue;
     const pct = Number(l.pct) || 0;
     const squad = l.poolMember?.squad;
     if (squad === "Mobile") aMobile += pct;
@@ -116,8 +114,6 @@ router.get("/:id", async (req, res) => {
       period: l.period,
       poolMemberId: l.poolMemberId,
       pct: l.pct,
-      status: l.status,
-      createdById: l.createdById,
     })),
   });
 });
@@ -224,11 +220,7 @@ const allocationLineSchema = z.object({
   pct: z.number().min(0).max(2),
 });
 
-router.post("/:id/allocation-lines", async (req, res) => {
-  const canManage = hasPermission(req.user, "manageAllocations");
-  const canPropose = hasPermission(req.user, "proposeAllocations");
-  if (!canManage && !canPropose) return res.status(403).json({ error: "Accès refusé." });
-
+router.post("/:id/allocation-lines", requirePermission("manageAllocations"), async (req, res) => {
   const project = await loadProjectOr404(req, res);
   if (!project) return;
 
@@ -236,7 +228,6 @@ router.post("/:id/allocation-lines", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
   if (!parsed.data.poolMemberId) return res.status(400).json({ error: "Ressource requise." });
 
-  const status = canManage ? "approved" : "pending";
   const line = await prisma.allocationLine.create({
     data: {
       projectId: project.id,
@@ -244,15 +235,10 @@ router.post("/:id/allocation-lines", async (req, res) => {
       poolMemberId: parsed.data.poolMemberId,
       pct: parsed.data.pct ?? 1,
       createdById: req.user.id,
-      status,
     },
     include: { poolMember: true },
   });
-  await logActivity({
-    user: req.user,
-    action: status === "approved" ? `a affecté ${line.poolMember.name} (${line.period})` : `a proposé ${line.poolMember.name} (${line.period})`,
-    project,
-  });
+  await logActivity({ user: req.user, action: `a affecté ${line.poolMember.name} (${line.period})`, project });
   res.status(201).json(line);
 });
 

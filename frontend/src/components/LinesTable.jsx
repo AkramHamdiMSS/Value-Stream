@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
-import { Plus, Trash2, Check } from "lucide-react";
-import { SURFACE, SURFACE2, BORDER, TEXT, MUTED, ACCENT, GREEN, AMBER, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
-import { Th, Td, Badge } from "./ui";
+import { Plus, Trash2 } from "lucide-react";
+import { SURFACE, SURFACE2, BORDER, TEXT, MUTED, ACCENT, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { Th, Td } from "./ui";
 
 // Locally-buffered editable table: keystrokes update local state instantly, and
 // commit to the server on blur (text/number/percent) or immediately on select change.
@@ -10,17 +10,11 @@ import { Th, Td, Badge } from "./ui";
 // periods that actually have lines show up, plus whichever one the user just picked
 // via "Ajouter une période". `maxPerGroup` hides a group's "+ ligne" once it's full
 // (e.g. the 3 fixed profiles for a demand period).
-// `editable` gates whether adding new lines is offered at all; `rowEditable(line)`
-// (optional, defaults to `editable`) governs whether a SPECIFIC existing row can be
-// edited/deleted — e.g. a Team Lead who can only touch their own pending proposals,
-// not lines someone else already approved.
-export default function LinesTable({ lines, columns, addLabel, editable = true, rowEditable, onAdd, onPatch, onRemove, groupBy, maxPerGroup }) {
+export default function LinesTable({ lines, columns, addLabel, editable = true, onAdd, onPatch, onRemove, groupBy, maxPerGroup }) {
   const [local, setLocal] = useState(lines);
   useEffect(() => setLocal(lines), [lines]);
   const [pickingPeriod, setPickingPeriod] = useState(false);
   const [periodChoice, setPeriodChoice] = useState("");
-
-  const isLineEditable = (line) => (rowEditable ? rowEditable(line) : editable);
 
   const setLocalValue = (id, key, value) => {
     setLocal((prev) => prev.map((l) => (l.id === id ? { ...l, [key]: value } : l)));
@@ -68,20 +62,8 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
     setPeriodChoice("");
   };
 
-  const renderCell = (c, line, lineEditable) => {
-    if (c.type === "status") {
-      return (
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {line.status === "pending" ? <Badge color={AMBER} text="En attente" /> : <Badge color={GREEN} text="Confirmée" />}
-          {line.status === "pending" && c.onApprove && (
-            <button onClick={() => c.onApprove(line)} title="Valider" style={{ background: "transparent", border: "none", color: GREEN, cursor: "pointer", padding: 2, display: "flex" }}>
-              <Check size={14} />
-            </button>
-          )}
-        </div>
-      );
-    }
-    return !lineEditable ? (
+  const renderCell = (c, line) => (
+    !editable ? (
       <div>
         <span style={{ color: c.type === "select" ? TEXT : MUTED }}>
           {c.type === "percent"
@@ -114,23 +96,19 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
         onChange={(e) => setLocalValue(line.id, c.key, c.type === "number" ? Number(e.target.value) : e.target.value)}
         onBlur={(e) => onPatch(line.id, c.key, c.type === "number" ? Number(e.target.value) : e.target.value)}
         style={{ ...inputStyle, width: c.width }} />
-    );
-  };
-
-  const renderDeleteCell = (line) => (
-    <Td>
-      {isLineEditable(line) && (
-        <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
-          <Trash2 size={14} />
-        </button>
-      )}
-    </Td>
+    )
   );
 
   const renderRow = (line) => (
     <tr key={line.id} style={{ borderTop: `1px solid ${BORDER}` }}>
-      {visibleColumns.map((c) => <Td key={c.key}>{renderCell(c, line, isLineEditable(line))}</Td>)}
-      {editable && renderDeleteCell(line)}
+      {visibleColumns.map((c) => <Td key={c.key}>{renderCell(c, line)}</Td>)}
+      {editable && (
+        <Td>
+          <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
+            <Trash2 size={14} />
+          </button>
+        </Td>
+      )}
     </tr>
   );
 
@@ -166,8 +144,14 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
                     {g.lines.map((line) => (
                       <tr key={line.id} style={{ borderTop: `1px solid ${BORDER}` }}>
                         <Td></Td>
-                        {visibleColumns.map((c) => <Td key={c.key}>{renderCell(c, line, isLineEditable(line))}</Td>)}
-                        {editable && renderDeleteCell(line)}
+                        {visibleColumns.map((c) => <Td key={c.key}>{renderCell(c, line)}</Td>)}
+                        {editable && (
+                          <Td>
+                            <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
+                              <Trash2 size={14} />
+                            </button>
+                          </Td>
+                        )}
                       </tr>
                     ))}
                   </Fragment>

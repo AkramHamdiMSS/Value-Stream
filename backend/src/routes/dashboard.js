@@ -25,7 +25,6 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
   const [allMembers, allocationLines] = await Promise.all([
     prisma.poolMember.findMany(),
     prisma.allocationLine.findMany({
-      where: { status: "approved" },
       select: { poolMemberId: true, period: true, pct: true, project: { select: { id: true, name: true } } },
     }),
   ]);
@@ -56,10 +55,8 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   const periods = generatePeriods();
 
   // Same "minimal dashboard" cohort the frontend restricts to the grid-only
-  // view: viewDashboard granted but no org-wide oversight permission.
-  // proposeAllocations (or any other non-oversight permission) doesn't pull
-  // them out of this — only the broader ones do.
-  const isMinimal = req.user.role !== "hsv" && !canViewAllProjects(req.user);
+  // view: viewDashboard granted and nothing else beyond base SVO access.
+  const isMinimal = req.user.role !== "hsv" && (req.user.permissions || []).length === 1 && req.user.permissions[0] === "viewDashboard";
   let sousEquipeFilter = null;
   if (isMinimal) {
     const self = await prisma.poolMember.findFirst({ where: { name: req.user.name } });
@@ -146,7 +143,6 @@ async function buildOwnDashboard(user, periods) {
 
     let pAlloc = { Mobile: 0, TPE: 0, Digital: 0 };
     for (const l of proj.allocationLines) {
-      if (l.status !== "approved") continue;
       const pct = Number(l.pct) || 0;
       const squad = l.poolMember?.squad;
       if (!squad) continue;
