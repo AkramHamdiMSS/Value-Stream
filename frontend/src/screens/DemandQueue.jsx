@@ -4,7 +4,7 @@ import { api } from "../api";
 import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, GREEN, RED, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td } from "../components/ui";
 
-export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocProjects, canManageAllocations, canProposeAllocations, onOpenProject, onAllocated, refreshKey }) {
+export default function DemandQueue({ pool, overAllocGrid, overAllocProjects, canManageAllocations, onOpenProject, onAllocated, refreshKey }) {
   const [rows, setRows] = useState(null);
   const [openRow, setOpenRow] = useState(null);
   const [pick, setPick] = useState({ poolMemberId: "", pct: 100 });
@@ -21,10 +21,7 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
   }
 
   const visibleRows = hideCovered ? rows.filter((r) => r.ecart < -0.001) : rows;
-  const canAct = canManageAllocations || canProposeAllocations;
-  // A propose-only viewer only picks from their own team.
-  const candidatePool = canManageAllocations ? pool : (teamPool?.length ? teamPool : pool);
-  const candidatesFor = (row) => candidatePool.filter((r) => r.squad === row.profile);
+  const candidatesFor = (row) => pool.filter((r) => r.squad === row.profile);
 
   // One "demande" is submitted per project+période, with one line per profile —
   // group them back into a single row so the queue reflects that, instead of
@@ -54,12 +51,11 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{canManageAllocations ? "Demandes à affecter" : "Demandes de mon équipe"}</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Demandes à affecter</h1>
       </div>
       <p style={{ color: MUTED, fontSize: 13, margin: "4px 0 16px" }}>
-        {canManageAllocations
-          ? "Toutes les demandes soumises par les SVO, tous projets confondus. Choisissez une ressource selon sa disponibilité déjà affichée, sans avoir à ouvrir chaque projet."
-          : "Demandes soumises pour votre profil, tous projets confondus. Vos propositions seront à valider par le Head of Value Stream."}
+        Toutes les demandes soumises par les SVO, tous projets confondus. Choisissez une ressource selon sa
+        disponibilité déjà affichée, sans avoir à ouvrir chaque projet.
       </p>
 
       <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, marginBottom: 12, cursor: "pointer" }}>
@@ -96,14 +92,14 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
                       <Td>{row.allocated}</Td>
                       <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
                       <Td>
-                        {canAct && (
+                        {canManageAllocations && (
                           <button onClick={() => { setOpenRow(openRow === row.key ? null : row.key); setPick({ poolMemberId: "", pct: 100 }); }} style={btnGhost}>
-                            {openRow === row.key ? "Fermer" : canManageAllocations ? "Affecter" : "Proposer"}
+                            {openRow === row.key ? "Fermer" : "Affecter"}
                           </button>
                         )}
                       </Td>
                     </tr>
-                    {canAct && openRow === row.key && (
+                    {canManageAllocations && openRow === row.key && (
                       <tr style={{ background: SURFACE2 }}>
                         <td colSpan={8} style={{ padding: "12px 14px" }}>
                           <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
@@ -153,7 +149,7 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
                             <span style={{ fontSize: 12.5, color: MUTED }}>%</span>
                             <button disabled={!pick.poolMemberId} onClick={() => submitAllocation(row)}
                               style={{ ...btnPrimary, opacity: pick.poolMemberId ? 1 : 0.5, cursor: pick.poolMemberId ? "pointer" : "not-allowed" }}>
-                              {canManageAllocations ? "Ajouter l'affectation" : "Proposer cette affectation"}
+                              Ajouter l'affectation
                             </button>
                           </div>
                         </td>

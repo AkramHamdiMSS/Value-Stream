@@ -88,7 +88,7 @@ router.post("/", requirePermission("manageProjects"), async (req, res) => {
   res.status(201).json({ ...serializeProject(project), totals: computeTotals(project) });
 });
 
-async function loadProjectOr404(req, res, { allowProposer = false } = {}) {
+async function loadProjectOr404(req, res) {
   const project = await prisma.project.findUnique({
     where: { id: req.params.id },
     include: { svo: true, demandLines: true, allocationLines: { include: { poolMember: true } } },
@@ -97,11 +97,7 @@ async function loadProjectOr404(req, res, { allowProposer = false } = {}) {
     res.status(404).json({ error: "Projet introuvable." });
     return null;
   }
-  // A propose-only actor doesn't own most of the projects whose demand they
-  // see in their squad-scoped queue — let them act on any project with
-  // submitted demand, not just ones they happen to own.
-  const allowed = canRead(req, project) || (allowProposer && hasPermission(req.user, "proposeAllocations") && project.demandSubmitted);
-  if (!allowed) {
+  if (!canRead(req, project)) {
     res.status(403).json({ error: "Accès refusé." });
     return null;
   }
@@ -109,9 +105,7 @@ async function loadProjectOr404(req, res, { allowProposer = false } = {}) {
 }
 
 router.get("/:id", async (req, res) => {
-  // A propose-only Team Lead can click through from their squad-scoped
-  // demand queue into projects they don't own — let them view it.
-  const project = await loadProjectOr404(req, res, { allowProposer: true });
+  const project = await loadProjectOr404(req, res);
   if (!project) return;
   res.json({
     ...serializeProject(project),
@@ -235,24 +229,12 @@ router.post("/:id/allocation-lines", async (req, res) => {
   const canPropose = hasPermission(req.user, "proposeAllocations");
   if (!canManage && !canPropose) return res.status(403).json({ error: "Accès refusé." });
 
-  const project = await loadProjectOr404(req, res, { allowProposer: true });
+  const project = await loadProjectOr404(req, res);
   if (!project) return;
 
   const parsed = allocationLineSchema.partial({ poolMemberId: true, pct: true }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
   if (!parsed.data.poolMemberId) return res.status(400).json({ error: "Ressource requise." });
-
-  // A propose-only actor can only put forward someone from their own
-  // sous-équipe — enforced here, not just hidden client-side.
-  if (!canManage) {
-    const [self, target] = await Promise.all([
-      prisma.poolMember.findFirst({ where: { name: req.user.name } }),
-      prisma.poolMember.findUnique({ where: { id: parsed.data.poolMemberId } }),
-    ]);
-    if (!self || !target || target.sousEquipe !== self.sousEquipe) {
-      return res.status(403).json({ error: "Vous ne pouvez proposer que des ressources de votre propre équipe." });
-    }
-  }
 
   const status = canManage ? "approved" : "pending";
   const line = await prisma.allocationLine.create({

@@ -6,7 +6,7 @@ import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADO
 import { Th, Td, Field, SectionTitle } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 
-export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, canProposeAllocations, user, svoUsers, pool, teamPool, periods, overAllocProjects, onBack, onProjectsChanged }) {
+export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, canProposeAllocations, user, svoUsers, pool, periods, overAllocProjects, onBack, onProjectsChanged }) {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,10 +64,6 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const canEditDemand = isOwner && !project.demandSubmitted;
   const canEditAlloc = canManageAllocations || canProposeAllocations;
   const isLineOwnedByMe = (line) => canManageAllocations || (canProposeAllocations && line.status === "pending" && line.createdById === user.id);
-  // A propose-only viewer can only pick from their own team, not the whole
-  // org pool — falls back to the full pool if the team-scoped list isn't
-  // available yet (e.g. still loading).
-  const resourceOptions = canManageAllocations || !teamPool?.length ? pool : teamPool;
   const canEditNameStatus = canManageProjects || isOwner;
   const poolById = Object.fromEntries(pool.map((p) => [p.id, p]));
 
@@ -287,8 +283,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         columns={[
           { key: "period", label: "Période", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
           {
-            key: "poolMemberId", label: "Ressource", type: "select", options: resourceOptions.map((r) => r.id), optionLabels: resourceOptions.map((r) => `${r.name} (${r.squad})`), width: 220,
-            fallbackLabel: (id) => (poolById[id] ? `${poolById[id].name} (${poolById[id].squad})` : null),
+            key: "poolMemberId", label: "Ressource", type: "select", options: pool.map((r) => r.id), optionLabels: pool.map((r) => `${r.name} (${r.squad})`), width: 220,
             // Recap of the resource's OTHER assignments for that same période, so the
             // picker doesn't need to be cross-checked against every other project.
             hint: (line) => {

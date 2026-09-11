@@ -29,12 +29,7 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
   const displayLabel = (col, line) => {
     if (col.type !== "select") return line[col.key] === "" || line[col.key] === undefined || line[col.key] === null ? "—" : line[col.key];
     const idx = col.options.indexOf(line[col.key]);
-    if (idx === -1) {
-      // `options` may be a restricted pick-list (e.g. a Team Lead's own
-      // team) — fall back to an unrestricted lookup so a read-only row for
-      // someone outside that list still shows its real label, not "—".
-      return col.fallbackLabel ? (col.fallbackLabel(line[col.key]) ?? "—") : "—";
-    }
+    if (idx === -1) return "—";
     return col.optionLabels ? col.optionLabels[idx] : col.options[idx];
   };
 
