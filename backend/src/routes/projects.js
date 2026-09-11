@@ -114,6 +114,8 @@ router.get("/:id", async (req, res) => {
       period: l.period,
       poolMemberId: l.poolMemberId,
       pct: l.pct,
+      releaseRequested: l.releaseRequested,
+      releaseNote: l.releaseNote,
     })),
   });
 });

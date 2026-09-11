@@ -3,13 +3,15 @@ import { ChevronLeft, Loader2 } from "lucide-react";
 import { api } from "../api";
 import { round1, effective } from "../lib/util";
 import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
-import { Th, Td, Field, SectionTitle } from "../components/ui";
+import { Th, Td, Field, SectionTitle, Badge } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 
 export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, user, svoUsers, pool, periods, overAllocProjects, onBack, onProjectsChanged }) {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [releaseDrafts, setReleaseDrafts] = useState({});
+  const [releasingId, setReleasingId] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -150,6 +152,29 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   };
   const removeAllocationLine = async (id) => {
     await api.delete(`/allocation-lines/${id}`);
+    setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.filter((l) => l.id !== id) }));
+    notifyChanged();
+  };
+
+  // ---- SVO-initiated release: flag an already-approved line for the HSV to
+  // free up, instead of the SVO removing it outright — the line stays real
+  // (and counted) until confirmed. ----
+  const requestRelease = async (id) => {
+    const note = (releaseDrafts[id] || "").trim();
+    if (!note) return;
+    const updated = await api.post(`/allocation-lines/${id}/request-release`, { note });
+    setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.map((l) => (l.id === id ? { ...l, ...updated } : l)) }));
+    setReleasingId(null);
+    setReleaseDrafts((d) => ({ ...d, [id]: "" }));
+    notifyChanged();
+  };
+  const cancelRelease = async (id) => {
+    const updated = await api.post(`/allocation-lines/${id}/cancel-release`);
+    setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.map((l) => (l.id === id ? { ...l, ...updated } : l)) }));
+    notifyChanged();
+  };
+  const confirmRelease = async (id) => {
+    await api.post(`/allocation-lines/${id}/confirm-release`);
     setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.filter((l) => l.id !== id) }));
     notifyChanged();
   };
@@ -295,6 +320,48 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
             },
           },
           { key: "pct", label: "Allocation %", type: "percent", width: 100 },
+          ...(isOwner || canManageAllocations ? [{
+            key: "release", label: "Libération", width: 220,
+            render: (line) => {
+              if (line.releaseRequested) {
+                return (
+                  <div>
+                    <Badge color={AMBER} text="Libération demandée" />
+                    <div style={{ fontSize: 10.5, color: MUTED, marginTop: 4 }}>{line.releaseNote}</div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                      {canManageAllocations && (
+                        <button onClick={() => confirmRelease(line.id)} style={{ ...btnGhost, fontSize: 11, padding: "3px 8px", color: GREEN, borderColor: GREEN }}>
+                          Valider
+                        </button>
+                      )}
+                      <button onClick={() => cancelRelease(line.id)} style={{ ...btnGhost, fontSize: 11, padding: "3px 8px" }}>
+                        {canManageAllocations ? "Refuser" : "Annuler"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+              if (!isOwner) return null;
+              if (releasingId === line.id) {
+                return (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <input value={releaseDrafts[line.id] || ""} onChange={(e) => setReleaseDrafts({ ...releaseDrafts, [line.id]: e.target.value })}
+                      placeholder="Raison / réaffectation prévue" style={{ ...inputStyle, width: 150 }} />
+                    <button onClick={() => requestRelease(line.id)} disabled={!(releaseDrafts[line.id] || "").trim()}
+                      style={{ ...btnPrimary, fontSize: 11, padding: "4px 8px", opacity: (releaseDrafts[line.id] || "").trim() ? 1 : 0.5 }}>
+                      OK
+                    </button>
+                    <button onClick={() => setReleasingId(null)} style={{ ...btnGhost, fontSize: 11, padding: "4px 8px" }}>Annuler</button>
+                  </div>
+                );
+              }
+              return (
+                <button onClick={() => setReleasingId(line.id)} style={{ ...btnGhost, fontSize: 11.5, padding: "4px 10px" }}>
+                  Libérer
+                </button>
+              );
+            },
+          }] : []),
         ]}
         addLabel="Ajouter une période"
         onAdd={addAllocationLine}

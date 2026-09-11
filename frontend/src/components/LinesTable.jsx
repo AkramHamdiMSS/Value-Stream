@@ -63,7 +63,9 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
   };
 
   const renderCell = (c, line) => (
-    !editable ? (
+    c.render ? (
+      c.render(line)
+    ) : !editable ? (
       <div>
         <span style={{ color: c.type === "select" ? TEXT : MUTED }}>
           {c.type === "percent"
