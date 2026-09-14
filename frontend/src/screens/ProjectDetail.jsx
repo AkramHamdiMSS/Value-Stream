@@ -26,6 +26,17 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
 
   const notifyChanged = () => onProjectsChanged();
 
+  // Every period id in [startId, endId] inclusive, using the project's own
+  // period order — so "S2 -> S5" resolves to however many weeks that spans,
+  // instead of forcing one add per week.
+  const periodsBetween = (startId, endId) => {
+    const ids = periods.map((p) => p.id);
+    const i0 = ids.indexOf(startId), i1 = ids.indexOf(endId);
+    if (i0 === -1 || i1 === -1) return [startId];
+    const [lo, hi] = i0 <= i1 ? [i0, i1] : [i1, i0];
+    return ids.slice(lo, hi + 1);
+  };
+
   // ---- synthesis: demandé vs alloué, computed locally from the lines already loaded ----
   // (kept above any early return so hook order stays stable while `project` is still loading)
   const relevantPeriods = useMemo(() => {
@@ -85,8 +96,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   // Adding a period creates all 3 profiles (Mobile/TPE/Digital) at once — a demand
   // period without all three is normally just because one was deleted, so a repeat
   // call only fills in whichever profiles are still missing for that period.
-  const addDemandLine = async (period) => {
-    const targetPeriod = period || periods[0]?.id || "";
+  const seedOneDemandPeriod = async (targetPeriod) => {
     const existing = new Set(project.demandLines.filter((l) => l.period === targetPeriod).map((l) => l.profile));
     const allProfiles = ["Mobile", "TPE", "Digital"];
     const missing = allProfiles.filter((p) => !existing.has(p));
@@ -96,6 +106,15 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
       api.post(`/projects/${project.id}/demand-lines`, { period: targetPeriod, profile, count: 0, pct: null })
     ));
     setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, ...created] }));
+  };
+  // `end` defaults to `start` so the per-group "+ ligne" trigger (single
+  // period) behaves exactly as before — only the range picker passes both.
+  const addDemandLine = async (start, end) => {
+    const startPeriod = start || periods[0]?.id || "";
+    const endPeriod = end || startPeriod;
+    for (const p of periodsBetween(startPeriod, endPeriod)) {
+      await seedOneDemandPeriod(p);
+    }
     notifyChanged();
   };
   const patchDemandLine = async (id, key, value) => {
@@ -111,17 +130,6 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   };
 
   // ---- allocation lines ----
-  // Every period id in [startId, endId] inclusive, using the project's own
-  // period order — so "S2 -> S5" resolves to however many weeks that spans,
-  // instead of forcing one add per week.
-  const periodsBetween = (startId, endId) => {
-    const ids = periods.map((p) => p.id);
-    const i0 = ids.indexOf(startId), i1 = ids.indexOf(endId);
-    if (i0 === -1 || i1 === -1) return [startId];
-    const [lo, hi] = i0 <= i1 ? [i0, i1] : [i1, i0];
-    return ids.slice(lo, hi + 1);
-  };
-
   // Pre-fills one line PER HEADCOUNT the SVO actually asked for that week — a demand
   // of "Mobile: 5" seeds 5 Mobile-squad lines, not one. Tops up whatever's still
   // missing per profile (so it's safe to call again on a partially-filled period),
@@ -329,6 +337,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         onRemove={removeDemandLine}
         groupBy="period"
         maxPerGroup={3}
+        rangeAdd
       />
 
       <SectionTitle style={{ marginTop: 28 }}>
