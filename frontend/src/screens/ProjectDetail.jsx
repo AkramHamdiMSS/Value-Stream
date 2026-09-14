@@ -78,7 +78,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const addDemandLine = async () => {
     const p = periods[0]?.id || "";
     const line = await api.post(`/projects/${project.id}/demand-lines`, {
-      periodStart: p, periodEnd: p, mobileCount: 0, tpeCount: 0, digitalCount: 0, pct: null,
+      periodStart: p, periodEnd: p, mobileCount: 0, tpeCount: 0, digitalCount: 0, mobilePct: null, tpePct: null, digitalPct: null,
     });
     setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, line] }));
     notifyChanged();
@@ -159,9 +159,9 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const synthesis = relevantPeriods.map((period) => {
     const row = { period, Mobile: { dem: 0, alloc: 0 }, TPE: { dem: 0, alloc: 0 }, Digital: { dem: 0, alloc: 0 } };
     project.demandLines.filter((l) => l.periodStart <= period && period <= l.periodEnd).forEach((l) => {
-      row.Mobile.dem += effective(l.mobileCount, l.pct);
-      row.TPE.dem += effective(l.tpeCount, l.pct);
-      row.Digital.dem += effective(l.digitalCount, l.pct);
+      row.Mobile.dem += effective(l.mobileCount, l.mobilePct);
+      row.TPE.dem += effective(l.tpeCount, l.tpePct);
+      row.Digital.dem += effective(l.digitalCount, l.digitalPct);
     });
     project.allocationLines.filter((l) => l.status === "approved" && l.periodStart <= period && period <= l.periodEnd).forEach((l) => {
       const res = poolById[l.poolMemberId];

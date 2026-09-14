@@ -4,15 +4,15 @@ import { SURFACE, SURFACE2, BORDER, TEXT, MUTED, inputStyle, btnGhost } from "..
 import { Th, Td } from "./ui";
 
 const SQUADS = [
-  { key: "mobileCount", label: "Mobile" },
-  { key: "tpeCount", label: "TPE" },
-  { key: "digitalCount", label: "Digital" },
+  { key: "mobileCount", pctKey: "mobilePct", label: "Mobile" },
+  { key: "tpeCount", pctKey: "tpePct", label: "TPE" },
+  { key: "digitalCount", pctKey: "digitalPct", label: "Digital" },
 ];
 
-// One demand line = one Début/Fin/Allocation % spanning three squad rows
-// (Mobile/TPE/Digital), each with its own headcount — Début, Fin and
-// Allocation % are shown once per line (rowSpan 3) since they apply to all
-// three squads, rather than repeating the same range three times.
+// One demand line = one Début/Fin spanning three squad rows (Mobile/TPE/
+// Digital), each with its own headcount AND its own allocation % — Début
+// and Fin are shown once per line (rowSpan 3) since the range applies to
+// all three squads, but the % doesn't have to match across them.
 export default function DemandTable({ lines, periods, editable, onAdd, onPatch, onRemove }) {
   const [local, setLocal] = useState(lines);
   useEffect(() => setLocal(lines), [lines]);
@@ -65,17 +65,15 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
                         style={{ ...inputStyle, width: 80 }} />
                     ) : <span style={{ color: MUTED }}>{line[sq.key] ?? 0}</span>}
                   </Td>
-                  {i === 0 && (
-                    <Td rowSpan={3} style={{ verticalAlign: "top" }}>
-                      {editable ? (
-                        <input type="number" min="0" max="200" placeholder="100"
-                          value={line.pct === "" || line.pct === undefined || line.pct === null ? "" : Math.round(Number(line.pct) * 100)}
-                          onChange={(e) => setLocalValue(line.id, "pct", e.target.value === "" ? "" : Number(e.target.value) / 100)}
-                          onBlur={(e) => onPatch(line.id, "pct", e.target.value === "" ? null : Number(e.target.value) / 100)}
-                          style={{ ...inputStyle, width: 90 }} />
-                      ) : <span style={{ color: MUTED }}>{line.pct === null || line.pct === undefined ? "100%" : `${Math.round(Number(line.pct) * 100)}%`}</span>}
-                    </Td>
-                  )}
+                  <Td>
+                    {editable ? (
+                      <input type="number" min="0" max="200" placeholder="100"
+                        value={line[sq.pctKey] === "" || line[sq.pctKey] === undefined || line[sq.pctKey] === null ? "" : Math.round(Number(line[sq.pctKey]) * 100)}
+                        onChange={(e) => setLocalValue(line.id, sq.pctKey, e.target.value === "" ? "" : Number(e.target.value) / 100)}
+                        onBlur={(e) => onPatch(line.id, sq.pctKey, e.target.value === "" ? null : Number(e.target.value) / 100)}
+                        style={{ ...inputStyle, width: 90 }} />
+                    ) : <span style={{ color: MUTED }}>{line[sq.pctKey] === null || line[sq.pctKey] === undefined ? "100%" : `${Math.round(Number(line[sq.pctKey]) * 100)}%`}</span>}
+                  </Td>
                   {i === 0 && editable && (
                     <Td rowSpan={3} style={{ verticalAlign: "top" }}>
                       <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">

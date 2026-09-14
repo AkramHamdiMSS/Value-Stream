@@ -83,9 +83,9 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   let besoinMobile = 0, besoinTpe = 0, besoinDigital = 0;
   for (const proj of projects) {
     for (const l of proj.demandLines) {
-      const effMobile = effective(l.mobileCount, l.pct);
-      const effTpe = effective(l.tpeCount, l.pct);
-      const effDigital = effective(l.digitalCount, l.pct);
+      const effMobile = effective(l.mobileCount, l.mobilePct);
+      const effTpe = effective(l.tpeCount, l.tpePct);
+      const effDigital = effective(l.digitalCount, l.digitalPct);
       besoinMobile += effMobile;
       besoinTpe += effTpe;
       besoinDigital += effDigital;
@@ -146,9 +146,9 @@ async function buildOwnDashboard(user, periods) {
 
     let pDemand = { Mobile: 0, TPE: 0, Digital: 0 };
     for (const l of proj.demandLines) {
-      const effMobile = effective(l.mobileCount, l.pct);
-      const effTpe = effective(l.tpeCount, l.pct);
-      const effDigital = effective(l.digitalCount, l.pct);
+      const effMobile = effective(l.mobileCount, l.mobilePct);
+      const effTpe = effective(l.tpeCount, l.tpePct);
+      const effDigital = effective(l.digitalCount, l.digitalPct);
       pDemand.Mobile += effMobile;
       pDemand.TPE += effTpe;
       pDemand.Digital += effDigital;

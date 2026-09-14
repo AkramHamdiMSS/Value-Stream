@@ -83,11 +83,14 @@ model DemandLine {
   periodStart  String  @map("period_start")
   periodEnd    String  @map("period_end")
   // One row for the whole squad breakdown of a range, instead of a separate
-  // row per squad — a single "Allocation %" still applies across all three.
-  mobileCount  Decimal @default(0) @db.Decimal(10, 2) @map("mobile_count")
-  tpeCount     Decimal @default(0) @db.Decimal(10, 2) @map("tpe_count")
-  digitalCount Decimal @default(0) @db.Decimal(10, 2) @map("digital_count")
-  pct          Decimal? @db.Decimal(6, 4)
+  // row per squad — each squad keeps its own headcount AND its own
+  // allocation % (null = 100%), since they don't have to match.
+  mobileCount  Decimal  @default(0) @db.Decimal(10, 2) @map("mobile_count")
+  tpeCount     Decimal  @default(0) @db.Decimal(10, 2) @map("tpe_count")
+  digitalCount Decimal  @default(0) @db.Decimal(10, 2) @map("digital_count")
+  mobilePct    Decimal? @db.Decimal(6, 4) @map("mobile_pct")
+  tpePct       Decimal? @db.Decimal(6, 4) @map("tpe_pct")
+  digitalPct   Decimal? @db.Decimal(6, 4) @map("digital_pct")
 
   @@index([projectId])
   @@map("demand_lines")

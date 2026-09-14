@@ -35,9 +35,9 @@ router.get("/", async (req, res) => {
       if (!line.periodStart || !line.periodEnd) continue;
       // One demand row now covers all three squads — emit up to one queue
       // row per squad it actually has headcount for.
-      for (const [profile, countField] of [["Mobile", "mobileCount"], ["TPE", "tpeCount"], ["Digital", "digitalCount"]]) {
+      for (const [profile, countField, pctField] of [["Mobile", "mobileCount", "mobilePct"], ["TPE", "tpeCount", "tpePct"], ["Digital", "digitalCount", "digitalPct"]]) {
         if (squadFilter && profile !== squadFilter) continue;
-        const demanded = effective(line[countField], line.pct);
+        const demanded = effective(line[countField], line[pctField]);
         if (demanded <= 0) continue;
         let allocated = 0;
         for (const a of proj.allocationLines) {

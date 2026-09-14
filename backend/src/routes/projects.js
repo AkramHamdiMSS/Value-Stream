@@ -25,9 +25,9 @@ function rangeLabel(line) {
 function computeTotals(project) {
   let dMobile = 0, dTpe = 0, dDigital = 0;
   for (const l of project.demandLines) {
-    dMobile += effective(l.mobileCount, l.pct);
-    dTpe += effective(l.tpeCount, l.pct);
-    dDigital += effective(l.digitalCount, l.pct);
+    dMobile += effective(l.mobileCount, l.mobilePct);
+    dTpe += effective(l.tpeCount, l.tpePct);
+    dDigital += effective(l.digitalCount, l.digitalPct);
   }
   let aMobile = 0, aTpe = 0, aDigital = 0;
   // Pending (unapproved) proposals don't count as real capacity yet.
@@ -188,8 +188,8 @@ router.patch("/:id", async (req, res) => {
     // three squads at once, so each is checked independently.
     const bySquad = {};
     for (const dl of updated.demandLines) {
-      for (const [squad, countField] of [["Mobile", "mobileCount"], ["TPE", "tpeCount"], ["Digital", "digitalCount"]]) {
-        const eff = effective(dl[countField], dl.pct);
+      for (const [squad, countField, pctField] of [["Mobile", "mobileCount", "mobilePct"], ["TPE", "tpeCount", "tpePct"], ["Digital", "digitalCount", "digitalPct"]]) {
+        const eff = effective(dl[countField], dl[pctField]);
         if (eff <= 0) continue;
         (bySquad[squad] ??= []).push(`${rangeLabel(dl)} (${eff})`);
       }
@@ -231,7 +231,9 @@ const demandLineSchema = z.object({
   mobileCount: z.number().nonnegative(),
   tpeCount: z.number().nonnegative(),
   digitalCount: z.number().nonnegative(),
-  pct: z.number().min(0).max(2).nullable().optional(),
+  mobilePct: z.number().min(0).max(2).nullable().optional(),
+  tpePct: z.number().min(0).max(2).nullable().optional(),
+  digitalPct: z.number().min(0).max(2).nullable().optional(),
 });
 
 router.post("/:id/demand-lines", async (req, res) => {
@@ -255,7 +257,9 @@ router.post("/:id/demand-lines", async (req, res) => {
       mobileCount: parsed.data.mobileCount ?? 0,
       tpeCount: parsed.data.tpeCount ?? 0,
       digitalCount: parsed.data.digitalCount ?? 0,
-      pct: parsed.data.pct ?? null,
+      mobilePct: parsed.data.mobilePct ?? null,
+      tpePct: parsed.data.tpePct ?? null,
+      digitalPct: parsed.data.digitalPct ?? null,
     },
   });
   await logActivity({ user: req.user, action: `a ajouté un besoin (${rangeLabel(line)})`, project });
@@ -367,9 +371,9 @@ router.get("/:id/synthesis", async (req, res) => {
   const rows = [...periods].sort().map((period) => {
     const row = { period, Mobile: { dem: 0, alloc: 0 }, TPE: { dem: 0, alloc: 0 }, Digital: { dem: 0, alloc: 0 } };
     project.demandLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
-      row.Mobile.dem += effective(l.mobileCount, l.pct);
-      row.TPE.dem += effective(l.tpeCount, l.pct);
-      row.Digital.dem += effective(l.digitalCount, l.pct);
+      row.Mobile.dem += effective(l.mobileCount, l.mobilePct);
+      row.TPE.dem += effective(l.tpeCount, l.tpePct);
+      row.Digital.dem += effective(l.digitalCount, l.digitalPct);
     });
     project.allocationLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
       const squad = l.poolMember?.squad;

@@ -31,7 +31,9 @@ const patchSchema = z.object({
   mobileCount: z.number().nonnegative().optional(),
   tpeCount: z.number().nonnegative().optional(),
   digitalCount: z.number().nonnegative().optional(),
-  pct: z.number().min(0).max(2).nullable().optional(),
+  mobilePct: z.number().min(0).max(2).nullable().optional(),
+  tpePct: z.number().min(0).max(2).nullable().optional(),
+  digitalPct: z.number().min(0).max(2).nullable().optional(),
 });
 
 function rangeLabel(line) {
