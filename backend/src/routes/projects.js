@@ -5,6 +5,7 @@ const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { effective } = require("../lib/periods");
 const { logActivity } = require("../lib/activity");
+const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe } = require("../lib/notify");
 
 const router = express.Router();
 router.use(authenticate);
@@ -169,6 +170,13 @@ router.patch("/:id", async (req, res) => {
   else if ("status" in data) action = `a changé le statut en "${data.status}"`;
   if (action) await logActivity({ user: req.user, action, project: updated });
 
+  if (data.demandSubmitted === true) {
+    await notifyHSV(
+      `Nouvelle demande de ressources — ${updated.name}`,
+      `${req.user.name} (SVO) a soumis la demande de ressources pour le projet "${updated.name}". Elle est à staffer.`
+    );
+  }
+
   res.json({ ...serializeProject(updated), totals: computeTotals(updated) });
 });
 
@@ -273,6 +281,25 @@ router.post("/:id/allocation-lines", async (req, res) => {
     action: status === "approved" ? `a affecté ${line.poolMember.name} (${line.period})` : `a proposé ${line.poolMember.name} (${line.period})`,
     project,
   });
+
+  if (status === "pending") {
+    await notifyHSV(
+      `Proposition d'affectation — ${project.name}`,
+      `${req.user.name} propose d'affecter ${line.poolMember.name} sur "${project.name}" (${line.period}, ${Math.round(Number(line.pct) * 100)}%). À valider.`
+    );
+  } else {
+    await notifyPoolMember(
+      line.poolMember,
+      `Nouvelle affectation — ${project.name}`,
+      `Vous avez été affecté(e) au projet "${project.name}" pour la période ${line.period} (${Math.round(Number(line.pct) * 100)}%).`
+    );
+    await notifyTeamLeadsForSousEquipe(
+      line.poolMember.sousEquipe,
+      `Affectation d'équipe — ${project.name}`,
+      `${line.poolMember.name} a été affecté(e) au projet "${project.name}" pour la période ${line.period} par ${req.user.name}.`
+    );
+  }
+
   res.status(201).json(line);
 });
 

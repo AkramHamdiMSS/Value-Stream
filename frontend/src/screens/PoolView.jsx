@@ -59,7 +59,7 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
-              <Th>Nom</Th><Th>Squad</Th><Th>Sous-équipe</Th><Th>Rôle</Th><Th>Pic de charge</Th><Th></Th>
+              <Th>Nom</Th><Th>Email</Th><Th>Squad</Th><Th>Sous-équipe</Th><Th>Rôle</Th><Th>Pic de charge</Th><Th></Th>
             </tr>
           </thead>
           <tbody>
@@ -69,6 +69,8 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
                 <tr key={p.id} style={{ borderTop: `1px solid ${BORDER}` }}>
                   <Td><input value={draftValue(p, "name")} onChange={(e) => setDraft(p.id, "name", e.target.value)}
                     onBlur={(e) => patchPerson(p.id, "name", e.target.value)} style={inputStyle} /></Td>
+                  <Td><input type="email" placeholder="email@…" value={draftValue(p, "email") ?? ""} onChange={(e) => setDraft(p.id, "email", e.target.value)}
+                    onBlur={(e) => patchPerson(p.id, "email", e.target.value)} style={inputStyle} /></Td>
                   <Td>
                     <select value={p.squad} onChange={(e) => patchPerson(p.id, "squad", e.target.value)} style={inputStyle}>
                       <option>Mobile</option><option>TPE</option><option>Digital</option>

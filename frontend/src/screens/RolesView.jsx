@@ -11,6 +11,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
   const [error, setError] = useState("");
   const [pwDrafts, setPwDrafts] = useState({});
   const [names, setNames] = useState({});
+  const [emails, setEmails] = useState({});
   const [openPermsFor, setOpenPermsFor] = useState(null);
   // Optimistic override so rapid successive toggles each build on the latest
   // known value instead of the (possibly stale) svoUsers prop — without this,
@@ -58,6 +59,17 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
     if (!name) return;
     try {
       await api.patch(`/users/${id}`, { name });
+      onChanged();
+      loadHsv();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const saveEmail = async (id) => {
+    const email = (emails[id] ?? "").trim();
+    try {
+      await api.patch(`/users/${id}`, { email });
       onChanged();
       loadHsv();
     } catch (e) {
@@ -142,7 +154,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
-              <Th>SVO</Th><Th>Projets</Th><Th>Compte</Th><Th>Définir / réinitialiser le mot de passe</Th>
+              <Th>SVO</Th><Th>Email</Th><Th>Projets</Th><Th>Compte</Th><Th>Définir / réinitialiser le mot de passe</Th>
               {isHSV && <Th>Permissions</Th>}
               <Th></Th>
             </tr>
@@ -154,6 +166,11 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
                   <Td>
                     <input value={names[s.id] ?? s.name} onChange={(e) => setNames({ ...names, [s.id]: e.target.value })}
                       onBlur={() => renameUser(s.id)} style={inputStyle} />
+                  </Td>
+                  <Td>
+                    <input type="email" placeholder="email@…" value={emails[s.id] ?? s.email ?? ""}
+                      onChange={(e) => setEmails({ ...emails, [s.id]: e.target.value })}
+                      onBlur={() => saveEmail(s.id)} style={inputStyle} />
                   </Td>
                   <Td><span style={{ color: MUTED }}>{s.projectCount}</span></Td>
                   <Td>
@@ -196,7 +213,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
                 </tr>
                 {isHSV && openPermsFor === s.id && (
                   <tr style={{ background: SURFACE2 }}>
-                    <td colSpan={6} style={{ padding: "14px 16px" }}>
+                    <td colSpan={7} style={{ padding: "14px 16px" }}>
                       <div style={{ fontSize: 11.5, color: MUTED, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                         Permissions supplémentaires — {s.name}
                       </div>
@@ -215,7 +232,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
               </Fragment>
             ))}
             {svoUsers.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun SVO.</td></tr>
+              <tr><td colSpan={7} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun SVO.</td></tr>
             )}
           </tbody>
         </table>
@@ -226,7 +243,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: SURFACE2 }}>
-                <Th>Head of Value Stream</Th><Th>Compte</Th><Th>Définir / réinitialiser le mot de passe</Th><Th></Th>
+                <Th>Head of Value Stream</Th><Th>Email</Th><Th>Compte</Th><Th>Définir / réinitialiser le mot de passe</Th><Th></Th>
               </tr>
             </thead>
             <tbody>
@@ -235,6 +252,11 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
                   <Td>
                     <input value={names[h.id] ?? h.name} onChange={(e) => setNames({ ...names, [h.id]: e.target.value })}
                       onBlur={() => renameUser(h.id)} style={inputStyle} />
+                  </Td>
+                  <Td>
+                    <input type="email" placeholder="email@…" value={emails[h.id] ?? h.email ?? ""}
+                      onChange={(e) => setEmails({ ...emails, [h.id]: e.target.value })}
+                      onBlur={() => saveEmail(h.id)} style={inputStyle} />
                   </Td>
                   <Td>
                     {h.hasPassword ? <Badge color={GREEN} text="Actif" /> : <Badge color={AMBER} text="Sans mot de passe" />}
@@ -267,7 +289,7 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
                 </tr>
               ))}
               {hsvUsers.length === 0 && (
-                <tr><td colSpan={4} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun compte Head of Value Stream.</td></tr>
+                <tr><td colSpan={5} style={{ padding: 16, textAlign: "center", color: MUTED }}>Aucun compte Head of Value Stream.</td></tr>
               )}
             </tbody>
           </table>

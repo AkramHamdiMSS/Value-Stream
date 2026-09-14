@@ -4,6 +4,7 @@ const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { logActivity } = require("../lib/activity");
+const { notifyHSV, notifyUser, notifyPoolMember, notifyTeamLeadsForSousEquipe } = require("../lib/notify");
 
 const router = express.Router();
 router.use(authenticate);
@@ -22,7 +23,7 @@ const patchSchema = z.object({
 router.patch("/:id", async (req, res) => {
   const parsed = patchSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
-  const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true } });
+  const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true, createdBy: true } });
   if (!line) return res.status(404).json({ error: "Ligne introuvable." });
 
   const canManage = hasPermission(req.user, "manageAllocations");
@@ -51,15 +52,37 @@ router.patch("/:id", async (req, res) => {
       : `a modifié sa proposition pour ${line.poolMember.name} (${line.period})`,
     project: line.project,
   });
+
+  if (canManage && line.status === "pending") {
+    await notifyApproval({ line, project: line.project, approver: req.user });
+  }
+
   res.json(updated);
 });
 
+// Shared by /approve and a direct HSV edit of a pending line (which also
+// confirms it) — the proposer learns their proposal went through, and the
+// resource learns they're now really on the project.
+async function notifyApproval({ line, project, approver }) {
+  await notifyUser(
+    line.createdBy,
+    `Proposition validée — ${project.name}`,
+    `${approver.name} a validé votre proposition d'affectation de ${line.poolMember.name} sur "${project.name}" (${line.period}).`
+  );
+  await notifyPoolMember(
+    line.poolMember,
+    `Affectation confirmée — ${project.name}`,
+    `Votre affectation au projet "${project.name}" pour la période ${line.period} est confirmée.`
+  );
+}
+
 // Validates a Team/Tech Lead's proposal.
 router.post("/:id/approve", requirePermission("manageAllocations"), async (req, res) => {
-  const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true } });
+  const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true, createdBy: true } });
   if (!line) return res.status(404).json({ error: "Ligne introuvable." });
   const updated = await prisma.allocationLine.update({ where: { id: req.params.id }, data: { status: "approved" }, include: { poolMember: true } });
   await logActivity({ user: req.user, action: `a validé l'affectation de ${line.poolMember.name} (${line.period})`, project: line.project });
+  await notifyApproval({ line, project: line.project, approver: req.user });
   res.json(updated);
 });
 
@@ -67,7 +90,7 @@ router.post("/:id/approve", requirePermission("manageAllocations"), async (req, 
 // "reject a proposal"); a proposeAllocations-only holder can only retract
 // their own still-pending proposal.
 router.delete("/:id", async (req, res) => {
-  const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true } });
+  const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true, createdBy: true } });
   if (!line) return res.status(404).json({ error: "Ligne introuvable." });
 
   const canManage = hasPermission(req.user, "manageAllocations");
@@ -82,6 +105,21 @@ router.delete("/:id", async (req, res) => {
       : `a retiré l'affectation de ${line.poolMember.name} (${line.period})`,
     project: line.project,
   });
+
+  if (canManage && line.status === "pending") {
+    await notifyUser(
+      line.createdBy,
+      `Proposition refusée — ${line.project.name}`,
+      `${req.user.name} a refusé votre proposition d'affectation de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
+    );
+  } else if (canManage && line.status === "approved") {
+    await notifyPoolMember(
+      line.poolMember,
+      `Retrait d'affectation — ${line.project.name}`,
+      `${req.user.name} vous a retiré du projet "${line.project.name}" (${line.period}).`
+    );
+  }
+
   res.json({ ok: true });
 });
 
@@ -109,6 +147,10 @@ router.post("/:id/request-release", async (req, res) => {
     action: `a demandé la libération de ${line.poolMember.name} (${line.period}) — ${parsed.data.note}`,
     project: line.project,
   });
+  await notifyHSV(
+    `Demande de libération — ${line.project.name}`,
+    `${req.user.name} demande la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}) — ${parsed.data.note}`
+  );
   res.json(updated);
 });
 
@@ -133,6 +175,14 @@ router.post("/:id/cancel-release", async (req, res) => {
       : `a refusé la libération de ${line.poolMember.name} (${line.period})`,
     project: line.project,
   });
+  if (canManage) {
+    const svo = await prisma.user.findUnique({ where: { id: line.project.svoUserId } });
+    await notifyUser(
+      svo,
+      `Libération refusée — ${line.project.name}`,
+      `${req.user.name} a refusé votre demande de libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
+    );
+  }
   res.json(updated);
 });
 
@@ -148,6 +198,24 @@ router.post("/:id/confirm-release", requirePermission("manageAllocations"), asyn
     action: `a validé la libération de ${line.poolMember.name} (${line.period}) — ${line.releaseNote}`,
     project: line.project,
   });
+
+  const svo = await prisma.user.findUnique({ where: { id: line.project.svoUserId } });
+  await notifyUser(
+    svo,
+    `Libération confirmée — ${line.project.name}`,
+    `${req.user.name} a confirmé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}) — la ressource est de nouveau disponible.`
+  );
+  await notifyPoolMember(
+    line.poolMember,
+    `Libération confirmée — ${line.project.name}`,
+    `Votre affectation au projet "${line.project.name}" (${line.period}) a pris fin — vous êtes de nouveau disponible.`
+  );
+  await notifyTeamLeadsForSousEquipe(
+    line.poolMember.sousEquipe,
+    `Libération d'équipe — ${line.project.name}`,
+    `${line.poolMember.name} est libéré(e) du projet "${line.project.name}" (${line.period}) et redevient disponible.`
+  );
+
   res.json({ ok: true });
 });
 

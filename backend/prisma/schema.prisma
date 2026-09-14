@@ -30,6 +30,7 @@ enum AllocationStatus {
 model User {
   id           String   @id @default(uuid())
   name         String   @unique
+  email        String?
   role         Role
   passwordHash String?  @map("password_hash")
   // Extra capabilities grantable to an svo user by the HSV (super admin), on
@@ -45,11 +46,12 @@ model User {
 }
 
 model PoolMember {
-  id         String @id @default(uuid())
+  id         String  @id @default(uuid())
   name       String
+  email      String?
   squad      Squad
-  sousEquipe String @map("sous_equipe")
-  roleTitle  String @map("role_title")
+  sousEquipe String  @map("sous_equipe")
+  roleTitle  String  @map("role_title")
 
   allocationLines AllocationLine[]
 

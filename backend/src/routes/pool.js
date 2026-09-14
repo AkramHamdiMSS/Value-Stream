@@ -16,6 +16,7 @@ router.use(requirePermission("managePool"));
 
 const memberSchema = z.object({
   name: z.string().trim().min(1),
+  email: z.union([z.string().trim().email(), z.literal("")]),
   squad: z.enum(["Mobile", "TPE", "Digital"]),
   sousEquipe: z.string().trim().min(1),
   roleTitle: z.string().trim().min(1),
@@ -41,13 +42,16 @@ router.patch("/:id", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
   const before = await prisma.poolMember.findUnique({ where: { id: req.params.id } });
   if (!before) return res.status(404).json({ error: "Personne introuvable." });
-  const member = await prisma.poolMember.update({ where: { id: req.params.id }, data: parsed.data });
+  const data = { ...parsed.data };
+  if (data.email === "") data.email = null;
+  const member = await prisma.poolMember.update({ where: { id: req.params.id }, data });
 
   let action = null;
   if ("name" in parsed.data) action = `a renommé ${before.name} en "${parsed.data.name}"`;
   else if ("squad" in parsed.data) action = `a changé le squad de ${before.name} en "${parsed.data.squad}"`;
   else if ("sousEquipe" in parsed.data) action = `a changé la sous-équipe de ${before.name} en "${parsed.data.sousEquipe}"`;
   else if ("roleTitle" in parsed.data) action = `a changé le rôle de ${before.name} en "${parsed.data.roleTitle}"`;
+  else if ("email" in parsed.data) action = `a mis à jour l'email de ${before.name}`;
   if (action) await logActivity({ user: req.user, action });
 
   res.json(member);

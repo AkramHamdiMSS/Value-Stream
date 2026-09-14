@@ -22,6 +22,7 @@ router.get("/", async (req, res) => {
     users.map((u) => ({
       id: u.id,
       name: u.name,
+      email: u.email,
       role: u.role,
       hasPassword: !!u.passwordHash,
       projectCount: u._count.projects,
@@ -105,19 +106,29 @@ router.post("/", async (req, res) => {
 });
 
 router.patch("/:id", async (req, res) => {
-  const schema = z.object({ name: z.string().trim().min(1) });
+  const schema = z.object({
+    name: z.string().trim().min(1).optional(),
+    email: z.union([z.string().trim().email(), z.literal("")]).optional(),
+  });
   const parsed = schema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Nom invalide." });
+  if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
+  if (parsed.data.name === undefined && parsed.data.email === undefined) {
+    return res.status(400).json({ error: "Rien à mettre à jour." });
+  }
 
-  const existing = await prisma.user.findUnique({ where: { name: parsed.data.name } });
-  if (existing && existing.id !== req.params.id) {
-    return res.status(409).json({ error: "Ce nom est déjà utilisé par un compte." });
+  if (parsed.data.name) {
+    const existing = await prisma.user.findUnique({ where: { name: parsed.data.name } });
+    if (existing && existing.id !== req.params.id) {
+      return res.status(409).json({ error: "Ce nom est déjà utilisé par un compte." });
+    }
   }
 
   const before = await prisma.user.findUnique({ where: { id: req.params.id } });
-  const user = await prisma.user.update({ where: { id: req.params.id }, data: { name: parsed.data.name } });
-  if (before) await logActivity({ user: req.user, action: `a renommé le compte "${before.name}" en "${user.name}"` });
-  res.json({ id: user.id, name: user.name, role: user.role });
+  const data = { ...parsed.data };
+  if (data.email === "") data.email = null;
+  const user = await prisma.user.update({ where: { id: req.params.id }, data });
+  if (before && parsed.data.name) await logActivity({ user: req.user, action: `a renommé le compte "${before.name}" en "${user.name}"` });
+  res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
 });
 
 router.delete("/:id", async (req, res) => {
