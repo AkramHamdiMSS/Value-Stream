@@ -5,6 +5,7 @@ import { round1, effective } from "../lib/util";
 import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td, Field, SectionTitle, Badge } from "../components/ui";
 import LinesTable from "../components/LinesTable";
+import DemandTable from "../components/DemandTable";
 
 export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, canProposeAllocations, user, svoUsers, pool, teamPool, periods, overAllocProjects, onBack, onProjectsChanged }) {
   const [project, setProject] = useState(null);
@@ -236,18 +237,10 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
       </div>
 
       <SectionTitle>Besoin exprimé par le SVO {!canEditDemand && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}</SectionTitle>
-      <LinesTable
+      <DemandTable
         lines={project.demandLines}
+        periods={periods}
         editable={canEditDemand}
-        columns={[
-          { key: "periodStart", label: "Début", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
-          { key: "periodEnd", label: "Fin", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
-          { key: "mobileCount", label: "Mobile", type: "number", width: 80 },
-          { key: "tpeCount", label: "TPE", type: "number", width: 80 },
-          { key: "digitalCount", label: "Digital", type: "number", width: 80 },
-          { key: "pct", label: "Allocation % (vide = 100%)", type: "percent", width: 110 },
-        ]}
-        addLabel="Ajouter une ligne"
         onAdd={addDemandLine}
         onPatch={patchDemandLine}
         onRemove={removeDemandLine}
