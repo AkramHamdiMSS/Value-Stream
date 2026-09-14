@@ -153,6 +153,21 @@ router.patch("/:id", async (req, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
 
+  // A demand line defaults to 0 on every squad while the SVO is still
+  // filling it in — only block at submission time, not on every keystroke,
+  // and only for a genuinely empty line (every squad still at 0).
+  if (parsed.data.demandSubmitted === true) {
+    if (project.demandLines.length === 0) {
+      return res.status(400).json({ error: "Ajoutez au moins une ligne de besoin avant de soumettre la demande." });
+    }
+    const emptyLine = project.demandLines.find((l) =>
+      Number(l.mobileCount) <= 0 && Number(l.tpeCount) <= 0 && Number(l.digitalCount) <= 0
+    );
+    if (emptyLine) {
+      return res.status(400).json({ error: "Chaque ligne de besoin doit avoir un effectif supérieur à 0 sur au moins un profil (Mobile, TPE ou Digital)." });
+    }
+  }
+
   const data = { ...parsed.data };
   if (!canManageAny) {
     // SVO cannot reassign the project's owner.
