@@ -32,13 +32,14 @@ router.get("/", async (req, res) => {
   const rows = [];
   for (const proj of projects) {
     for (const line of proj.demandLines) {
-      if (!line.period || !line.profile) continue;
+      if (!line.periodStart || !line.periodEnd || !line.profile) continue;
       if (squadFilter && line.profile !== squadFilter) continue;
       const demanded = effective(line.count, line.pct);
       let allocated = 0;
       for (const a of proj.allocationLines) {
         if (a.status !== "approved") continue;
-        if (a.period !== line.period) continue;
+        // Overlap, not exact match — either range can now span multiple weeks.
+        if (a.periodStart > line.periodEnd || a.periodEnd < line.periodStart) continue;
         if (a.poolMember?.squad === line.profile) allocated += Number(a.pct) || 0;
       }
       rows.push({
@@ -46,7 +47,8 @@ router.get("/", async (req, res) => {
         projectId: proj.id,
         projectName: proj.name,
         svo: proj.svo.name,
-        period: line.period,
+        periodStart: line.periodStart,
+        periodEnd: line.periodEnd,
         profile: line.profile,
         demanded: round1(demanded),
         allocated: round1(allocated),

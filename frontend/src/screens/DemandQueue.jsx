@@ -25,6 +25,11 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
   // A propose-only viewer only picks from their own team.
   const candidatePool = canManageAllocations ? pool : (teamPool?.length ? teamPool : pool);
   const candidatesFor = (row) => candidatePool.filter((r) => r.squad === row.profile);
+  const rangeLabel = (row) => (row.periodStart === row.periodEnd ? row.periodStart : `${row.periodStart} → ${row.periodEnd}`);
+  // Weeks from the resource-load grid that fall within a row's span — the
+  // grid is already keyed by week id, so membership is just string range
+  // comparison, no separate period list needed here.
+  const weeksInRange = (grid, start, end) => Object.keys(grid || {}).filter((w) => w >= start && w <= end);
 
   // One "demande" is submitted per project+période, with one line per profile —
   // group them back into a single row so the queue reflects that, instead of
@@ -32,10 +37,10 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
   const groups = [];
   const groupIndexByKey = {};
   for (const row of visibleRows) {
-    const gKey = `${row.projectId}:${row.period}`;
+    const gKey = `${row.projectId}:${row.periodStart}:${row.periodEnd}`;
     if (!(gKey in groupIndexByKey)) {
       groupIndexByKey[gKey] = groups.length;
-      groups.push({ key: gKey, projectId: row.projectId, projectName: row.projectName, svo: row.svo, period: row.period, rows: [] });
+      groups.push({ key: gKey, projectId: row.projectId, projectName: row.projectName, svo: row.svo, periodLabel: rangeLabel(row), rows: [] });
     }
     groups[groupIndexByKey[gKey]].rows.push(row);
   }
@@ -44,7 +49,7 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
   const submitAllocation = async (row) => {
     if (!pick.poolMemberId) return;
     await api.post(`/projects/${row.projectId}/allocation-lines`, {
-      period: row.period, poolMemberId: pick.poolMemberId, pct: pick.pct / 100,
+      periodStart: row.periodStart, periodEnd: row.periodEnd, poolMemberId: pick.poolMemberId, pct: pick.pct / 100,
     });
     setOpenRow(null);
     load();
@@ -88,7 +93,7 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
                             <button onClick={() => onOpenProject(g.projectId)} style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 13, padding: 0 }}>{g.projectName}</button>
                           </Td>
                           <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.svo}</Td>
-                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.period}</Td>
+                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.periodLabel}</Td>
                         </>
                       )}
                       <Td>{row.profile}</Td>
@@ -107,13 +112,20 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
                       <tr style={{ background: SURFACE2 }}>
                         <td colSpan={8} style={{ padding: "12px 14px" }}>
                           <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
-                            Choisissez une ressource {row.profile} — sa charge sur ses autres projets cette semaine-là est affichée pour vous aider à décider.
+                            Choisissez une ressource {row.profile} — sa charge sur ses autres projets sur cette période est affichée pour vous aider à décider.
                           </div>
                           <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 10, maxHeight: 220, overflowY: "auto", marginBottom: 10 }}>
                             {candidatesFor(row).map((r) => {
-                              const load2 = overAllocGrid[r.id]?.[row.period] || 0;
+                              const weeks = weeksInRange(overAllocGrid[r.id], row.periodStart, row.periodEnd);
+                              const load2 = weeks.length ? Math.max(...weeks.map((w) => overAllocGrid[r.id][w] || 0)) : 0;
                               const over = load2 > 1.001;
-                              const entries = overAllocProjects?.[`${r.id}:${row.period}`] || [];
+                              const seenProjects = new Map();
+                              for (const w of weeks) {
+                                for (const e of overAllocProjects?.[`${r.id}:${w}`] || []) {
+                                  if (!seenProjects.has(e.projectId)) seenProjects.set(e.projectId, e);
+                                }
+                              }
+                              const entries = [...seenProjects.values()];
                               const selected = pick.poolMemberId === r.id;
                               return (
                                 <div key={r.id} onClick={() => setPick({ ...pick, poolMemberId: r.id })} style={{

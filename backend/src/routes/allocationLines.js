@@ -10,10 +10,15 @@ const router = express.Router();
 router.use(authenticate);
 
 const patchSchema = z.object({
-  period: z.string().trim().min(1).optional(),
+  periodStart: z.string().trim().min(1).optional(),
+  periodEnd: z.string().trim().min(1).optional(),
   poolMemberId: z.string().uuid().optional(),
   pct: z.number().min(0).max(2).optional(),
 });
+
+function rangeLabel(line) {
+  return line.periodStart === line.periodEnd ? line.periodStart : `${line.periodStart} → ${line.periodEnd}`;
+}
 
 // Editing a line: HSV/manageAllocations can touch anything (and confirms it,
 // so a pending proposal doesn't stay stuck once someone with real authority
@@ -40,6 +45,10 @@ router.patch("/:id", async (req, res) => {
     }
   }
 
+  const nextStart = parsed.data.periodStart ?? line.periodStart;
+  const nextEnd = parsed.data.periodEnd ?? line.periodEnd;
+  if (nextStart > nextEnd) return res.status(400).json({ error: "La semaine de fin doit être après la semaine de début." });
+
   const updated = await prisma.allocationLine.update({
     where: { id: req.params.id },
     data: { ...parsed.data, ...(canManage ? { status: "approved" } : {}) },
@@ -48,8 +57,8 @@ router.patch("/:id", async (req, res) => {
   await logActivity({
     user: req.user,
     action: canManage
-      ? `a modifié l'affectation de ${line.poolMember.name} (${line.period})`
-      : `a modifié sa proposition pour ${line.poolMember.name} (${line.period})`,
+      ? `a modifié l'affectation de ${line.poolMember.name} (${rangeLabel(line)})`
+      : `a modifié sa proposition pour ${line.poolMember.name} (${rangeLabel(line)})`,
     project: line.project,
   });
 
@@ -68,18 +77,18 @@ async function notifyApproval({ line, project, approver }) {
   await notifyUser(
     line.createdBy,
     `Proposition validée — ${project.name}`,
-    `${approver.name} a validé votre proposition d'affectation de ${line.poolMember.name} sur "${project.name}" (${line.period}).`,
+    `${approver.name} a validé votre proposition d'affectation de ${line.poolMember.name} sur "${project.name}" (${rangeLabel(line)}).`,
     link
   );
   await notifyPoolMember(
     line.poolMember,
     `Affectation confirmée — ${project.name}`,
-    `Votre affectation au projet "${project.name}" pour la période ${line.period} est confirmée.`,
+    `Votre affectation au projet "${project.name}" pour la période ${rangeLabel(line)} est confirmée.`,
     link
   );
   await notifyHSV(
     `[Journal] Affectation validée — ${project.name}`,
-    `${approver.name} a validé l'affectation de ${line.poolMember.name} sur "${project.name}" (${line.period}).`,
+    `${approver.name} a validé l'affectation de ${line.poolMember.name} sur "${project.name}" (${rangeLabel(line)}).`,
     link
   );
 }
@@ -89,7 +98,7 @@ router.post("/:id/approve", requirePermission("manageAllocations"), async (req, 
   const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true, createdBy: true } });
   if (!line) return res.status(404).json({ error: "Ligne introuvable." });
   const updated = await prisma.allocationLine.update({ where: { id: req.params.id }, data: { status: "approved" }, include: { poolMember: true } });
-  await logActivity({ user: req.user, action: `a validé l'affectation de ${line.poolMember.name} (${line.period})`, project: line.project });
+  await logActivity({ user: req.user, action: `a validé l'affectation de ${line.poolMember.name} (${rangeLabel(line)})`, project: line.project });
   await notifyApproval({ line, project: line.project, approver: req.user });
   res.json(updated);
 });
@@ -109,8 +118,8 @@ router.delete("/:id", async (req, res) => {
   await logActivity({
     user: req.user,
     action: canManage && line.status === "pending"
-      ? `a rejeté la proposition de ${line.poolMember.name} (${line.period})`
-      : `a retiré l'affectation de ${line.poolMember.name} (${line.period})`,
+      ? `a rejeté la proposition de ${line.poolMember.name} (${rangeLabel(line)})`
+      : `a retiré l'affectation de ${line.poolMember.name} (${rangeLabel(line)})`,
     project: line.project,
   });
 
@@ -119,24 +128,24 @@ router.delete("/:id", async (req, res) => {
     await notifyUser(
       line.createdBy,
       `Proposition refusée — ${line.project.name}`,
-      `${req.user.name} a refusé votre proposition d'affectation de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+      `${req.user.name} a refusé votre proposition d'affectation de ${line.poolMember.name} sur "${line.project.name}" (${rangeLabel(line)}).`,
       deleteLink
     );
     await notifyHSV(
       `[Journal] Proposition refusée — ${line.project.name}`,
-      `${req.user.name} a refusé la proposition de ${line.createdBy.name} pour ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+      `${req.user.name} a refusé la proposition de ${line.createdBy.name} pour ${line.poolMember.name} sur "${line.project.name}" (${rangeLabel(line)}).`,
       deleteLink
     );
   } else if (canManage && line.status === "approved") {
     await notifyPoolMember(
       line.poolMember,
       `Retrait d'affectation — ${line.project.name}`,
-      `${req.user.name} vous a retiré du projet "${line.project.name}" (${line.period}).`,
+      `${req.user.name} vous a retiré du projet "${line.project.name}" (${rangeLabel(line)}).`,
       deleteLink
     );
     await notifyHSV(
       `[Journal] Affectation retirée — ${line.project.name}`,
-      `${req.user.name} a retiré ${line.poolMember.name} du projet "${line.project.name}" (${line.period}).`,
+      `${req.user.name} a retiré ${line.poolMember.name} du projet "${line.project.name}" (${rangeLabel(line)}).`,
       deleteLink
     );
   }
@@ -174,12 +183,12 @@ router.post("/:id/request-release", async (req, res) => {
   const pctLabel = isPartial ? `${Math.round(Number(line.pct) * 100)}% → ${Math.round(parsed.data.newPct * 100)}%` : "totale";
   await logActivity({
     user: req.user,
-    action: `a demandé la libération ${isPartial ? "partielle" : "totale"} de ${line.poolMember.name} (${line.period}, ${pctLabel}) — ${parsed.data.note}`,
+    action: `a demandé la libération ${isPartial ? "partielle" : "totale"} de ${line.poolMember.name} (${rangeLabel(line)}, ${pctLabel}) — ${parsed.data.note}`,
     project: line.project,
   });
   await notifyHSV(
     `Demande de libération ${isPartial ? "partielle" : ""} — ${line.project.name}`,
-    `${req.user.name} demande la libération ${isPartial ? "partielle" : "totale"} de ${line.poolMember.name} sur "${line.project.name}" (${line.period}, ${pctLabel}) — ${parsed.data.note}`,
+    `${req.user.name} demande la libération ${isPartial ? "partielle" : "totale"} de ${line.poolMember.name} sur "${line.project.name}" (${rangeLabel(line)}, ${pctLabel}) — ${parsed.data.note}`,
     projectLink(line.project.id)
   );
   res.json(updated);
@@ -202,8 +211,8 @@ router.post("/:id/cancel-release", async (req, res) => {
   await logActivity({
     user: req.user,
     action: isOwner && !canManage
-      ? `a annulé sa demande de libération de ${line.poolMember.name} (${line.period})`
-      : `a refusé la libération de ${line.poolMember.name} (${line.period})`,
+      ? `a annulé sa demande de libération de ${line.poolMember.name} (${rangeLabel(line)})`
+      : `a refusé la libération de ${line.poolMember.name} (${rangeLabel(line)})`,
     project: line.project,
   });
   if (canManage) {
@@ -212,12 +221,12 @@ router.post("/:id/cancel-release", async (req, res) => {
     await notifyUser(
       svo,
       `Libération refusée — ${line.project.name}`,
-      `${req.user.name} a refusé votre demande de libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+      `${req.user.name} a refusé votre demande de libération de ${line.poolMember.name} sur "${line.project.name}" (${rangeLabel(line)}).`,
       link
     );
     await notifyHSV(
       `[Journal] Libération refusée — ${line.project.name}`,
-      `${req.user.name} a refusé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+      `${req.user.name} a refusé la libération de ${line.poolMember.name} sur "${line.project.name}" (${rangeLabel(line)}).`,
       link
     );
   }
@@ -248,7 +257,7 @@ router.post("/:id/confirm-release", requirePermission("manageAllocations"), asyn
   }
   await logActivity({
     user: req.user,
-    action: `a validé la libération ${isPartial ? "partielle" : "totale"} de ${line.poolMember.name} (${line.period}, ${pctLabel}) — ${line.releaseNote}`,
+    action: `a validé la libération ${isPartial ? "partielle" : "totale"} de ${line.poolMember.name} (${rangeLabel(line)}, ${pctLabel}) — ${line.releaseNote}`,
     project: line.project,
   });
 
@@ -258,26 +267,26 @@ router.post("/:id/confirm-release", requirePermission("manageAllocations"), asyn
   await notifyUser(
     svo,
     `Libération confirmée — ${line.project.name}`,
-    `${req.user.name} a confirmé la libération ${releaseWord} de ${line.poolMember.name} sur "${line.project.name}" (${line.period}, ${pctLabel}).`,
+    `${req.user.name} a confirmé la libération ${releaseWord} de ${line.poolMember.name} sur "${line.project.name}" (${rangeLabel(line)}, ${pctLabel}).`,
     releaseLink
   );
   await notifyPoolMember(
     line.poolMember,
     `Libération confirmée — ${line.project.name}`,
     isPartial
-      ? `Votre affectation au projet "${line.project.name}" (${line.period}) passe à ${Math.round(Number(line.releaseNewPct) * 100)}% — le reste est de nouveau disponible.`
-      : `Votre affectation au projet "${line.project.name}" (${line.period}) a pris fin — vous êtes de nouveau disponible.`,
+      ? `Votre affectation au projet "${line.project.name}" (${rangeLabel(line)}) passe à ${Math.round(Number(line.releaseNewPct) * 100)}% — le reste est de nouveau disponible.`
+      : `Votre affectation au projet "${line.project.name}" (${rangeLabel(line)}) a pris fin — vous êtes de nouveau disponible.`,
     releaseLink
   );
   await notifyTeamLeadsForSousEquipe(
     line.poolMember.sousEquipe,
     `Libération d'équipe — ${line.project.name}`,
-    `${line.poolMember.name} est libéré(e) ${isPartial ? "partiellement" : ""} du projet "${line.project.name}" (${line.period}, ${pctLabel}).`,
+    `${line.poolMember.name} est libéré(e) ${isPartial ? "partiellement" : ""} du projet "${line.project.name}" (${rangeLabel(line)}, ${pctLabel}).`,
     releaseLink
   );
   await notifyHSV(
     `[Journal] Libération confirmée — ${line.project.name}`,
-    `${req.user.name} a confirmé la libération ${releaseWord} de ${line.poolMember.name} sur "${line.project.name}" (${line.period}, ${pctLabel}).`,
+    `${req.user.name} a confirmé la libération ${releaseWord} de ${line.poolMember.name} sur "${line.project.name}" (${rangeLabel(line)}, ${pctLabel}).`,
     releaseLink
   );
 

@@ -75,13 +75,16 @@ model Project {
 }
 
 model DemandLine {
-  id        String  @id @default(uuid())
-  projectId String  @map("project_id")
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  period    String
-  profile   Squad
-  count     Decimal @db.Decimal(10, 2)
-  pct       Decimal? @db.Decimal(6, 4)
+  id          String  @id @default(uuid())
+  projectId   String  @map("project_id")
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // One row now covers a whole span of weeks (inclusive), not a single one —
+  // both are period ids like "2026-W40", ordered so periodStart <= periodEnd.
+  periodStart String  @map("period_start")
+  periodEnd   String  @map("period_end")
+  profile     Squad
+  count       Decimal @db.Decimal(10, 2)
+  pct         Decimal? @db.Decimal(6, 4)
 
   @@index([projectId])
   @@map("demand_lines")
@@ -107,7 +110,9 @@ model AllocationLine {
   id           String     @id @default(uuid())
   projectId    String     @map("project_id")
   project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  period       String
+  // Same range convention as DemandLine.periodStart/periodEnd.
+  periodStart  String     @map("period_start")
+  periodEnd    String     @map("period_end")
   poolMemberId String     @map("pool_member_id")
   poolMember   PoolMember @relation(fields: [poolMemberId], references: [id])
   pct          Decimal    @db.Decimal(6, 4)
@@ -123,7 +128,7 @@ model AllocationLine {
   releaseNote      String?  @map("release_note")
   releaseNewPct    Decimal? @db.Decimal(6, 4) @map("release_new_pct")
 
-  @@index([poolMemberId, period])
+  @@index([poolMemberId, periodStart, periodEnd])
   @@index([projectId])
   @@map("allocation_lines")
 }

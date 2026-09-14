@@ -40,10 +40,17 @@ function generatePeriodObjects(n = N_WEEKS, from = new Date()) {
   return out;
 }
 
+// Period ids are "YYYY-Wnn" (zero-padded week, generated in order), which
+// happens to sort correctly as plain strings — so range membership is just
+// string comparison, no need to materialize the list of weeks in between.
+function inRange(id, start, end) {
+  return start <= id && id <= end;
+}
+
 function effective(count, pct) {
   const c = Number(count) || 0;
   const p = pct === null || pct === undefined || pct === "" ? 1 : Number(pct);
   return c * p;
 }
 
-module.exports = { N_WEEKS, nextMonday, isoWeekId, generatePeriods, generatePeriodObjects, effective };
+module.exports = { N_WEEKS, nextMonday, isoWeekId, generatePeriods, generatePeriodObjects, effective, inRange };

@@ -2,7 +2,7 @@ const express = require("express");
 const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
-const { effective, generatePeriods } = require("../lib/periods");
+const { effective, generatePeriods, inRange } = require("../lib/periods");
 
 const router = express.Router();
 router.use(authenticate);
@@ -26,7 +26,7 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     prisma.poolMember.findMany(),
     prisma.allocationLine.findMany({
       where: { status: "approved" },
-      select: { poolMemberId: true, period: true, pct: true, project: { select: { id: true, name: true } } },
+      select: { poolMemberId: true, periodStart: true, periodEnd: true, pct: true, project: { select: { id: true, name: true } } },
     }),
   ]);
   const pool = sousEquipeFilter ? allMembers.filter((m) => m.sousEquipe === sousEquipeFilter) : allMembers;
@@ -35,11 +35,14 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
   const overAllocProjects = {};
   for (const res of pool) overAllocGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
   for (const l of allocationLines) {
-    if (!overAllocGrid[l.poolMemberId] || !(l.period in overAllocGrid[l.poolMemberId])) continue;
-    overAllocGrid[l.poolMemberId][l.period] += Number(l.pct) || 0;
-    const key = `${l.poolMemberId}:${l.period}`;
-    if (!overAllocProjects[key]) overAllocProjects[key] = [];
-    overAllocProjects[key].push({ projectId: l.project.id, projectName: l.project.name, pct: round1(Number(l.pct) || 0) });
+    if (!overAllocGrid[l.poolMemberId]) continue;
+    for (const p of periods) {
+      if (!inRange(p, l.periodStart, l.periodEnd)) continue;
+      overAllocGrid[l.poolMemberId][p] += Number(l.pct) || 0;
+      const key = `${l.poolMemberId}:${p}`;
+      if (!overAllocProjects[key]) overAllocProjects[key] = [];
+      overAllocProjects[key].push({ projectId: l.project.id, projectName: l.project.name, pct: round1(Number(l.pct) || 0) });
+    }
   }
 
   let alertCount = 0;
@@ -84,7 +87,9 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
       if (l.profile === "Mobile") besoinMobile += eff;
       else if (l.profile === "TPE") besoinTpe += eff;
       else if (l.profile === "Digital") besoinDigital += eff;
-      if (map[l.period]) map[l.period][l.profile] = round1(map[l.period][l.profile] + eff);
+      for (const p of periods) {
+        if (inRange(p, l.periodStart, l.periodEnd)) map[p][l.profile] = round1(map[p][l.profile] + eff);
+      }
     }
   }
   const demandByMonth = periods.map((p) => map[p]);
@@ -141,7 +146,9 @@ async function buildOwnDashboard(user, periods) {
       if (l.profile === "Mobile") besoinMobile += eff;
       else if (l.profile === "TPE") besoinTpe += eff;
       else if (l.profile === "Digital") besoinDigital += eff;
-      if (map[l.period]) map[l.period][l.profile] = round1(map[l.period][l.profile] + eff);
+      for (const p of periods) {
+        if (inRange(p, l.periodStart, l.periodEnd)) map[p][l.profile] = round1(map[p][l.profile] + eff);
+      }
     }
 
     let pAlloc = { Mobile: 0, TPE: 0, Digital: 0 };

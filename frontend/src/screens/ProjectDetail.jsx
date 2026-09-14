@@ -12,8 +12,6 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const [error, setError] = useState("");
   const [releaseDrafts, setReleaseDrafts] = useState({});
   const [releasingId, setReleasingId] = useState(null);
-  const [proposingPeriod, setProposingPeriod] = useState(null);
-  const [proposePick, setProposePick] = useState({ poolMemberId: "", pct: 100 });
 
   const load = () => {
     setLoading(true);
@@ -42,31 +40,11 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const relevantPeriods = useMemo(() => {
     if (!project) return [];
     const set = new Set();
-    project.demandLines.forEach((l) => l.period && set.add(l.period));
-    project.allocationLines.forEach((l) => l.period && set.add(l.period));
+    [...project.demandLines, ...project.allocationLines].forEach((l) => {
+      periodsBetween(l.periodStart, l.periodEnd).forEach((p) => set.add(p));
+    });
     return periods.map((p) => p.id).filter((id) => set.has(id));
   }, [project, periods]);
-
-  // Periods where the SVO's requested headcount (per profile) isn't fully covered yet
-  // by allocation lines of the matching squad — surfaced as one-click suggestions
-  // above the affectation table instead of making the HSV hunt for them in a picker.
-  const pendingAllocPeriods = useMemo(() => {
-    if (!project) return [];
-    const missingByPeriod = new Map();
-    for (const dl of project.demandLines) {
-      if (effective(dl.count, dl.pct) <= 0) continue;
-      const needed = Math.max(1, Math.round(Number(dl.count) || 0));
-      const existing = project.allocationLines.filter((al) => {
-        if (al.period !== dl.period) return false;
-        return pool.find((r) => r.id === al.poolMemberId)?.squad === dl.profile;
-      }).length;
-      if (existing < needed) {
-        if (!missingByPeriod.has(dl.period)) missingByPeriod.set(dl.period, []);
-        missingByPeriod.get(dl.period).push(`${dl.profile} ${existing}/${needed}`);
-      }
-    }
-    return periods.filter((p) => missingByPeriod.has(p.id)).map((p) => ({ ...p, missing: missingByPeriod.get(p.id) }));
-  }, [project, periods, pool]);
 
   if (loading) {
     return <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, padding: 40 }}><Loader2 className="animate-spin" size={18} /> Chargement…</div>;
@@ -93,28 +71,14 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   };
 
   // ---- demand lines ----
-  // Adding a period creates all 3 profiles (Mobile/TPE/Digital) at once — a demand
-  // period without all three is normally just because one was deleted, so a repeat
-  // call only fills in whichever profiles are still missing for that period.
-  const seedOneDemandPeriod = async (targetPeriod) => {
-    const existing = new Set(project.demandLines.filter((l) => l.period === targetPeriod).map((l) => l.profile));
-    const allProfiles = ["Mobile", "TPE", "Digital"];
-    const missing = allProfiles.filter((p) => !existing.has(p));
-    const toCreate = existing.size === 0 ? allProfiles : missing;
-    if (toCreate.length === 0) return;
-    const created = await Promise.all(toCreate.map((profile) =>
-      api.post(`/projects/${project.id}/demand-lines`, { period: targetPeriod, profile, count: 0, pct: null })
-    ));
-    setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, ...created] }));
-  };
-  // `end` defaults to `start` so the per-group "+ ligne" trigger (single
-  // period) behaves exactly as before — only the range picker passes both.
-  const addDemandLine = async (start, end) => {
-    const startPeriod = start || periods[0]?.id || "";
-    const endPeriod = end || startPeriod;
-    for (const p of periodsBetween(startPeriod, endPeriod)) {
-      await seedOneDemandPeriod(p);
-    }
+  // One row = one span of weeks — the SVO sets the range, profile and
+  // headcount directly on the row instead of it being generated per week.
+  const addDemandLine = async () => {
+    const p = periods[0]?.id || "";
+    const line = await api.post(`/projects/${project.id}/demand-lines`, {
+      periodStart: p, periodEnd: p, profile: "Mobile", count: 0, pct: null,
+    });
+    setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, line] }));
     notifyChanged();
   };
   const patchDemandLine = async (id, key, value) => {
@@ -130,71 +94,17 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   };
 
   // ---- allocation lines ----
-  // Pre-fills one line PER HEADCOUNT the SVO actually asked for that week — a demand
-  // of "Mobile: 5" seeds 5 Mobile-squad lines, not one. Tops up whatever's still
-  // missing per profile (so it's safe to call again on a partially-filled period),
-  // spreading across distinct squad members where possible. Falls back to a single
-  // blank line once every demanded headcount is already covered, or when there's no
-  // demand to go on at all.
-  const seedOnePeriod = async (targetPeriod) => {
-    const seeds = [];
-    for (const profile of ["Mobile", "TPE", "Digital"]) {
-      const dl = project.demandLines.find((l) => l.period === targetPeriod && l.profile === profile);
-      if (!dl || effective(dl.count, dl.pct) <= 0) continue;
-      const needed = Math.max(1, Math.round(Number(dl.count) || 0));
-      const squadMembers = pool.filter((r) => r.squad === profile);
-      if (squadMembers.length === 0) continue;
-      const existing = project.allocationLines.filter((al) =>
-        al.period === targetPeriod && squadMembers.some((m) => m.id === al.poolMemberId)
-      ).length;
-      const missing = needed - existing;
-      const pctValue = dl.pct === null || dl.pct === undefined || dl.pct === "" ? 1 : Number(dl.pct);
-      for (let i = 0; i < missing; i++) {
-        seeds.push({ poolMemberId: squadMembers[(existing + i) % squadMembers.length].id, pct: pctValue });
-      }
-    }
-
-    if (seeds.length > 0) {
-      const created = await Promise.all(seeds.map((s) =>
-        api.post(`/projects/${project.id}/allocation-lines`, { period: targetPeriod, poolMemberId: s.poolMemberId, pct: s.pct })
-      ));
-      setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, ...created] }));
-      return;
-    }
-
-    if (pool.length === 0) return;
+  // One row = one resource for one span of weeks. The resource picker
+  // (`resourceOptions`) is already scoped to the actor's own team for a
+  // propose-only holder and to the whole pool for a manager, so a fresh row
+  // just needs some starting resource — the row is immediately editable.
+  const addAllocationLine = async () => {
+    if (resourceOptions.length === 0) return;
+    const p = periods[0]?.id || "";
     const line = await api.post(`/projects/${project.id}/allocation-lines`, {
-      period: targetPeriod, poolMemberId: pool[0].id, pct: 1,
+      periodStart: p, periodEnd: p, poolMemberId: resourceOptions[0].id, pct: 1,
     });
     setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, line] }));
-  };
-
-  // `end` defaults to `start` so a single-period call (the per-group "+ ligne"
-  // trigger) behaves exactly as before — only the range picker passes both.
-  const addAllocationLine = async (start, end) => {
-    const startPeriod = start || periods[0]?.id || "";
-    const endPeriod = end || startPeriod;
-    if (!canManageAllocations) {
-      // Propose-only: let the user pick who from their own team instead of
-      // auto-assigning a resource they never chose (that resource often
-      // isn't even in their sous-équipe, so the request would just fail).
-      setProposingPeriod({ start: startPeriod, end: endPeriod });
-      setProposePick({ poolMemberId: "", pct: 100 });
-      return;
-    }
-    for (const p of periodsBetween(startPeriod, endPeriod)) {
-      await seedOnePeriod(p);
-    }
-    notifyChanged();
-  };
-  const submitProposedAllocation = async () => {
-    if (!proposePick.poolMemberId) return;
-    const targetPeriods = periodsBetween(proposingPeriod.start, proposingPeriod.end);
-    const created = await Promise.all(targetPeriods.map((p) =>
-      api.post(`/projects/${project.id}/allocation-lines`, { period: p, poolMemberId: proposePick.poolMemberId, pct: proposePick.pct / 100 })
-    ));
-    setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, ...created] }));
-    setProposingPeriod(null);
     notifyChanged();
   };
   const patchAllocationLine = async (id, key, value) => {
@@ -245,10 +155,10 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
 
   const synthesis = relevantPeriods.map((period) => {
     const row = { period, Mobile: { dem: 0, alloc: 0 }, TPE: { dem: 0, alloc: 0 }, Digital: { dem: 0, alloc: 0 } };
-    project.demandLines.filter((l) => l.period === period).forEach((l) => {
+    project.demandLines.filter((l) => l.periodStart <= period && period <= l.periodEnd).forEach((l) => {
       row[l.profile].dem += effective(l.count, l.pct);
     });
-    project.allocationLines.filter((l) => l.period === period && l.status === "approved").forEach((l) => {
+    project.allocationLines.filter((l) => l.status === "approved" && l.periodStart <= period && period <= l.periodEnd).forEach((l) => {
       const res = poolById[l.poolMemberId];
       if (res) row[res.squad].alloc += Number(l.pct) || 0;
     });
@@ -326,54 +236,43 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         lines={project.demandLines}
         editable={canEditDemand}
         columns={[
-          { key: "period", label: "Période", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
+          { key: "periodStart", label: "Début", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
+          { key: "periodEnd", label: "Fin", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
           { key: "profile", label: "Profil", type: "select", options: ["Mobile", "TPE", "Digital"], width: 90 },
           { key: "count", label: "Nombre de personnes", type: "number", width: 90 },
           { key: "pct", label: "Allocation % (vide = 100%)", type: "percent", width: 110 },
         ]}
-        addLabel="Ajouter une période"
+        addLabel="Ajouter une ligne"
         onAdd={addDemandLine}
         onPatch={patchDemandLine}
         onRemove={removeDemandLine}
-        groupBy="period"
-        maxPerGroup={3}
-        rangeAdd
       />
 
       <SectionTitle style={{ marginTop: 28 }}>
         Affectation des ressources {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}
       </SectionTitle>
-      {canEditAlloc && pendingAllocPeriods.length > 0 && (
-        <div style={{
-          display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8,
-          padding: "10px 12px", marginBottom: 10, borderRadius: 10,
-          background: `color-mix(in srgb, ${AMBER} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${AMBER} 40%, transparent)`,
-        }}>
-          <span style={{ fontSize: 12, color: AMBER, fontWeight: 600 }}>Semaines demandées par le SVO, pas encore affectées :</span>
-          {pendingAllocPeriods.map((p) => (
-            <button key={p.id} onClick={() => addAllocationLine(p.id)} style={{
-              background: `color-mix(in srgb, ${AMBER} 15%, transparent)`, border: `1px solid color-mix(in srgb, ${AMBER} 55%, transparent)`, borderRadius: 20,
-              color: AMBER, fontSize: 11.5, fontWeight: 600, padding: "4px 10px", cursor: "pointer",
-            }}>
-              {p.label} <span style={{ fontWeight: 400, opacity: 0.8 }}>({p.missing.join(", ")})</span>
-            </button>
-          ))}
-        </div>
-      )}
       <LinesTable
         lines={project.allocationLines}
         editable={canEditAlloc}
         rowEditable={isLineOwnedByMe}
         columns={[
-          { key: "period", label: "Période", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
+          { key: "periodStart", label: "Début", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
+          { key: "periodEnd", label: "Fin", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
           {
             key: "poolMemberId", label: "Ressource", type: "select", options: resourceOptions.map((r) => r.id), optionLabels: resourceOptions.map((r) => `${r.name} (${r.squad})`), width: 220,
             fallbackLabel: (id) => (poolById[id] ? `${poolById[id].name} (${poolById[id].squad})` : null),
-            // Recap of the resource's OTHER assignments for that same période, so the
-            // picker doesn't need to be cross-checked against every other project.
+            // Recap of the resource's OTHER assignments across the same span of
+            // weeks, so the picker doesn't need to be cross-checked against
+            // every other project — deduped per project across the range.
             hint: (line) => {
-              if (!line.poolMemberId || !line.period) return null;
-              const entries = (overAllocProjects?.[`${line.poolMemberId}:${line.period}`] || []).filter((e) => e.projectId !== project.id);
+              if (!line.poolMemberId || !line.periodStart || !line.periodEnd) return null;
+              const seen = new Map();
+              for (const w of periodsBetween(line.periodStart, line.periodEnd)) {
+                for (const e of overAllocProjects?.[`${line.poolMemberId}:${w}`] || []) {
+                  if (e.projectId !== project.id && !seen.has(e.projectId)) seen.set(e.projectId, e);
+                }
+              }
+              const entries = [...seen.values()];
               if (entries.length === 0) return null;
               return (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
@@ -470,52 +369,11 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
             },
           }] : []),
         ]}
-        addLabel={canManageAllocations ? "Ajouter une période" : "Proposer une affectation"}
+        addLabel={canManageAllocations ? "Ajouter une affectation" : "Proposer une affectation"}
         onAdd={addAllocationLine}
         onPatch={patchAllocationLine}
         onRemove={removeAllocationLine}
-        groupBy="period"
-        rangeAdd
       />
-
-      {proposingPeriod && (
-        <div style={{
-          background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 20, boxShadow: CARD_SHADOW,
-        }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
-            Proposer une ressource de mon équipe — {periods.find((p) => p.id === proposingPeriod.start)?.label || proposingPeriod.start}
-            {proposingPeriod.end !== proposingPeriod.start && ` → ${periods.find((p) => p.id === proposingPeriod.end)?.label || proposingPeriod.end}`}
-          </div>
-          <div style={{ background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 10, maxHeight: 220, overflowY: "auto", marginBottom: 10 }}>
-            {resourceOptions.map((r) => {
-              const selected = proposePick.poolMemberId === r.id;
-              return (
-                <div key={r.id} onClick={() => setProposePick({ ...proposePick, poolMemberId: r.id })} style={{
-                  padding: "8px 10px", borderTop: `1px solid ${BORDER}`, cursor: "pointer",
-                  background: selected ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : "transparent",
-                  fontSize: 12.5, fontWeight: selected ? 700 : 600, color: selected ? ACCENT : undefined,
-                }}>
-                  {r.name} <span style={{ fontWeight: 400, color: MUTED }}>({r.squad})</span>
-                </div>
-              );
-            })}
-            {resourceOptions.length === 0 && (
-              <div style={{ padding: 10, fontSize: 12, color: MUTED }}>Aucune ressource dans votre équipe.</div>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <input type="number" min="0" max="200" value={proposePick.pct}
-              onChange={(e) => setProposePick({ ...proposePick, pct: Number(e.target.value) })}
-              style={{ ...inputStyle, width: 80 }} />
-            <span style={{ fontSize: 12.5, color: MUTED }}>%</span>
-            <button disabled={!proposePick.poolMemberId} onClick={submitProposedAllocation}
-              style={{ ...btnPrimary, opacity: proposePick.poolMemberId ? 1 : 0.5, cursor: proposePick.poolMemberId ? "pointer" : "not-allowed" }}>
-              Proposer cette affectation
-            </button>
-            <button onClick={() => setProposingPeriod(null)} style={btnGhost}>Annuler</button>
-          </div>
-        </div>
-      )}
 
       {relevantPeriods.length > 0 && (
         <>

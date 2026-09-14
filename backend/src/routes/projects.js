@@ -3,7 +3,7 @@ const { z } = require("zod");
 const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
-const { effective } = require("../lib/periods");
+const { effective, inRange } = require("../lib/periods");
 const { logActivity } = require("../lib/activity");
 const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe, notifyTeamLeadsForSquad, projectLink } = require("../lib/notify");
 
@@ -16,6 +16,10 @@ function canViewAllProjects(user) {
 
 function canRead(req, project) {
   return canViewAllProjects(req.user) || project.svoUserId === req.user.id;
+}
+
+function rangeLabel(line) {
+  return line.periodStart === line.periodEnd ? line.periodStart : `${line.periodStart} → ${line.periodEnd}`;
 }
 
 function computeTotals(project) {
@@ -120,7 +124,8 @@ router.get("/:id", async (req, res) => {
     demandLines: project.demandLines,
     allocationLines: project.allocationLines.map((l) => ({
       id: l.id,
-      period: l.period,
+      periodStart: l.periodStart,
+      periodEnd: l.periodEnd,
       poolMemberId: l.poolMemberId,
       pct: l.pct,
       status: l.status,
@@ -186,7 +191,7 @@ router.patch("/:id", async (req, res) => {
     for (const dl of updated.demandLines) {
       const eff = effective(dl.count, dl.pct);
       if (eff <= 0) continue;
-      (bySquad[dl.profile] ??= []).push(`${dl.period} (${eff})`);
+      (bySquad[dl.profile] ??= []).push(`${rangeLabel(dl)} (${eff})`);
     }
     await Promise.all(
       Object.entries(bySquad).map(([squad, lines]) =>
@@ -220,7 +225,8 @@ router.get("/:id/demand-lines", async (req, res) => {
 });
 
 const demandLineSchema = z.object({
-  period: z.string().trim().min(1),
+  periodStart: z.string().trim().min(1),
+  periodEnd: z.string().trim().min(1),
   profile: z.enum(["Mobile", "TPE", "Digital"]),
   count: z.number().nonnegative(),
   pct: z.number().min(0).max(2).nullable().optional(),
@@ -235,17 +241,21 @@ router.post("/:id/demand-lines", async (req, res) => {
 
   const parsed = demandLineSchema.partial({ count: true }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
+  const periodStart = parsed.data.periodStart ?? "";
+  const periodEnd = parsed.data.periodEnd ?? periodStart;
+  if (periodStart > periodEnd) return res.status(400).json({ error: "La semaine de fin doit être après la semaine de début." });
 
   const line = await prisma.demandLine.create({
     data: {
       projectId: project.id,
-      period: parsed.data.period ?? "",
+      periodStart,
+      periodEnd,
       profile: parsed.data.profile ?? "Mobile",
       count: parsed.data.count ?? 0,
       pct: parsed.data.pct ?? null,
     },
   });
-  await logActivity({ user: req.user, action: `a ajouté un besoin ${line.profile} (${line.period})`, project });
+  await logActivity({ user: req.user, action: `a ajouté un besoin ${line.profile} (${rangeLabel(line)})`, project });
   res.status(201).json(line);
 });
 
@@ -258,7 +268,8 @@ router.get("/:id/allocation-lines", async (req, res) => {
 });
 
 const allocationLineSchema = z.object({
-  period: z.string().trim().min(1),
+  periodStart: z.string().trim().min(1),
+  periodEnd: z.string().trim().min(1),
   poolMemberId: z.string().uuid(),
   pct: z.number().min(0).max(2),
 });
@@ -274,6 +285,9 @@ router.post("/:id/allocation-lines", async (req, res) => {
   const parsed = allocationLineSchema.partial({ poolMemberId: true, pct: true }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
   if (!parsed.data.poolMemberId) return res.status(400).json({ error: "Ressource requise." });
+  const periodStart = parsed.data.periodStart ?? "";
+  const periodEnd = parsed.data.periodEnd ?? periodStart;
+  if (periodStart > periodEnd) return res.status(400).json({ error: "La semaine de fin doit être après la semaine de début." });
 
   // A propose-only actor can only put forward someone from their own
   // sous-équipe — enforced here, not just hidden client-side.
@@ -291,7 +305,8 @@ router.post("/:id/allocation-lines", async (req, res) => {
   const line = await prisma.allocationLine.create({
     data: {
       projectId: project.id,
-      period: parsed.data.period ?? "",
+      periodStart,
+      periodEnd,
       poolMemberId: parsed.data.poolMemberId,
       pct: parsed.data.pct ?? 1,
       createdById: req.user.id,
@@ -299,9 +314,10 @@ router.post("/:id/allocation-lines", async (req, res) => {
     },
     include: { poolMember: true },
   });
+  const label = rangeLabel(line);
   await logActivity({
     user: req.user,
-    action: status === "approved" ? `a affecté ${line.poolMember.name} (${line.period})` : `a proposé ${line.poolMember.name} (${line.period})`,
+    action: status === "approved" ? `a affecté ${line.poolMember.name} (${label})` : `a proposé ${line.poolMember.name} (${label})`,
     project,
   });
 
@@ -309,25 +325,25 @@ router.post("/:id/allocation-lines", async (req, res) => {
   if (status === "pending") {
     await notifyHSV(
       `Proposition d'affectation — ${project.name}`,
-      `${req.user.name} propose d'affecter ${line.poolMember.name} sur "${project.name}" (${line.period}, ${Math.round(Number(line.pct) * 100)}%). À valider.`,
+      `${req.user.name} propose d'affecter ${line.poolMember.name} sur "${project.name}" (${label}, ${Math.round(Number(line.pct) * 100)}%). À valider.`,
       allocLink
     );
   } else {
     await notifyPoolMember(
       line.poolMember,
       `Nouvelle affectation — ${project.name}`,
-      `Vous avez été affecté(e) au projet "${project.name}" pour la période ${line.period} (${Math.round(Number(line.pct) * 100)}%).`,
+      `Vous avez été affecté(e) au projet "${project.name}" pour la période ${label} (${Math.round(Number(line.pct) * 100)}%).`,
       allocLink
     );
     await notifyTeamLeadsForSousEquipe(
       line.poolMember.sousEquipe,
       `Affectation d'équipe — ${project.name}`,
-      `${line.poolMember.name} a été affecté(e) au projet "${project.name}" pour la période ${line.period} par ${req.user.name}.`,
+      `${line.poolMember.name} a été affecté(e) au projet "${project.name}" pour la période ${label} par ${req.user.name}.`,
       allocLink
     );
     await notifyHSV(
       `[Journal] Affectation directe — ${project.name}`,
-      `${req.user.name} a affecté ${line.poolMember.name} sur "${project.name}" (${line.period}, ${Math.round(Number(line.pct) * 100)}%).`,
+      `${req.user.name} a affecté ${line.poolMember.name} sur "${project.name}" (${label}, ${Math.round(Number(line.pct) * 100)}%).`,
       allocLink
     );
   }
@@ -342,15 +358,15 @@ router.get("/:id/synthesis", async (req, res) => {
   if (!project) return;
 
   const periods = new Set();
-  project.demandLines.forEach((l) => l.period && periods.add(l.period));
-  project.allocationLines.forEach((l) => l.period && periods.add(l.period));
+  project.demandLines.forEach((l) => { periods.add(l.periodStart); periods.add(l.periodEnd); });
+  project.allocationLines.forEach((l) => { periods.add(l.periodStart); periods.add(l.periodEnd); });
 
   const rows = [...periods].sort().map((period) => {
     const row = { period, Mobile: { dem: 0, alloc: 0 }, TPE: { dem: 0, alloc: 0 }, Digital: { dem: 0, alloc: 0 } };
-    project.demandLines.filter((l) => l.period === period).forEach((l) => {
+    project.demandLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
       row[l.profile].dem += effective(l.count, l.pct);
     });
-    project.allocationLines.filter((l) => l.period === period).forEach((l) => {
+    project.allocationLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
       const squad = l.poolMember?.squad;
       if (squad) row[squad].alloc += Number(l.pct) || 0;
     });
