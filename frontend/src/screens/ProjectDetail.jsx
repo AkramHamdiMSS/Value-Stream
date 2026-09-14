@@ -12,7 +12,6 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const [error, setError] = useState("");
   const [releaseDrafts, setReleaseDrafts] = useState({});
   const [releasingId, setReleasingId] = useState(null);
-  const [addingDemand, setAddingDemand] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -72,28 +71,20 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   };
 
   // ---- demand lines ----
-  // One row = one span of weeks for one profile. Rather than pick Début/Fin
-  // separately on each of up to 3 rows, the SVO sets the range once and
-  // ticks which squads it applies to — one row is created per ticked squad,
-  // all sharing that same range.
-  const addDemandLine = () => {
+  // One row = one span of weeks, with a headcount per squad (Mobile/TPE/
+  // Digital) right on that same row — no more picking which squads apply,
+  // they're just three columns.
+  const addDemandLine = async () => {
     const p = periods[0]?.id || "";
-    setAddingDemand({ start: p, end: p, profiles: { Mobile: true, TPE: true, Digital: true } });
-  };
-  const confirmAddDemand = async () => {
-    const profiles = Object.entries(addingDemand.profiles).filter(([, on]) => on).map(([profile]) => profile);
-    if (profiles.length === 0 || !addingDemand.start || !addingDemand.end) return;
-    const created = await Promise.all(profiles.map((profile) =>
-      api.post(`/projects/${project.id}/demand-lines`, {
-        periodStart: addingDemand.start, periodEnd: addingDemand.end, profile, count: 0, pct: null,
-      })
-    ));
-    setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, ...created] }));
-    setAddingDemand(null);
+    const line = await api.post(`/projects/${project.id}/demand-lines`, {
+      periodStart: p, periodEnd: p, mobileCount: 0, tpeCount: 0, digitalCount: 0, pct: null,
+    });
+    setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, line] }));
     notifyChanged();
   };
+  const countKeys = ["mobileCount", "tpeCount", "digitalCount"];
   const patchDemandLine = async (id, key, value) => {
-    const payload = { [key]: key === "count" ? Number(value) || 0 : value };
+    const payload = { [key]: countKeys.includes(key) ? Number(value) || 0 : value };
     const updated = await api.patch(`/demand-lines/${id}`, payload);
     setProject((prev) => ({ ...prev, demandLines: prev.demandLines.map((l) => (l.id === id ? updated : l)) }));
     notifyChanged();
@@ -167,7 +158,9 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const synthesis = relevantPeriods.map((period) => {
     const row = { period, Mobile: { dem: 0, alloc: 0 }, TPE: { dem: 0, alloc: 0 }, Digital: { dem: 0, alloc: 0 } };
     project.demandLines.filter((l) => l.periodStart <= period && period <= l.periodEnd).forEach((l) => {
-      row[l.profile].dem += effective(l.count, l.pct);
+      row.Mobile.dem += effective(l.mobileCount, l.pct);
+      row.TPE.dem += effective(l.tpeCount, l.pct);
+      row.Digital.dem += effective(l.digitalCount, l.pct);
     });
     project.allocationLines.filter((l) => l.status === "approved" && l.periodStart <= period && period <= l.periodEnd).forEach((l) => {
       const res = poolById[l.poolMemberId];
@@ -249,8 +242,9 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         columns={[
           { key: "periodStart", label: "Début", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
           { key: "periodEnd", label: "Fin", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
-          { key: "profile", label: "Profil", type: "select", options: ["Mobile", "TPE", "Digital"], width: 90 },
-          { key: "count", label: "Nombre de personnes", type: "number", width: 90 },
+          { key: "mobileCount", label: "Mobile", type: "number", width: 80 },
+          { key: "tpeCount", label: "TPE", type: "number", width: 80 },
+          { key: "digitalCount", label: "Digital", type: "number", width: 80 },
           { key: "pct", label: "Allocation % (vide = 100%)", type: "percent", width: 110 },
         ]}
         addLabel="Ajouter une ligne"
@@ -258,44 +252,6 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         onPatch={patchDemandLine}
         onRemove={removeDemandLine}
       />
-
-      {addingDemand && (
-        <div style={{
-          background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 20, boxShadow: CARD_SHADOW,
-        }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 10 }}>Nouveau besoin</div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
-            <div>
-              <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Début</div>
-              <select value={addingDemand.start} onChange={(e) => setAddingDemand({ ...addingDemand, start: e.target.value })} style={{ ...inputStyle, minWidth: 140 }}>
-                {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Fin</div>
-              <select value={addingDemand.end} onChange={(e) => setAddingDemand({ ...addingDemand, end: e.target.value })} style={{ ...inputStyle, minWidth: 140 }}>
-                {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 14, marginBottom: 12 }}>
-            {["Mobile", "TPE", "Digital"].map((profile) => (
-              <label key={profile} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, cursor: "pointer" }}>
-                <input type="checkbox" checked={addingDemand.profiles[profile]}
-                  onChange={(e) => setAddingDemand({ ...addingDemand, profiles: { ...addingDemand.profiles, [profile]: e.target.checked } })} />
-                {profile}
-              </label>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={confirmAddDemand} disabled={addingDemand.start > addingDemand.end || !Object.values(addingDemand.profiles).some(Boolean)}
-              style={{ ...btnPrimary, opacity: addingDemand.start > addingDemand.end || !Object.values(addingDemand.profiles).some(Boolean) ? 0.5 : 1 }}>
-              Ajouter
-            </button>
-            <button onClick={() => setAddingDemand(null)} style={btnGhost}>Annuler</button>
-          </div>
-        </div>
-      )}
 
       <SectionTitle style={{ marginTop: 28 }}>
         Affectation des ressources {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}

@@ -32,28 +32,33 @@ router.get("/", async (req, res) => {
   const rows = [];
   for (const proj of projects) {
     for (const line of proj.demandLines) {
-      if (!line.periodStart || !line.periodEnd || !line.profile) continue;
-      if (squadFilter && line.profile !== squadFilter) continue;
-      const demanded = effective(line.count, line.pct);
-      let allocated = 0;
-      for (const a of proj.allocationLines) {
-        if (a.status !== "approved") continue;
-        // Overlap, not exact match — either range can now span multiple weeks.
-        if (a.periodStart > line.periodEnd || a.periodEnd < line.periodStart) continue;
-        if (a.poolMember?.squad === line.profile) allocated += Number(a.pct) || 0;
+      if (!line.periodStart || !line.periodEnd) continue;
+      // One demand row now covers all three squads — emit up to one queue
+      // row per squad it actually has headcount for.
+      for (const [profile, countField] of [["Mobile", "mobileCount"], ["TPE", "tpeCount"], ["Digital", "digitalCount"]]) {
+        if (squadFilter && profile !== squadFilter) continue;
+        const demanded = effective(line[countField], line.pct);
+        if (demanded <= 0) continue;
+        let allocated = 0;
+        for (const a of proj.allocationLines) {
+          if (a.status !== "approved") continue;
+          // Overlap, not exact match — either range can now span multiple weeks.
+          if (a.periodStart > line.periodEnd || a.periodEnd < line.periodStart) continue;
+          if (a.poolMember?.squad === profile) allocated += Number(a.pct) || 0;
+        }
+        rows.push({
+          key: `${proj.id}:${line.id}:${profile}`,
+          projectId: proj.id,
+          projectName: proj.name,
+          svo: proj.svo.name,
+          periodStart: line.periodStart,
+          periodEnd: line.periodEnd,
+          profile,
+          demanded: round1(demanded),
+          allocated: round1(allocated),
+          ecart: round1(allocated - demanded),
+        });
       }
-      rows.push({
-        key: `${proj.id}:${line.id}`,
-        projectId: proj.id,
-        projectName: proj.name,
-        svo: proj.svo.name,
-        periodStart: line.periodStart,
-        periodEnd: line.periodEnd,
-        profile: line.profile,
-        demanded: round1(demanded),
-        allocated: round1(allocated),
-        ecart: round1(allocated - demanded),
-      });
     }
   }
   rows.sort((a, b) => a.ecart - b.ecart);

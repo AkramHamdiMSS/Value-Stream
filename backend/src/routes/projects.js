@@ -25,10 +25,9 @@ function rangeLabel(line) {
 function computeTotals(project) {
   let dMobile = 0, dTpe = 0, dDigital = 0;
   for (const l of project.demandLines) {
-    const eff = effective(l.count, l.pct);
-    if (l.profile === "Mobile") dMobile += eff;
-    else if (l.profile === "TPE") dTpe += eff;
-    else if (l.profile === "Digital") dDigital += eff;
+    dMobile += effective(l.mobileCount, l.pct);
+    dTpe += effective(l.tpeCount, l.pct);
+    dDigital += effective(l.digitalCount, l.pct);
   }
   let aMobile = 0, aTpe = 0, aDigital = 0;
   // Pending (unapproved) proposals don't count as real capacity yet.
@@ -185,13 +184,15 @@ router.patch("/:id", async (req, res) => {
     );
 
     // Team/Tech Leads of each demanded squad get a heads-up too, so they can
-    // start anticipating who they might propose — demand is only ever
-    // expressed per squad (Mobile/TPE/Digital), not per sous-équipe.
+    // start anticipating who they might propose — one demand row spans all
+    // three squads at once, so each is checked independently.
     const bySquad = {};
     for (const dl of updated.demandLines) {
-      const eff = effective(dl.count, dl.pct);
-      if (eff <= 0) continue;
-      (bySquad[dl.profile] ??= []).push(`${rangeLabel(dl)} (${eff})`);
+      for (const [squad, countField] of [["Mobile", "mobileCount"], ["TPE", "tpeCount"], ["Digital", "digitalCount"]]) {
+        const eff = effective(dl[countField], dl.pct);
+        if (eff <= 0) continue;
+        (bySquad[squad] ??= []).push(`${rangeLabel(dl)} (${eff})`);
+      }
     }
     await Promise.all(
       Object.entries(bySquad).map(([squad, lines]) =>
@@ -227,8 +228,9 @@ router.get("/:id/demand-lines", async (req, res) => {
 const demandLineSchema = z.object({
   periodStart: z.string().trim().min(1),
   periodEnd: z.string().trim().min(1),
-  profile: z.enum(["Mobile", "TPE", "Digital"]),
-  count: z.number().nonnegative(),
+  mobileCount: z.number().nonnegative(),
+  tpeCount: z.number().nonnegative(),
+  digitalCount: z.number().nonnegative(),
   pct: z.number().min(0).max(2).nullable().optional(),
 });
 
@@ -239,7 +241,7 @@ router.post("/:id/demand-lines", async (req, res) => {
   if (!isOwner) return res.status(403).json({ error: "Seul le SVO du projet peut éditer le besoin." });
   if (project.demandSubmitted) return res.status(409).json({ error: "La demande est soumise — rouvrez-la pour modifier." });
 
-  const parsed = demandLineSchema.partial({ count: true }).safeParse(req.body);
+  const parsed = demandLineSchema.partial({ mobileCount: true, tpeCount: true, digitalCount: true }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
   const periodStart = parsed.data.periodStart ?? "";
   const periodEnd = parsed.data.periodEnd ?? periodStart;
@@ -250,12 +252,13 @@ router.post("/:id/demand-lines", async (req, res) => {
       projectId: project.id,
       periodStart,
       periodEnd,
-      profile: parsed.data.profile ?? "Mobile",
-      count: parsed.data.count ?? 0,
+      mobileCount: parsed.data.mobileCount ?? 0,
+      tpeCount: parsed.data.tpeCount ?? 0,
+      digitalCount: parsed.data.digitalCount ?? 0,
       pct: parsed.data.pct ?? null,
     },
   });
-  await logActivity({ user: req.user, action: `a ajouté un besoin ${line.profile} (${rangeLabel(line)})`, project });
+  await logActivity({ user: req.user, action: `a ajouté un besoin (${rangeLabel(line)})`, project });
   res.status(201).json(line);
 });
 
@@ -364,7 +367,9 @@ router.get("/:id/synthesis", async (req, res) => {
   const rows = [...periods].sort().map((period) => {
     const row = { period, Mobile: { dem: 0, alloc: 0 }, TPE: { dem: 0, alloc: 0 }, Digital: { dem: 0, alloc: 0 } };
     project.demandLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
-      row[l.profile].dem += effective(l.count, l.pct);
+      row.Mobile.dem += effective(l.mobileCount, l.pct);
+      row.TPE.dem += effective(l.tpeCount, l.pct);
+      row.Digital.dem += effective(l.digitalCount, l.pct);
     });
     project.allocationLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
       const squad = l.poolMember?.squad;

@@ -83,12 +83,17 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   let besoinMobile = 0, besoinTpe = 0, besoinDigital = 0;
   for (const proj of projects) {
     for (const l of proj.demandLines) {
-      const eff = effective(l.count, l.pct);
-      if (l.profile === "Mobile") besoinMobile += eff;
-      else if (l.profile === "TPE") besoinTpe += eff;
-      else if (l.profile === "Digital") besoinDigital += eff;
+      const effMobile = effective(l.mobileCount, l.pct);
+      const effTpe = effective(l.tpeCount, l.pct);
+      const effDigital = effective(l.digitalCount, l.pct);
+      besoinMobile += effMobile;
+      besoinTpe += effTpe;
+      besoinDigital += effDigital;
       for (const p of periods) {
-        if (inRange(p, l.periodStart, l.periodEnd)) map[p][l.profile] = round1(map[p][l.profile] + eff);
+        if (!inRange(p, l.periodStart, l.periodEnd)) continue;
+        map[p].Mobile = round1(map[p].Mobile + effMobile);
+        map[p].TPE = round1(map[p].TPE + effTpe);
+        map[p].Digital = round1(map[p].Digital + effDigital);
       }
     }
   }
@@ -141,13 +146,20 @@ async function buildOwnDashboard(user, periods) {
 
     let pDemand = { Mobile: 0, TPE: 0, Digital: 0 };
     for (const l of proj.demandLines) {
-      const eff = effective(l.count, l.pct);
-      pDemand[l.profile] += eff;
-      if (l.profile === "Mobile") besoinMobile += eff;
-      else if (l.profile === "TPE") besoinTpe += eff;
-      else if (l.profile === "Digital") besoinDigital += eff;
+      const effMobile = effective(l.mobileCount, l.pct);
+      const effTpe = effective(l.tpeCount, l.pct);
+      const effDigital = effective(l.digitalCount, l.pct);
+      pDemand.Mobile += effMobile;
+      pDemand.TPE += effTpe;
+      pDemand.Digital += effDigital;
+      besoinMobile += effMobile;
+      besoinTpe += effTpe;
+      besoinDigital += effDigital;
       for (const p of periods) {
-        if (inRange(p, l.periodStart, l.periodEnd)) map[p][l.profile] = round1(map[p][l.profile] + eff);
+        if (!inRange(p, l.periodStart, l.periodEnd)) continue;
+        map[p].Mobile = round1(map[p].Mobile + effMobile);
+        map[p].TPE = round1(map[p].TPE + effTpe);
+        map[p].Digital = round1(map[p].Digital + effDigital);
       }
     }
 

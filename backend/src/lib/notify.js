@@ -122,7 +122,7 @@ async function notifyTeamLeadsForSousEquipe(sousEquipe, subject, text, link) {
 
 // Same idea as above but scoped to a whole squad (Mobile/TPE/Digital) rather
 // than a sous-équipe — used for demand, which is only ever expressed at
-// squad granularity (see DemandLine.profile), so every lead of that squad
+// squad granularity (see DemandLine's mobileCount/tpeCount/digitalCount), so every lead of that squad
 // can start planning who they might propose.
 async function notifyTeamLeadsForSquad(squad, subject, text, link) {
   if (!squad) return;

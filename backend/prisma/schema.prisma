@@ -80,11 +80,14 @@ model DemandLine {
   project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   // One row now covers a whole span of weeks (inclusive), not a single one —
   // both are period ids like "2026-W40", ordered so periodStart <= periodEnd.
-  periodStart String  @map("period_start")
-  periodEnd   String  @map("period_end")
-  profile     Squad
-  count       Decimal @db.Decimal(10, 2)
-  pct         Decimal? @db.Decimal(6, 4)
+  periodStart  String  @map("period_start")
+  periodEnd    String  @map("period_end")
+  // One row for the whole squad breakdown of a range, instead of a separate
+  // row per squad — a single "Allocation %" still applies across all three.
+  mobileCount  Decimal @default(0) @db.Decimal(10, 2) @map("mobile_count")
+  tpeCount     Decimal @default(0) @db.Decimal(10, 2) @map("tpe_count")
+  digitalCount Decimal @default(0) @db.Decimal(10, 2) @map("digital_count")
+  pct          Decimal? @db.Decimal(6, 4)
 
   @@index([projectId])
   @@map("demand_lines")

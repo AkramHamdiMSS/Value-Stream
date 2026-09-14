@@ -28,8 +28,9 @@ async function loadEditableLineOr404(req, res) {
 const patchSchema = z.object({
   periodStart: z.string().trim().min(1).optional(),
   periodEnd: z.string().trim().min(1).optional(),
-  profile: z.enum(["Mobile", "TPE", "Digital"]).optional(),
-  count: z.number().nonnegative().optional(),
+  mobileCount: z.number().nonnegative().optional(),
+  tpeCount: z.number().nonnegative().optional(),
+  digitalCount: z.number().nonnegative().optional(),
   pct: z.number().min(0).max(2).nullable().optional(),
 });
 
@@ -46,7 +47,7 @@ router.patch("/:id", async (req, res) => {
   const nextEnd = parsed.data.periodEnd ?? line.periodEnd;
   if (nextStart > nextEnd) return res.status(400).json({ error: "La semaine de fin doit être après la semaine de début." });
   const updated = await prisma.demandLine.update({ where: { id: line.id }, data: parsed.data });
-  await logActivity({ user: req.user, action: `a modifié le besoin ${line.profile} (${rangeLabel(line)})`, project: line.project });
+  await logActivity({ user: req.user, action: `a modifié le besoin (${rangeLabel(line)})`, project: line.project });
   res.json(updated);
 });
 
@@ -54,7 +55,7 @@ router.delete("/:id", async (req, res) => {
   const line = await loadEditableLineOr404(req, res);
   if (!line) return;
   await prisma.demandLine.delete({ where: { id: line.id } });
-  await logActivity({ user: req.user, action: `a supprimé le besoin ${line.profile} (${rangeLabel(line)})`, project: line.project });
+  await logActivity({ user: req.user, action: `a supprimé le besoin (${rangeLabel(line)})`, project: line.project });
   res.json({ ok: true });
 });
 
