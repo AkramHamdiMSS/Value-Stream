@@ -14,20 +14,43 @@ const patchSchema = z.object({
   pct: z.number().min(0).max(2).optional(),
 });
 
-// Editing a line — HSV/manageAllocations only — also confirms it, so a
-// pending proposal doesn't stay stuck pending once someone with real
-// authority has already touched it.
-router.patch("/:id", requirePermission("manageAllocations"), async (req, res) => {
+// Editing a line: HSV/manageAllocations can touch anything (and confirms it,
+// so a pending proposal doesn't stay stuck once someone with real authority
+// has touched it). A proposeAllocations-only holder can only edit their own
+// still-pending proposal — status stays pending, and any resource change is
+// still restricted to their own sous-équipe.
+router.patch("/:id", async (req, res) => {
   const parsed = patchSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
   const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true } });
   if (!line) return res.status(404).json({ error: "Ligne introuvable." });
+
+  const canManage = hasPermission(req.user, "manageAllocations");
+  const isOwnPendingProposal = line.status === "pending" && line.createdById === req.user.id && hasPermission(req.user, "proposeAllocations");
+  if (!canManage && !isOwnPendingProposal) return res.status(403).json({ error: "Accès refusé." });
+
+  if (!canManage && parsed.data.poolMemberId) {
+    const [self, target] = await Promise.all([
+      prisma.poolMember.findFirst({ where: { name: req.user.name } }),
+      prisma.poolMember.findUnique({ where: { id: parsed.data.poolMemberId } }),
+    ]);
+    if (!self || !target || target.sousEquipe !== self.sousEquipe) {
+      return res.status(403).json({ error: "Vous ne pouvez proposer que des ressources de votre propre équipe." });
+    }
+  }
+
   const updated = await prisma.allocationLine.update({
     where: { id: req.params.id },
-    data: { ...parsed.data, status: "approved" },
+    data: { ...parsed.data, ...(canManage ? { status: "approved" } : {}) },
     include: { poolMember: true },
   });
-  await logActivity({ user: req.user, action: `a modifié l'affectation de ${line.poolMember.name} (${line.period})`, project: line.project });
+  await logActivity({
+    user: req.user,
+    action: canManage
+      ? `a modifié l'affectation de ${line.poolMember.name} (${line.period})`
+      : `a modifié sa proposition pour ${line.poolMember.name} (${line.period})`,
+    project: line.project,
+  });
   res.json(updated);
 });
 

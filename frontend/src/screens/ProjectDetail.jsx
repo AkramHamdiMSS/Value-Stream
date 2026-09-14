@@ -12,6 +12,8 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const [error, setError] = useState("");
   const [releaseDrafts, setReleaseDrafts] = useState({});
   const [releasingId, setReleasingId] = useState(null);
+  const [proposingPeriod, setProposingPeriod] = useState(null);
+  const [proposePick, setProposePick] = useState({ poolMemberId: "", pct: 100 });
 
   const load = () => {
     setLoading(true);
@@ -117,6 +119,14 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   // demand to go on at all.
   const addAllocationLine = async (period) => {
     const targetPeriod = period || periods[0]?.id || "";
+    if (!canManageAllocations) {
+      // Propose-only: let the user pick who from their own team instead of
+      // auto-assigning a resource they never chose (that resource often
+      // isn't even in their sous-équipe, so the request would just fail).
+      setProposingPeriod(targetPeriod);
+      setProposePick({ poolMemberId: "", pct: 100 });
+      return;
+    }
     const seeds = [];
     for (const profile of ["Mobile", "TPE", "Digital"]) {
       const dl = project.demandLines.find((l) => l.period === targetPeriod && l.profile === profile);
@@ -148,6 +158,15 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
       period: targetPeriod, poolMemberId: pool[0].id, pct: 1,
     });
     setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, line] }));
+    notifyChanged();
+  };
+  const submitProposedAllocation = async () => {
+    if (!proposePick.poolMemberId) return;
+    const line = await api.post(`/projects/${project.id}/allocation-lines`, {
+      period: proposingPeriod, poolMemberId: proposePick.poolMemberId, pct: proposePick.pct / 100,
+    });
+    setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, line] }));
+    setProposingPeriod(null);
     notifyChanged();
   };
   const patchAllocationLine = async (id, key, value) => {
@@ -397,6 +416,44 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         onRemove={removeAllocationLine}
         groupBy="period"
       />
+
+      {proposingPeriod && (
+        <div style={{
+          background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 20, boxShadow: CARD_SHADOW,
+        }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
+            Proposer une ressource de mon équipe — {periods.find((p) => p.id === proposingPeriod)?.label || proposingPeriod}
+          </div>
+          <div style={{ background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 10, maxHeight: 220, overflowY: "auto", marginBottom: 10 }}>
+            {resourceOptions.map((r) => {
+              const selected = proposePick.poolMemberId === r.id;
+              return (
+                <div key={r.id} onClick={() => setProposePick({ ...proposePick, poolMemberId: r.id })} style={{
+                  padding: "8px 10px", borderTop: `1px solid ${BORDER}`, cursor: "pointer",
+                  background: selected ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : "transparent",
+                  fontSize: 12.5, fontWeight: selected ? 700 : 600, color: selected ? ACCENT : undefined,
+                }}>
+                  {r.name} <span style={{ fontWeight: 400, color: MUTED }}>({r.squad})</span>
+                </div>
+              );
+            })}
+            {resourceOptions.length === 0 && (
+              <div style={{ padding: 10, fontSize: 12, color: MUTED }}>Aucune ressource dans votre équipe.</div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input type="number" min="0" max="200" value={proposePick.pct}
+              onChange={(e) => setProposePick({ ...proposePick, pct: Number(e.target.value) })}
+              style={{ ...inputStyle, width: 80 }} />
+            <span style={{ fontSize: 12.5, color: MUTED }}>%</span>
+            <button disabled={!proposePick.poolMemberId} onClick={submitProposedAllocation}
+              style={{ ...btnPrimary, opacity: proposePick.poolMemberId ? 1 : 0.5, cursor: proposePick.poolMemberId ? "pointer" : "not-allowed" }}>
+              Proposer cette affectation
+            </button>
+            <button onClick={() => setProposingPeriod(null)} style={btnGhost}>Annuler</button>
+          </div>
+        </div>
+      )}
 
       {relevantPeriods.length > 0 && (
         <>
