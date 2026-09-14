@@ -63,4 +63,18 @@ async function notifyTeamLeadsForSousEquipe(sousEquipe, subject, text) {
   await Promise.all(leads.map((u) => sendEmail(u.email, subject, text)));
 }
 
-module.exports = { sendEmail, notifyHSV, notifyUser, notifyPoolMember, notifyTeamLeadsForSousEquipe };
+// Same idea as above but scoped to a whole squad (Mobile/TPE/Digital) rather
+// than a sous-équipe — used for demand, which is only ever expressed at
+// squad granularity (see DemandLine.profile), so every lead of that squad
+// can start planning who they might propose.
+async function notifyTeamLeadsForSquad(squad, subject, text) {
+  if (!squad) return;
+  const members = await prisma.poolMember.findMany({ where: { squad }, select: { name: true } });
+  if (members.length === 0) return;
+  const leads = await prisma.user.findMany({
+    where: { name: { in: members.map((m) => m.name) }, permissions: { has: "proposeAllocations" } },
+  });
+  await Promise.all(leads.map((u) => sendEmail(u.email, subject, text)));
+}
+
+module.exports = { sendEmail, notifyHSV, notifyUser, notifyPoolMember, notifyTeamLeadsForSousEquipe, notifyTeamLeadsForSquad };

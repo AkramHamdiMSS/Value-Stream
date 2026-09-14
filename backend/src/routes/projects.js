@@ -5,7 +5,7 @@ const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { effective } = require("../lib/periods");
 const { logActivity } = require("../lib/activity");
-const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe } = require("../lib/notify");
+const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe, notifyTeamLeadsForSquad } = require("../lib/notify");
 
 const router = express.Router();
 router.use(authenticate);
@@ -174,6 +174,25 @@ router.patch("/:id", async (req, res) => {
     await notifyHSV(
       `Nouvelle demande de ressources — ${updated.name}`,
       `${req.user.name} (SVO) a soumis la demande de ressources pour le projet "${updated.name}". Elle est à staffer.`
+    );
+
+    // Team/Tech Leads of each demanded squad get a heads-up too, so they can
+    // start anticipating who they might propose — demand is only ever
+    // expressed per squad (Mobile/TPE/Digital), not per sous-équipe.
+    const bySquad = {};
+    for (const dl of updated.demandLines) {
+      const eff = effective(dl.count, dl.pct);
+      if (eff <= 0) continue;
+      (bySquad[dl.profile] ??= []).push(`${dl.period} (${eff})`);
+    }
+    await Promise.all(
+      Object.entries(bySquad).map(([squad, lines]) =>
+        notifyTeamLeadsForSquad(
+          squad,
+          `Demande à prévoir — ${updated.name}`,
+          `${req.user.name} (SVO) a soumis une demande ${squad} pour "${updated.name}" : ${lines.join(", ")}. À vous de proposer une affectation le moment venu.`
+        )
+      )
     );
   }
 
