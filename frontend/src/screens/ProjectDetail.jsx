@@ -111,22 +111,24 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   };
 
   // ---- allocation lines ----
+  // Every period id in [startId, endId] inclusive, using the project's own
+  // period order — so "S2 -> S5" resolves to however many weeks that spans,
+  // instead of forcing one add per week.
+  const periodsBetween = (startId, endId) => {
+    const ids = periods.map((p) => p.id);
+    const i0 = ids.indexOf(startId), i1 = ids.indexOf(endId);
+    if (i0 === -1 || i1 === -1) return [startId];
+    const [lo, hi] = i0 <= i1 ? [i0, i1] : [i1, i0];
+    return ids.slice(lo, hi + 1);
+  };
+
   // Pre-fills one line PER HEADCOUNT the SVO actually asked for that week — a demand
   // of "Mobile: 5" seeds 5 Mobile-squad lines, not one. Tops up whatever's still
   // missing per profile (so it's safe to call again on a partially-filled period),
   // spreading across distinct squad members where possible. Falls back to a single
   // blank line once every demanded headcount is already covered, or when there's no
   // demand to go on at all.
-  const addAllocationLine = async (period) => {
-    const targetPeriod = period || periods[0]?.id || "";
-    if (!canManageAllocations) {
-      // Propose-only: let the user pick who from their own team instead of
-      // auto-assigning a resource they never chose (that resource often
-      // isn't even in their sous-équipe, so the request would just fail).
-      setProposingPeriod(targetPeriod);
-      setProposePick({ poolMemberId: "", pct: 100 });
-      return;
-    }
+  const seedOnePeriod = async (targetPeriod) => {
     const seeds = [];
     for (const profile of ["Mobile", "TPE", "Digital"]) {
       const dl = project.demandLines.find((l) => l.period === targetPeriod && l.profile === profile);
@@ -149,7 +151,6 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         api.post(`/projects/${project.id}/allocation-lines`, { period: targetPeriod, poolMemberId: s.poolMemberId, pct: s.pct })
       ));
       setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, ...created] }));
-      notifyChanged();
       return;
     }
 
@@ -158,14 +159,33 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
       period: targetPeriod, poolMemberId: pool[0].id, pct: 1,
     });
     setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, line] }));
+  };
+
+  // `end` defaults to `start` so a single-period call (the per-group "+ ligne"
+  // trigger) behaves exactly as before — only the range picker passes both.
+  const addAllocationLine = async (start, end) => {
+    const startPeriod = start || periods[0]?.id || "";
+    const endPeriod = end || startPeriod;
+    if (!canManageAllocations) {
+      // Propose-only: let the user pick who from their own team instead of
+      // auto-assigning a resource they never chose (that resource often
+      // isn't even in their sous-équipe, so the request would just fail).
+      setProposingPeriod({ start: startPeriod, end: endPeriod });
+      setProposePick({ poolMemberId: "", pct: 100 });
+      return;
+    }
+    for (const p of periodsBetween(startPeriod, endPeriod)) {
+      await seedOnePeriod(p);
+    }
     notifyChanged();
   };
   const submitProposedAllocation = async () => {
     if (!proposePick.poolMemberId) return;
-    const line = await api.post(`/projects/${project.id}/allocation-lines`, {
-      period: proposingPeriod, poolMemberId: proposePick.poolMemberId, pct: proposePick.pct / 100,
-    });
-    setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, line] }));
+    const targetPeriods = periodsBetween(proposingPeriod.start, proposingPeriod.end);
+    const created = await Promise.all(targetPeriods.map((p) =>
+      api.post(`/projects/${project.id}/allocation-lines`, { period: p, poolMemberId: proposePick.poolMemberId, pct: proposePick.pct / 100 })
+    ));
+    setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, ...created] }));
     setProposingPeriod(null);
     notifyChanged();
   };
@@ -446,6 +466,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         onPatch={patchAllocationLine}
         onRemove={removeAllocationLine}
         groupBy="period"
+        rangeAdd
       />
 
       {proposingPeriod && (
@@ -453,7 +474,8 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
           background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 20, boxShadow: CARD_SHADOW,
         }}>
           <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
-            Proposer une ressource de mon équipe — {periods.find((p) => p.id === proposingPeriod)?.label || proposingPeriod}
+            Proposer une ressource de mon équipe — {periods.find((p) => p.id === proposingPeriod.start)?.label || proposingPeriod.start}
+            {proposingPeriod.end !== proposingPeriod.start && ` → ${periods.find((p) => p.id === proposingPeriod.end)?.label || proposingPeriod.end}`}
           </div>
           <div style={{ background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 10, maxHeight: 220, overflowY: "auto", marginBottom: 10 }}>
             {resourceOptions.map((r) => {

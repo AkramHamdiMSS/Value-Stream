@@ -14,11 +14,16 @@ import { Th, Td } from "./ui";
 // (optional, defaults to `editable`) governs whether a SPECIFIC existing row can be
 // edited/deleted — e.g. a Team Lead who can only touch their own pending proposals,
 // not lines someone else already approved.
-export default function LinesTable({ lines, columns, addLabel, editable = true, rowEditable, onAdd, onPatch, onRemove, groupBy, maxPerGroup }) {
+// `rangeAdd` swaps the bottom "+ addLabel" picker for a start/end pair (still from
+// `groupCol.options`, chronological) instead of one period at a time — `onAdd` is
+// then called as `onAdd(start, end)`; the per-group "+ ligne" trigger still calls
+// `onAdd(period)` with a single argument either way.
+export default function LinesTable({ lines, columns, addLabel, editable = true, rowEditable, onAdd, onPatch, onRemove, groupBy, maxPerGroup, rangeAdd = false }) {
   const [local, setLocal] = useState(lines);
   useEffect(() => setLocal(lines), [lines]);
   const [pickingPeriod, setPickingPeriod] = useState(false);
   const [periodChoice, setPeriodChoice] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
 
   const isLineEditable = (line) => (rowEditable ? rowEditable(line) : editable);
 
@@ -68,10 +73,20 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
 
   const confirmAddPeriod = () => {
     if (!periodChoice) return;
-    onAdd(periodChoice);
+    if (rangeAdd) {
+      if (!rangeEnd) return;
+      onAdd(periodChoice, rangeEnd);
+    } else {
+      onAdd(periodChoice);
+    }
     setPickingPeriod(false);
     setPeriodChoice("");
+    setRangeEnd("");
   };
+  const endOptions = rangeAdd && groupCol
+    ? groupCol.options.slice(Math.max(0, groupCol.options.indexOf(periodChoice)))
+      .map((opt) => ({ value: opt, label: groupCol.optionLabels ? groupCol.optionLabels[groupCol.options.indexOf(opt)] : opt }))
+    : [];
 
   const renderCell = (c, line, lineEditable) => (
     c.render ? (
@@ -184,16 +199,31 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
       </table>
       {editable && groupCol && (
         pickingPeriod ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: 10 }}>
-            <select value={periodChoice} onChange={(e) => setPeriodChoice(e.target.value)} style={{ ...inputStyle, minWidth: 160 }}>
-              <option value="">Choisir une période…</option>
-              {availablePeriods.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
-            <button onClick={confirmAddPeriod} disabled={!periodChoice} style={{ ...btnPrimary, fontSize: 12.5, opacity: periodChoice ? 1 : 0.5, cursor: periodChoice ? "pointer" : "not-allowed" }}>Ajouter</button>
-            <button onClick={() => { setPickingPeriod(false); setPeriodChoice(""); }} style={{ ...btnGhost, fontSize: 12.5 }}>Annuler</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: 10, flexWrap: "wrap" }}>
+            {rangeAdd ? (
+              <>
+                <select value={periodChoice} onChange={(e) => { setPeriodChoice(e.target.value); setRangeEnd(""); }} style={{ ...inputStyle, minWidth: 150 }}>
+                  <option value="">Semaine de début…</option>
+                  {groupCol.options.map((opt, i) => <option key={opt} value={opt}>{groupCol.optionLabels ? groupCol.optionLabels[i] : opt}</option>)}
+                </select>
+                <select value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} disabled={!periodChoice} style={{ ...inputStyle, minWidth: 150, opacity: periodChoice ? 1 : 0.5 }}>
+                  <option value="">Semaine de fin…</option>
+                  {endOptions.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </>
+            ) : (
+              <select value={periodChoice} onChange={(e) => setPeriodChoice(e.target.value)} style={{ ...inputStyle, minWidth: 160 }}>
+                <option value="">Choisir une période…</option>
+                {availablePeriods.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            )}
+            <button onClick={confirmAddPeriod} disabled={!periodChoice || (rangeAdd && !rangeEnd)}
+              style={{ ...btnPrimary, fontSize: 12.5, opacity: !periodChoice || (rangeAdd && !rangeEnd) ? 0.5 : 1, cursor: !periodChoice || (rangeAdd && !rangeEnd) ? "not-allowed" : "pointer" }}>Ajouter</button>
+            <button onClick={() => { setPickingPeriod(false); setPeriodChoice(""); setRangeEnd(""); }} style={{ ...btnGhost, fontSize: 12.5 }}>Annuler</button>
           </div>
         ) : (
-          <button onClick={() => setPickingPeriod(true)} disabled={availablePeriods.length === 0} style={{ ...btnGhost, margin: 10, fontSize: 12.5, opacity: availablePeriods.length === 0 ? 0.5 : 1 }}>
+          <button onClick={() => setPickingPeriod(true)} disabled={rangeAdd ? groupCol.options.length === 0 : availablePeriods.length === 0}
+            style={{ ...btnGhost, margin: 10, fontSize: 12.5, opacity: (rangeAdd ? groupCol.options.length === 0 : availablePeriods.length === 0) ? 0.5 : 1 }}>
             <Plus size={14} /> {addLabel}
           </button>
         )
