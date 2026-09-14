@@ -73,12 +73,22 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   // ---- demand lines ----
   // One row = one span of weeks — the SVO sets the range, profile and
   // headcount directly on the row instead of it being generated per week.
+  // Seeds one row per squad (Mobile/TPE/Digital) so the SVO doesn't have to
+  // click "Ajouter" three times — only whichever profiles aren't already
+  // present at the default single-week slot get created, so a repeat click
+  // tops up rather than duplicating.
   const addDemandLine = async () => {
     const p = periods[0]?.id || "";
-    const line = await api.post(`/projects/${project.id}/demand-lines`, {
-      periodStart: p, periodEnd: p, profile: "Mobile", count: 0, pct: null,
-    });
-    setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, line] }));
+    const existing = new Set(
+      project.demandLines.filter((l) => l.periodStart === p && l.periodEnd === p).map((l) => l.profile)
+    );
+    const allProfiles = ["Mobile", "TPE", "Digital"];
+    const toCreate = existing.size === 0 ? allProfiles : allProfiles.filter((profile) => !existing.has(profile));
+    if (toCreate.length === 0) return;
+    const created = await Promise.all(toCreate.map((profile) =>
+      api.post(`/projects/${project.id}/demand-lines`, { periodStart: p, periodEnd: p, profile, count: 0, pct: null })
+    ));
+    setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, ...created] }));
     notifyChanged();
   };
   const patchDemandLine = async (id, key, value) => {
