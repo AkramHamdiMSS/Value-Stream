@@ -40,12 +40,18 @@ router.get("/", async (req, res) => {
         const demanded = effective(line[countField], line[pctField]);
         if (demanded <= 0) continue;
         let allocated = 0;
+        let hasPending = false;
         for (const a of proj.allocationLines) {
-          if (a.status !== "approved") continue;
           // Overlap, not exact match — either range can now span multiple weeks.
           if (a.periodStart > line.periodEnd || a.periodEnd < line.periodStart) continue;
-          if (a.poolMember?.squad === profile) allocated += Number(a.pct) || 0;
+          if (a.poolMember?.squad !== profile) continue;
+          if (a.status === "approved") allocated += Number(a.pct) || 0;
+          else if (a.status === "pending") hasPending = true;
         }
+        // Workflow stage, not a coverage ratio: has the HSV validated
+        // anything yet (2nd validation), has a Team/Tech Lead at least
+        // proposed something (1st validation), or is it untouched.
+        const status = allocated > 0.001 ? "validated" : hasPending ? "proposed" : "untreated";
         rows.push({
           key: `${proj.id}:${line.id}:${profile}`,
           projectId: proj.id,
@@ -57,6 +63,7 @@ router.get("/", async (req, res) => {
           demanded: round1(demanded),
           allocated: round1(allocated),
           ecart: round1(allocated - demanded),
+          status,
         });
       }
     }

@@ -1,14 +1,27 @@
 import { Fragment, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "../api";
-import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, GREEN, RED, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
-import { Th, Td } from "../components/ui";
+import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, GREEN, AMBER, RED, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { Th, Td, Badge } from "../components/ui";
+
+const STATUS_FILTERS = [
+  { value: "all", label: "Toutes" },
+  { value: "untreated", label: "Non traitées" },
+  { value: "proposed", label: "Team Lead (1ère validation)" },
+  { value: "validated", label: "Admin (2ème validation)" },
+];
+const STATUS_BADGE = {
+  untreated: { color: AMBER, text: "Non traitée" },
+  proposed: { color: ACCENT, text: "Team Lead ✓ (1/2)" },
+  validated: { color: GREEN, text: "Admin ✓✓ (2/2)" },
+};
 
 export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocProjects, canManageAllocations, canProposeAllocations, onOpenProject, onAllocated, refreshKey }) {
   const [rows, setRows] = useState(null);
   const [openRow, setOpenRow] = useState(null);
   const [pick, setPick] = useState({ poolMemberId: "", pct: 100 });
   const [hideCovered, setHideCovered] = useState(true);
+  const [statusFilter, setStatusFilter] = useState("all");
   const [error, setError] = useState("");
 
   const load = () => {
@@ -20,7 +33,9 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
     return <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, padding: 40 }}><Loader2 className="animate-spin" size={18} /> Chargement…</div>;
   }
 
-  const visibleRows = hideCovered ? rows.filter((r) => r.ecart < -0.001) : rows;
+  const visibleRows = rows
+    .filter((r) => !hideCovered || r.ecart < -0.001)
+    .filter((r) => statusFilter === "all" || r.status === statusFilter);
   const canAct = canManageAllocations || canProposeAllocations;
   // A propose-only viewer only picks from their own team.
   const candidatePool = canManageAllocations ? pool : (teamPool?.length ? teamPool : pool);
@@ -67,6 +82,17 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
           : "Demandes soumises pour votre profil, tous projets confondus. Vos propositions seront à valider par le Head of Value Stream."}
       </p>
 
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+        {STATUS_FILTERS.map((f) => (
+          <button key={f.value} onClick={() => setStatusFilter(f.value)} style={{
+            ...btnGhost, fontSize: 11.5, padding: "5px 10px",
+            ...(statusFilter === f.value ? { background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`, color: ACCENT, borderColor: ACCENT } : {}),
+          }}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: MUTED, marginBottom: 12, cursor: "pointer" }}>
         <input type="checkbox" checked={hideCovered} onChange={(e) => setHideCovered(e.target.checked)} />
         Masquer les besoins déjà entièrement couverts
@@ -78,7 +104,7 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
-              <Th>Projet</Th><Th>SVO</Th><Th>Période</Th><Th>Profil</Th><Th>Demandé</Th><Th>Alloué</Th><Th>Écart</Th><Th></Th>
+              <Th>Projet</Th><Th>SVO</Th><Th>Période</Th><Th>Profil</Th><Th>Demandé</Th><Th>Alloué</Th><Th>Écart</Th><Th>Statut</Th><Th></Th>
             </tr>
           </thead>
           <tbody>
@@ -100,6 +126,7 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
                       <Td>{row.demanded}</Td>
                       <Td>{row.allocated}</Td>
                       <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
+                      <Td><Badge color={STATUS_BADGE[row.status]?.color || MUTED} text={STATUS_BADGE[row.status]?.text || row.status} /></Td>
                       <Td>
                         {canAct && (
                           <button onClick={() => { setOpenRow(openRow === row.key ? null : row.key); setPick({ poolMemberId: "", pct: 100 }); }} style={btnGhost}>
@@ -110,7 +137,7 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
                     </tr>
                     {canAct && openRow === row.key && (
                       <tr style={{ background: SURFACE2 }}>
-                        <td colSpan={8} style={{ padding: "12px 14px" }}>
+                        <td colSpan={9} style={{ padding: "12px 14px" }}>
                           <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
                             Choisissez une ressource {row.profile} — sa charge sur ses autres projets sur cette période est affichée pour vous aider à décider.
                           </div>
@@ -176,7 +203,7 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
               </Fragment>
             ))}
             {visibleRows.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: MUTED }}>
+              <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: MUTED }}>
                 {hideCovered ? "Aucun besoin en attente — tout est couvert." : "Aucune demande soumise pour l'instant."}
               </td></tr>
             )}
