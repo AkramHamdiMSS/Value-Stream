@@ -15,6 +15,8 @@ import DemandQueue from "./screens/DemandQueue";
 import PoolView from "./screens/PoolView";
 import RolesView from "./screens/RolesView";
 import ActivityLog from "./screens/ActivityLog";
+import ToastContainer from "./components/Toast";
+import LoadingBar from "./components/LoadingBar";
 
 export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
@@ -119,14 +121,24 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div style={{ background: NAVY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontFamily: FONT_BODY }}>
-        <Loader2 className="animate-spin" size={20} style={{ marginRight: 8 }} /> Chargement…
-      </div>
+      <>
+        <LoadingBar />
+        <ToastContainer />
+        <div style={{ background: NAVY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontFamily: FONT_BODY }}>
+          <Loader2 className="animate-spin" size={20} style={{ marginRight: 8 }} /> Chargement…
+        </div>
+      </>
     );
   }
 
   if (!user) {
-    return <LoginScreen onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />;
+    return (
+      <>
+        <LoadingBar />
+        <ToastContainer />
+        <LoginScreen onLogin={handleLogin} theme={theme} onToggleTheme={toggleTheme} />
+      </>
+    );
   }
 
   // The API already returns exactly the projects this user is allowed to see
@@ -150,7 +162,10 @@ export default function App() {
   };
 
   return (
-    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex" }}>
+    <>
+      <LoadingBar />
+      <ToastContainer />
+      <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex" }}>
       <div style={{ width: 220, background: SIDEBAR_BG, borderRight: `1px solid ${SIDEBAR_BORDER}`, padding: "20px 12px", flexShrink: 0 }}>
         <div style={{ marginBottom: 16 }}>
           <BrandHeader />
@@ -242,6 +257,7 @@ export default function App() {
         <ChangePasswordModal user={user} hasPassword={hasPassword}
           onClose={() => { setShowAccount(false); setHasPassword(true); }} />
       )}
-    </div>
+      </div>
+    </>
   );
 }

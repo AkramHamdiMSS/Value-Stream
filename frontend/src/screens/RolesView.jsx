@@ -3,6 +3,8 @@ import { Plus, KeyRound, Trash2, ShieldCheck, ArrowUpCircle } from "lucide-react
 import { api } from "../api";
 import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, AMBER, RED, ACCENT, CARD_SHADOW, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
 import { PERMISSIONS } from "../lib/permissions";
+import { isValidEmail } from "../lib/validate";
+import { showToast } from "../lib/toast";
 import { Th, Td, Badge } from "../components/ui";
 
 export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
@@ -68,6 +70,10 @@ export default function RolesView({ svoUsers, pool, isHSV, onChanged }) {
 
   const saveEmail = async (id) => {
     const email = (emails[id] ?? "").trim();
+    if (email && !isValidEmail(email)) {
+      showToast("Adresse email invalide — format attendu : nom@domaine.com", "error");
+      return;
+    }
     try {
       await api.patch(`/users/${id}`, { email });
       onChanged();

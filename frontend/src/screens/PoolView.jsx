@@ -3,6 +3,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { api } from "../api";
 import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, RED, CARD_SHADOW, inputStyle, btnPrimary, iconBtn } from "../styles";
 import { Th, Td } from "../components/ui";
+import { isValidEmail } from "../lib/validate";
+import { showToast } from "../lib/toast";
 
 export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
   const [error, setError] = useState("");
@@ -25,6 +27,10 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
     }
   };
   const patchPerson = async (id, key, value) => {
+    if (key === "email" && value.trim() && !isValidEmail(value)) {
+      showToast("Adresse email invalide — format attendu : nom@domaine.com", "error");
+      return;
+    }
     try {
       await api.patch(`/pool/${id}`, { [key]: value });
       onChanged();
