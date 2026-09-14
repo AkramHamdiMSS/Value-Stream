@@ -116,9 +116,12 @@ model AllocationLine {
   status       AllocationStatus @default(approved)
   // SVO-initiated: "this resource I already got approved is free for
   // something else" — the line stays real/counted until the HSV confirms
-  // the release (which deletes it), so nothing frees up silently.
-  releaseRequested Boolean @default(false) @map("release_requested")
-  releaseNote      String? @map("release_note")
+  // the release. A null releaseNewPct means a full release (the line is
+  // deleted on confirm); a value means a partial release (pct drops to
+  // that value and the line survives, keeping the rest of the allocation).
+  releaseRequested Boolean  @default(false) @map("release_requested")
+  releaseNote      String?  @map("release_note")
+  releaseNewPct    Decimal? @db.Decimal(6, 4) @map("release_new_pct")
 
   @@index([poolMemberId, period])
   @@index([projectId])

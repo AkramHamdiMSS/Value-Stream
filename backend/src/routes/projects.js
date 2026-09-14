@@ -127,6 +127,7 @@ router.get("/:id", async (req, res) => {
       createdById: l.createdById,
       releaseRequested: l.releaseRequested,
       releaseNote: l.releaseNote,
+      releaseNewPct: l.releaseNewPct,
     })),
   });
 });

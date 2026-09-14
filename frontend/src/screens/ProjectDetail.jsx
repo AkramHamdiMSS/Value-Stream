@@ -189,12 +189,15 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   // free up, instead of the SVO removing it outright — the line stays real
   // (and counted) until confirmed. ----
   const requestRelease = async (id) => {
-    const note = (releaseDrafts[id] || "").trim();
+    const draft = releaseDrafts[id] || {};
+    const note = (draft.note || "").trim();
     if (!note) return;
-    const updated = await api.post(`/allocation-lines/${id}/request-release`, { note });
+    const body = { note };
+    if (draft.partial) body.newPct = draft.newPct / 100;
+    const updated = await api.post(`/allocation-lines/${id}/request-release`, body);
     setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.map((l) => (l.id === id ? { ...l, ...updated } : l)) }));
     setReleasingId(null);
-    setReleaseDrafts((d) => ({ ...d, [id]: "" }));
+    setReleaseDrafts((d) => ({ ...d, [id]: undefined }));
     notifyChanged();
   };
   const cancelRelease = async (id) => {
@@ -203,8 +206,12 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     notifyChanged();
   };
   const confirmRelease = async (id) => {
-    await api.post(`/allocation-lines/${id}/confirm-release`);
-    setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.filter((l) => l.id !== id) }));
+    const result = await api.post(`/allocation-lines/${id}/confirm-release`);
+    if (result.deleted) {
+      setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.filter((l) => l.id !== id) }));
+    } else {
+      setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.map((l) => (l.id === id ? { ...l, ...result } : l)) }));
+    }
     notifyChanged();
   };
 
@@ -371,9 +378,10 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
               // a pending proposal gets rejected/retracted instead (see Statut).
               if (line.status === "pending") return null;
               if (line.releaseRequested) {
+                const partial = line.releaseNewPct !== null && line.releaseNewPct !== undefined;
                 return (
                   <div>
-                    <Badge color={AMBER} text="Libération demandée" />
+                    <Badge color={AMBER} text={partial ? `Libération partielle → ${Math.round(Number(line.releaseNewPct) * 100)}%` : "Libération totale demandée"} />
                     <div style={{ fontSize: 10.5, color: MUTED, marginTop: 4 }}>{line.releaseNote}</div>
                     <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                       {canManageAllocations && (
@@ -390,15 +398,38 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
               }
               if (!isOwner) return null;
               if (releasingId === line.id) {
+                const draft = releaseDrafts[line.id] || { note: "", partial: false, newPct: Math.max(0, Math.round(Number(line.pct) * 100) - 50) };
+                const currentPct = Math.round(Number(line.pct) * 100);
+                const pctInvalid = draft.partial && (draft.newPct <= 0 || draft.newPct >= currentPct);
                 return (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    <input value={releaseDrafts[line.id] || ""} onChange={(e) => setReleaseDrafts({ ...releaseDrafts, [line.id]: e.target.value })}
-                      placeholder="Raison / réaffectation prévue" style={{ ...inputStyle, width: 150 }} />
-                    <button onClick={() => requestRelease(line.id)} disabled={!(releaseDrafts[line.id] || "").trim()}
-                      style={{ ...btnPrimary, fontSize: 11, padding: "4px 8px", opacity: (releaseDrafts[line.id] || "").trim() ? 1 : 0.5 }}>
-                      OK
-                    </button>
-                    <button onClick={() => setReleasingId(null)} style={{ ...btnGhost, fontSize: 11, padding: "4px 8px" }}>Annuler</button>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 10, fontSize: 11 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                        <input type="radio" checked={!draft.partial} onChange={() => setReleaseDrafts({ ...releaseDrafts, [line.id]: { ...draft, partial: false } })} />
+                        Totale
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                        <input type="radio" checked={draft.partial} onChange={() => setReleaseDrafts({ ...releaseDrafts, [line.id]: { ...draft, partial: true } })} />
+                        Partielle
+                      </label>
+                    </div>
+                    {draft.partial && (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input type="number" min="0" max={Math.max(0, currentPct - 1)} value={draft.newPct}
+                          onChange={(e) => setReleaseDrafts({ ...releaseDrafts, [line.id]: { ...draft, newPct: Number(e.target.value) } })}
+                          style={{ ...inputStyle, width: 60 }} />
+                        <span style={{ fontSize: 10.5, color: MUTED }}>% (au lieu de {currentPct}%)</span>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                      <input value={draft.note} onChange={(e) => setReleaseDrafts({ ...releaseDrafts, [line.id]: { ...draft, note: e.target.value } })}
+                        placeholder="Raison / réaffectation prévue" style={{ ...inputStyle, width: 150 }} />
+                      <button onClick={() => requestRelease(line.id)} disabled={!draft.note.trim() || pctInvalid}
+                        style={{ ...btnPrimary, fontSize: 11, padding: "4px 8px", opacity: !draft.note.trim() || pctInvalid ? 0.5 : 1 }}>
+                        OK
+                      </button>
+                      <button onClick={() => setReleasingId(null)} style={{ ...btnGhost, fontSize: 11, padding: "4px 8px" }}>Annuler</button>
+                    </div>
                   </div>
                 );
               }

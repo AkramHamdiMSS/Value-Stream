@@ -146,9 +146,13 @@ router.delete("/:id", async (req, res) => {
 
 // SVO releases a resource on their own project: flags the (still real, still
 // counted) line for review instead of removing it outright, so the HSV sees
-// and confirms it rather than capacity silently disappearing.
+// and confirms it rather than capacity silently disappearing. Omitting newPct
+// asks for a full release (the line is deleted on confirm); passing it asks
+// to only give back the gap down to that percentage (the line survives at
+// the lower pct) — e.g. 100% -> 40% frees 60% for someone else while the
+// person stays on the project part-time.
 router.post("/:id/request-release", async (req, res) => {
-  const schema = z.object({ note: z.string().trim().min(1) });
+  const schema = z.object({ note: z.string().trim().min(1), newPct: z.number().min(0).max(2).optional() });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Merci de décrire la raison / réallocation prévue." });
 
@@ -157,20 +161,25 @@ router.post("/:id/request-release", async (req, res) => {
   if (line.project.svoUserId !== req.user.id) return res.status(403).json({ error: "Seul le SVO du projet peut demander la libération." });
   if (line.status !== "approved") return res.status(409).json({ error: "Seules les affectations confirmées peuvent être libérées." });
   if (line.releaseRequested) return res.status(409).json({ error: "Une libération est déjà demandée pour cette ligne." });
+  if (parsed.data.newPct !== undefined && parsed.data.newPct >= Number(line.pct)) {
+    return res.status(400).json({ error: "Le nouveau pourcentage doit être inférieur à l'allocation actuelle." });
+  }
 
+  const isPartial = parsed.data.newPct !== undefined;
   const updated = await prisma.allocationLine.update({
     where: { id: req.params.id },
-    data: { releaseRequested: true, releaseNote: parsed.data.note },
+    data: { releaseRequested: true, releaseNote: parsed.data.note, releaseNewPct: isPartial ? parsed.data.newPct : null },
     include: { poolMember: true },
   });
+  const pctLabel = isPartial ? `${Math.round(Number(line.pct) * 100)}% → ${Math.round(parsed.data.newPct * 100)}%` : "totale";
   await logActivity({
     user: req.user,
-    action: `a demandé la libération de ${line.poolMember.name} (${line.period}) — ${parsed.data.note}`,
+    action: `a demandé la libération ${isPartial ? "partielle" : "totale"} de ${line.poolMember.name} (${line.period}, ${pctLabel}) — ${parsed.data.note}`,
     project: line.project,
   });
   await notifyHSV(
-    `Demande de libération — ${line.project.name}`,
-    `${req.user.name} demande la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}) — ${parsed.data.note}`,
+    `Demande de libération ${isPartial ? "partielle" : ""} — ${line.project.name}`,
+    `${req.user.name} demande la libération ${isPartial ? "partielle" : "totale"} de ${line.poolMember.name} sur "${line.project.name}" (${line.period}, ${pctLabel}) — ${parsed.data.note}`,
     projectLink(line.project.id)
   );
   res.json(updated);
@@ -187,7 +196,7 @@ router.post("/:id/cancel-release", async (req, res) => {
 
   const updated = await prisma.allocationLine.update({
     where: { id: req.params.id },
-    data: { releaseRequested: false, releaseNote: null },
+    data: { releaseRequested: false, releaseNote: null, releaseNewPct: null },
     include: { poolMember: true },
   });
   await logActivity({
@@ -215,46 +224,64 @@ router.post("/:id/cancel-release", async (req, res) => {
   res.json(updated);
 });
 
-// HSV confirms: the resource is actually freed — the line is removed.
+// HSV confirms: a full release removes the line entirely; a partial one
+// just drops pct to the proposed value and clears the release flags — the
+// resource stays on the project at the reduced share.
 router.post("/:id/confirm-release", requirePermission("manageAllocations"), async (req, res) => {
   const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true } });
   if (!line) return res.status(404).json({ error: "Ligne introuvable." });
   if (!line.releaseRequested) return res.status(409).json({ error: "Aucune libération en attente pour cette ligne." });
 
-  await prisma.allocationLine.delete({ where: { id: req.params.id } });
+  const isPartial = line.releaseNewPct !== null && line.releaseNewPct !== undefined;
+  const pctLabel = isPartial ? `${Math.round(Number(line.pct) * 100)}% → ${Math.round(Number(line.releaseNewPct) * 100)}%` : "totale";
+  let responseBody;
+  if (isPartial) {
+    const updated = await prisma.allocationLine.update({
+      where: { id: req.params.id },
+      data: { pct: line.releaseNewPct, releaseRequested: false, releaseNote: null, releaseNewPct: null },
+      include: { poolMember: true },
+    });
+    responseBody = updated;
+  } else {
+    await prisma.allocationLine.delete({ where: { id: req.params.id } });
+    responseBody = { ok: true, deleted: true };
+  }
   await logActivity({
     user: req.user,
-    action: `a validé la libération de ${line.poolMember.name} (${line.period}) — ${line.releaseNote}`,
+    action: `a validé la libération ${isPartial ? "partielle" : "totale"} de ${line.poolMember.name} (${line.period}, ${pctLabel}) — ${line.releaseNote}`,
     project: line.project,
   });
 
   const svo = await prisma.user.findUnique({ where: { id: line.project.svoUserId } });
   const releaseLink = projectLink(line.project.id);
+  const releaseWord = isPartial ? "partielle" : "totale";
   await notifyUser(
     svo,
     `Libération confirmée — ${line.project.name}`,
-    `${req.user.name} a confirmé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}) — la ressource est de nouveau disponible.`,
+    `${req.user.name} a confirmé la libération ${releaseWord} de ${line.poolMember.name} sur "${line.project.name}" (${line.period}, ${pctLabel}).`,
     releaseLink
   );
   await notifyPoolMember(
     line.poolMember,
     `Libération confirmée — ${line.project.name}`,
-    `Votre affectation au projet "${line.project.name}" (${line.period}) a pris fin — vous êtes de nouveau disponible.`,
+    isPartial
+      ? `Votre affectation au projet "${line.project.name}" (${line.period}) passe à ${Math.round(Number(line.releaseNewPct) * 100)}% — le reste est de nouveau disponible.`
+      : `Votre affectation au projet "${line.project.name}" (${line.period}) a pris fin — vous êtes de nouveau disponible.`,
     releaseLink
   );
   await notifyTeamLeadsForSousEquipe(
     line.poolMember.sousEquipe,
     `Libération d'équipe — ${line.project.name}`,
-    `${line.poolMember.name} est libéré(e) du projet "${line.project.name}" (${line.period}) et redevient disponible.`,
+    `${line.poolMember.name} est libéré(e) ${isPartial ? "partiellement" : ""} du projet "${line.project.name}" (${line.period}, ${pctLabel}).`,
     releaseLink
   );
   await notifyHSV(
     `[Journal] Libération confirmée — ${line.project.name}`,
-    `${req.user.name} a confirmé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+    `${req.user.name} a confirmé la libération ${releaseWord} de ${line.poolMember.name} sur "${line.project.name}" (${line.period}, ${pctLabel}).`,
     releaseLink
   );
 
-  res.json({ ok: true });
+  res.json(responseBody);
 });
 
 module.exports = router;
