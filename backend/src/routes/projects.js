@@ -317,6 +317,10 @@ router.post("/:id/allocation-lines", async (req, res) => {
       `Affectation d'équipe — ${project.name}`,
       `${line.poolMember.name} a été affecté(e) au projet "${project.name}" pour la période ${line.period} par ${req.user.name}.`
     );
+    await notifyHSV(
+      `[Journal] Affectation directe — ${project.name}`,
+      `${req.user.name} a affecté ${line.poolMember.name} sur "${project.name}" (${line.period}, ${Math.round(Number(line.pct) * 100)}%).`
+    );
   }
 
   res.status(201).json(line);

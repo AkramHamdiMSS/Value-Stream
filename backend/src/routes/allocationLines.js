@@ -74,6 +74,10 @@ async function notifyApproval({ line, project, approver }) {
     `Affectation confirmée — ${project.name}`,
     `Votre affectation au projet "${project.name}" pour la période ${line.period} est confirmée.`
   );
+  await notifyHSV(
+    `[Journal] Affectation validée — ${project.name}`,
+    `${approver.name} a validé l'affectation de ${line.poolMember.name} sur "${project.name}" (${line.period}).`
+  );
 }
 
 // Validates a Team/Tech Lead's proposal.
@@ -112,11 +116,19 @@ router.delete("/:id", async (req, res) => {
       `Proposition refusée — ${line.project.name}`,
       `${req.user.name} a refusé votre proposition d'affectation de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
     );
+    await notifyHSV(
+      `[Journal] Proposition refusée — ${line.project.name}`,
+      `${req.user.name} a refusé la proposition de ${line.createdBy.name} pour ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
+    );
   } else if (canManage && line.status === "approved") {
     await notifyPoolMember(
       line.poolMember,
       `Retrait d'affectation — ${line.project.name}`,
       `${req.user.name} vous a retiré du projet "${line.project.name}" (${line.period}).`
+    );
+    await notifyHSV(
+      `[Journal] Affectation retirée — ${line.project.name}`,
+      `${req.user.name} a retiré ${line.poolMember.name} du projet "${line.project.name}" (${line.period}).`
     );
   }
 
@@ -182,6 +194,10 @@ router.post("/:id/cancel-release", async (req, res) => {
       `Libération refusée — ${line.project.name}`,
       `${req.user.name} a refusé votre demande de libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
     );
+    await notifyHSV(
+      `[Journal] Libération refusée — ${line.project.name}`,
+      `${req.user.name} a refusé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
+    );
   }
   res.json(updated);
 });
@@ -214,6 +230,10 @@ router.post("/:id/confirm-release", requirePermission("manageAllocations"), asyn
     line.poolMember.sousEquipe,
     `Libération d'équipe — ${line.project.name}`,
     `${line.poolMember.name} est libéré(e) du projet "${line.project.name}" (${line.period}) et redevient disponible.`
+  );
+  await notifyHSV(
+    `[Journal] Libération confirmée — ${line.project.name}`,
+    `${req.user.name} a confirmé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
   );
 
   res.json({ ok: true });
