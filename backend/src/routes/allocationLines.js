@@ -4,7 +4,7 @@ const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { logActivity } = require("../lib/activity");
-const { notifyHSV, notifyUser, notifyPoolMember, notifyTeamLeadsForSousEquipe } = require("../lib/notify");
+const { notifyHSV, notifyUser, notifyPoolMember, notifyTeamLeadsForSousEquipe, projectLink } = require("../lib/notify");
 
 const router = express.Router();
 router.use(authenticate);
@@ -64,19 +64,23 @@ router.patch("/:id", async (req, res) => {
 // confirms it) — the proposer learns their proposal went through, and the
 // resource learns they're now really on the project.
 async function notifyApproval({ line, project, approver }) {
+  const link = projectLink(project.id);
   await notifyUser(
     line.createdBy,
     `Proposition validée — ${project.name}`,
-    `${approver.name} a validé votre proposition d'affectation de ${line.poolMember.name} sur "${project.name}" (${line.period}).`
+    `${approver.name} a validé votre proposition d'affectation de ${line.poolMember.name} sur "${project.name}" (${line.period}).`,
+    link
   );
   await notifyPoolMember(
     line.poolMember,
     `Affectation confirmée — ${project.name}`,
-    `Votre affectation au projet "${project.name}" pour la période ${line.period} est confirmée.`
+    `Votre affectation au projet "${project.name}" pour la période ${line.period} est confirmée.`,
+    link
   );
   await notifyHSV(
     `[Journal] Affectation validée — ${project.name}`,
-    `${approver.name} a validé l'affectation de ${line.poolMember.name} sur "${project.name}" (${line.period}).`
+    `${approver.name} a validé l'affectation de ${line.poolMember.name} sur "${project.name}" (${line.period}).`,
+    link
   );
 }
 
@@ -110,25 +114,30 @@ router.delete("/:id", async (req, res) => {
     project: line.project,
   });
 
+  const deleteLink = projectLink(line.project.id);
   if (canManage && line.status === "pending") {
     await notifyUser(
       line.createdBy,
       `Proposition refusée — ${line.project.name}`,
-      `${req.user.name} a refusé votre proposition d'affectation de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
+      `${req.user.name} a refusé votre proposition d'affectation de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+      deleteLink
     );
     await notifyHSV(
       `[Journal] Proposition refusée — ${line.project.name}`,
-      `${req.user.name} a refusé la proposition de ${line.createdBy.name} pour ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
+      `${req.user.name} a refusé la proposition de ${line.createdBy.name} pour ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+      deleteLink
     );
   } else if (canManage && line.status === "approved") {
     await notifyPoolMember(
       line.poolMember,
       `Retrait d'affectation — ${line.project.name}`,
-      `${req.user.name} vous a retiré du projet "${line.project.name}" (${line.period}).`
+      `${req.user.name} vous a retiré du projet "${line.project.name}" (${line.period}).`,
+      deleteLink
     );
     await notifyHSV(
       `[Journal] Affectation retirée — ${line.project.name}`,
-      `${req.user.name} a retiré ${line.poolMember.name} du projet "${line.project.name}" (${line.period}).`
+      `${req.user.name} a retiré ${line.poolMember.name} du projet "${line.project.name}" (${line.period}).`,
+      deleteLink
     );
   }
 
@@ -161,7 +170,8 @@ router.post("/:id/request-release", async (req, res) => {
   });
   await notifyHSV(
     `Demande de libération — ${line.project.name}`,
-    `${req.user.name} demande la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}) — ${parsed.data.note}`
+    `${req.user.name} demande la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}) — ${parsed.data.note}`,
+    projectLink(line.project.id)
   );
   res.json(updated);
 });
@@ -189,14 +199,17 @@ router.post("/:id/cancel-release", async (req, res) => {
   });
   if (canManage) {
     const svo = await prisma.user.findUnique({ where: { id: line.project.svoUserId } });
+    const link = projectLink(line.project.id);
     await notifyUser(
       svo,
       `Libération refusée — ${line.project.name}`,
-      `${req.user.name} a refusé votre demande de libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
+      `${req.user.name} a refusé votre demande de libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+      link
     );
     await notifyHSV(
       `[Journal] Libération refusée — ${line.project.name}`,
-      `${req.user.name} a refusé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
+      `${req.user.name} a refusé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+      link
     );
   }
   res.json(updated);
@@ -216,24 +229,29 @@ router.post("/:id/confirm-release", requirePermission("manageAllocations"), asyn
   });
 
   const svo = await prisma.user.findUnique({ where: { id: line.project.svoUserId } });
+  const releaseLink = projectLink(line.project.id);
   await notifyUser(
     svo,
     `Libération confirmée — ${line.project.name}`,
-    `${req.user.name} a confirmé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}) — la ressource est de nouveau disponible.`
+    `${req.user.name} a confirmé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}) — la ressource est de nouveau disponible.`,
+    releaseLink
   );
   await notifyPoolMember(
     line.poolMember,
     `Libération confirmée — ${line.project.name}`,
-    `Votre affectation au projet "${line.project.name}" (${line.period}) a pris fin — vous êtes de nouveau disponible.`
+    `Votre affectation au projet "${line.project.name}" (${line.period}) a pris fin — vous êtes de nouveau disponible.`,
+    releaseLink
   );
   await notifyTeamLeadsForSousEquipe(
     line.poolMember.sousEquipe,
     `Libération d'équipe — ${line.project.name}`,
-    `${line.poolMember.name} est libéré(e) du projet "${line.project.name}" (${line.period}) et redevient disponible.`
+    `${line.poolMember.name} est libéré(e) du projet "${line.project.name}" (${line.period}) et redevient disponible.`,
+    releaseLink
   );
   await notifyHSV(
     `[Journal] Libération confirmée — ${line.project.name}`,
-    `${req.user.name} a confirmé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`
+    `${req.user.name} a confirmé la libération de ${line.poolMember.name} sur "${line.project.name}" (${line.period}).`,
+    releaseLink
   );
 
   res.json({ ok: true });

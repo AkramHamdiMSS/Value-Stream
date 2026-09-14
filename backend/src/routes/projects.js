@@ -5,7 +5,7 @@ const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { effective } = require("../lib/periods");
 const { logActivity } = require("../lib/activity");
-const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe, notifyTeamLeadsForSquad } = require("../lib/notify");
+const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe, notifyTeamLeadsForSquad, projectLink } = require("../lib/notify");
 
 const router = express.Router();
 router.use(authenticate);
@@ -171,9 +171,11 @@ router.patch("/:id", async (req, res) => {
   if (action) await logActivity({ user: req.user, action, project: updated });
 
   if (data.demandSubmitted === true) {
+    const link = projectLink(updated.id);
     await notifyHSV(
       `Nouvelle demande de ressources — ${updated.name}`,
-      `${req.user.name} (SVO) a soumis la demande de ressources pour le projet "${updated.name}". Elle est à staffer.`
+      `${req.user.name} (SVO) a soumis la demande de ressources pour le projet "${updated.name}". Elle est à staffer.`,
+      link
     );
 
     // Team/Tech Leads of each demanded squad get a heads-up too, so they can
@@ -190,7 +192,8 @@ router.patch("/:id", async (req, res) => {
         notifyTeamLeadsForSquad(
           squad,
           `Demande à prévoir — ${updated.name}`,
-          `${req.user.name} (SVO) a soumis une demande ${squad} pour "${updated.name}" : ${lines.join(", ")}. À vous de proposer une affectation le moment venu.`
+          `${req.user.name} (SVO) a soumis une demande ${squad} pour "${updated.name}" : ${lines.join(", ")}. À vous de proposer une affectation le moment venu.`,
+          link
         )
       )
     );
@@ -301,25 +304,30 @@ router.post("/:id/allocation-lines", async (req, res) => {
     project,
   });
 
+  const allocLink = projectLink(project.id);
   if (status === "pending") {
     await notifyHSV(
       `Proposition d'affectation — ${project.name}`,
-      `${req.user.name} propose d'affecter ${line.poolMember.name} sur "${project.name}" (${line.period}, ${Math.round(Number(line.pct) * 100)}%). À valider.`
+      `${req.user.name} propose d'affecter ${line.poolMember.name} sur "${project.name}" (${line.period}, ${Math.round(Number(line.pct) * 100)}%). À valider.`,
+      allocLink
     );
   } else {
     await notifyPoolMember(
       line.poolMember,
       `Nouvelle affectation — ${project.name}`,
-      `Vous avez été affecté(e) au projet "${project.name}" pour la période ${line.period} (${Math.round(Number(line.pct) * 100)}%).`
+      `Vous avez été affecté(e) au projet "${project.name}" pour la période ${line.period} (${Math.round(Number(line.pct) * 100)}%).`,
+      allocLink
     );
     await notifyTeamLeadsForSousEquipe(
       line.poolMember.sousEquipe,
       `Affectation d'équipe — ${project.name}`,
-      `${line.poolMember.name} a été affecté(e) au projet "${project.name}" pour la période ${line.period} par ${req.user.name}.`
+      `${line.poolMember.name} a été affecté(e) au projet "${project.name}" pour la période ${line.period} par ${req.user.name}.`,
+      allocLink
     );
     await notifyHSV(
       `[Journal] Affectation directe — ${project.name}`,
-      `${req.user.name} a affecté ${line.poolMember.name} sur "${project.name}" (${line.period}, ${Math.round(Number(line.pct) * 100)}%).`
+      `${req.user.name} a affecté ${line.poolMember.name} sur "${project.name}" (${line.period}, ${Math.round(Number(line.pct) * 100)}%).`,
+      allocLink
     );
   }
 

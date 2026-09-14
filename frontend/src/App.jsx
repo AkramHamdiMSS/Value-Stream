@@ -32,6 +32,10 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [showAccount, setShowAccount] = useState(false);
   const [theme, setTheme] = useState(getInitialTheme);
+  // A notification email's "Voir le projet" button links to ?project=<id> —
+  // read once at load, consumed (and stripped from the URL) as soon as a
+  // user is available, whether that's immediately or only after login.
+  const [pendingProjectId, setPendingProjectId] = useState(() => new URLSearchParams(window.location.search).get("project"));
 
   const isHSV = user?.role === "hsv";
   const has = (key) => isHSV || !!user?.permissions?.includes(key);
@@ -80,6 +84,14 @@ export default function App() {
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !pendingProjectId) return;
+    setTab("projects");
+    setSelectedId(pendingProjectId);
+    setPendingProjectId(null);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [user, pendingProjectId]);
 
   useEffect(() => {
     if (tab === "dashboard" && !can.viewDashboard) { setTab("projects"); setSelectedId(null); }
