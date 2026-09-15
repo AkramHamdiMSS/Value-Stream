@@ -257,8 +257,11 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
           { key: "periodStart", label: "Début", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
           { key: "periodEnd", label: "Fin", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
           {
-            key: "poolMemberId", label: "Ressource", type: "select", options: resourceOptions.map((r) => r.id), optionLabels: resourceOptions.map((r) => `${r.name} (${r.squad})`), width: 220,
-            fallbackLabel: (id) => (poolById[id] ? `${poolById[id].name} (${poolById[id].squad})` : null),
+            key: "poolMemberId", label: "Ressource", type: "select", options: resourceOptions.map((r) => r.id), optionLabels: resourceOptions.map((r) => `${r.name} (${r.sousEquipe})`), width: 220,
+            // Sous-équipe, not squad — "TPE" alone doesn't say whether this
+            // person is Android or Engage, which is exactly what demand is
+            // now split on, so the plain squad label invites mismatches.
+            fallbackLabel: (id) => (poolById[id] ? `${poolById[id].name} (${poolById[id].sousEquipe})` : null),
             // Recap of the resource's OTHER assignments across the same span of
             // weeks, so the picker doesn't need to be cross-checked against
             // every other project — deduped per project across the range.
