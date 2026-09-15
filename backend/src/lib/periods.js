@@ -1,11 +1,13 @@
 const N_WEEKS = 52;
 const MONTHS_FR = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
-function nextMonday(date) {
+// Monday of the week containing `date` — so S1 is always the current week,
+// not next week whenever "today" happens to fall after a Monday.
+function currentWeekMonday(date) {
   const d = new Date(date);
-  const day = d.getDay();
-  const diff = (8 - day) % 7;
-  d.setDate(d.getDate() + diff);
+  const day = d.getDay(); // 0=Sun .. 6=Sat
+  const diff = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diff);
   return d;
 }
 
@@ -20,7 +22,7 @@ function isoWeekId(date) {
 
 function generatePeriods(n = N_WEEKS, from = new Date()) {
   const out = [];
-  let d = nextMonday(from);
+  let d = currentWeekMonday(from);
   for (let i = 0; i < n; i++) {
     out.push(isoWeekId(d));
     d.setDate(d.getDate() + 7);
@@ -32,7 +34,7 @@ function generatePeriods(n = N_WEEKS, from = new Date()) {
 // like "S1 · 7 sept." formatted from the week's Monday date.
 function generatePeriodObjects(n = N_WEEKS, from = new Date()) {
   const out = [];
-  let d = nextMonday(from);
+  let d = currentWeekMonday(from);
   for (let i = 0; i < n; i++) {
     out.push({ id: isoWeekId(d), label: `S${i + 1} · ${d.getDate()} ${MONTHS_FR[d.getMonth()]}` });
     d.setDate(d.getDate() + 7);
@@ -53,4 +55,4 @@ function effective(count, pct) {
   return c * p;
 }
 
-module.exports = { N_WEEKS, nextMonday, isoWeekId, generatePeriods, generatePeriodObjects, effective, inRange };
+module.exports = { N_WEEKS, currentWeekMonday, isoWeekId, generatePeriods, generatePeriodObjects, effective, inRange };
