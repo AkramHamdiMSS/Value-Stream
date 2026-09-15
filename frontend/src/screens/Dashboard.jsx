@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge, UserCheck, Inbox, Unlock, FileText } from "lucide-react";
 import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, AMBER, RED, CARD_SHADOW } from "../styles";
 import { Kpi, Th, Td, Badge } from "../components/ui";
 
@@ -129,8 +129,10 @@ function OwnDashboard({ data, labelFor, onOpenProject, minimalDashboard }) {
 // ---------------------------------------------------------------- HSV / global view
 
 function AllDashboard({ data, labelFor, onOpenProject }) {
-  const { totals, bySquad, demandByMonth, alertCount, projectsCount } = data;
+  const { totals, bySquad, demandByMonth, alertCount, projectsCount, topProjects } = data;
   const chartWeeks = demandByMonth.slice(0, 16);
+  const ecart = totals.ecartTotal;
+  const couverture = totals.couvertureTotal;
 
   return (
     <div>
@@ -139,11 +141,22 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
         Calculé en direct à partir des projets, du Pool et des affectations — aucune saisie ici.
       </p>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <Kpi label="Projets" value={projectsCount} icon={<FolderKanban size={18} />} />
         <Kpi label="Besoin total (pers.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />} />
-        <Kpi label="Capacité pool" value={totals.capTotal} accent={GREEN} icon={<Users size={18} />} />
+        <Kpi label="Alloué (pers.)" value={totals.allocTotal} accent={GREEN} icon={<Users size={18} />} />
+        <Kpi label="Couverture" value={couverture == null ? "—" : `${couverture}%`} accent={couverture == null ? undefined : couverture >= 100 ? GREEN : RED} icon={<Percent size={18} />} />
+        <Kpi label="Écart" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
+        <Kpi label="Capacité pool" value={totals.capTotal} icon={<Users size={18} />} />
         <Kpi label="Ressources en sur-allocation" value={alertCount} accent={alertCount > 0 ? RED : GREEN} icon={<AlertTriangle size={18} />} />
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        <Kpi label="Ressources disponibles" value={totals.availableCount} accent={GREEN} icon={<UserCheck size={18} />} />
+        <Kpi label="Utilisation du pool (semaine en cours)" value={`${totals.poolUtilizationPct}%`} accent={totals.poolUtilizationPct > 100 ? RED : undefined} icon={<Gauge size={18} />} />
+        <Kpi label="Demandes en attente de validation" value={totals.backlogCount} accent={totals.backlogCount > 0 ? AMBER : GREEN} icon={<Inbox size={18} />} />
+        <Kpi label="Libérations en attente" value={totals.releasePendingCount} accent={totals.releasePendingCount > 0 ? AMBER : GREEN} icon={<Unlock size={18} />} />
+        <Kpi label="Brouillons / Soumises" value={`${totals.draftCount} / ${totals.submittedCount}`} icon={<FileText size={18} />} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginBottom: 20 }}>
@@ -164,8 +177,11 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
         </div>
 
         <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Besoin vs capacité par squad</div>
-          <ResponsiveContainer width="100%" height={220}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Besoin / Capacité / Alloué par profil</div>
+          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
+            Couverture : {bySquad.map((s) => `${s.name} ${s.couverture == null ? "—" : `${s.couverture}%`}`).join(" · ")}
+          </div>
+          <ResponsiveContainer width="100%" height={195}>
             <BarChart data={bySquad}>
               <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
               <XAxis dataKey="name" stroke={MUTED} fontSize={11} />
@@ -174,10 +190,39 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="besoin" fill={ACCENT} radius={[4, 4, 0, 0]} />
               <Bar dataKey="capacite" fill={GREEN} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="alloue" fill={AMBER} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
+
+      {topProjects?.length > 0 && (
+        <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW, marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Top projets en manque</div>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
+            Les projets soumis avec le plus grand écart négatif (alloué − demandé). Cliquez sur un projet pour l'ouvrir.
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: SURFACE2 }}>
+                <Th>Projet</Th><Th>SVO</Th><Th>Statut</Th><Th>Demandé</Th><Th>Alloué</Th><Th>Écart</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {topProjects.map((p) => (
+                <tr key={p.id} style={{ borderTop: `1px solid ${BORDER}`, cursor: "pointer" }} onClick={() => onOpenProject?.(p.id)}>
+                  <Td><span style={{ fontWeight: 600 }}>{p.name}</span></Td>
+                  <Td><span style={{ color: MUTED }}>{p.svo}</span></Td>
+                  <Td><span style={{ color: MUTED }}>{p.status}</span></Td>
+                  <Td>{p.demand}</Td>
+                  <Td>{p.alloc}</Td>
+                  <Td><span style={{ color: p.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{p.ecart}</span></Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <ResourceLoadGrid data={data} labelFor={labelFor} onOpenProject={onOpenProject} />
     </div>

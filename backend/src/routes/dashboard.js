@@ -4,6 +4,7 @@ const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { effective, generatePeriods, inRange } = require("../lib/periods");
 const { PROFILES, PROFILE_FIELDS } = require("../lib/profiles");
+const { buildDemandQueueRows } = require("../lib/demandQueueRows");
 
 const router = express.Router();
 router.use(authenticate);
@@ -84,21 +85,52 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
     return res.json({ ...own, ...resourceLoad, periods });
   }
 
-  const [projects] = await Promise.all([
-    prisma.project.findMany({ include: { demandLines: true } }),
-  ]);
+  const projects = await prisma.project.findMany({
+    include: { svo: true, demandLines: true, allocationLines: { include: { poolMember: true } } },
+  });
 
   const map = Object.fromEntries(periods.map((p) => [p, { period: p, ...zeroByProfile() }]));
   const besoin = zeroByProfile();
+  const alloc = zeroByProfile();
+  let draftCount = 0, submittedCount = 0;
+  let releasePendingCount = 0;
+  const projectStats = [];
+
   for (const proj of projects) {
+    if (proj.demandSubmitted) submittedCount++; else draftCount++;
+
+    const pDemand = zeroByProfile();
     for (const l of proj.demandLines) {
       for (const { profile, countField, pctField } of PROFILE_FIELDS) {
         const eff = effective(l[countField], l[pctField]);
         besoin[profile] += eff;
+        pDemand[profile] += eff;
         for (const p of periods) {
           if (inRange(p, l.periodStart, l.periodEnd)) map[p][profile] = round1(map[p][profile] + eff);
         }
       }
+    }
+
+    const pAlloc = zeroByProfile();
+    for (const a of proj.allocationLines) {
+      if (a.releaseRequested) releasePendingCount++;
+      if (a.status !== "approved") continue;
+      const key = a.poolMember?.sousEquipe;
+      const pct = Number(a.pct) || 0;
+      if (key in alloc) alloc[key] += pct;
+      if (key in pAlloc) pAlloc[key] += pct;
+    }
+
+    // Only submitted projects with an actual demand count toward "top
+    // projets en manque" — a draft, or a submitted line with nothing
+    // requested yet, has no gap worth surfacing.
+    const demandTotal = Object.values(pDemand).reduce((a, b) => a + b, 0);
+    if (proj.demandSubmitted && demandTotal > 0.001) {
+      const allocTotal = Object.values(pAlloc).reduce((a, b) => a + b, 0);
+      projectStats.push({
+        id: proj.id, name: proj.name, svo: proj.svo.name, status: proj.status,
+        demand: round1(demandTotal), alloc: round1(allocTotal), ecart: round1(allocTotal - demandTotal),
+      });
     }
   }
   const demandByMonth = periods.map((p) => map[p]);
@@ -108,17 +140,56 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
     if (p.sousEquipe in cap) cap[p.sousEquipe] += 1;
   }
   const besoinTotal = Object.values(besoin).reduce((a, b) => a + b, 0);
+  const allocTotal = Object.values(alloc).reduce((a, b) => a + b, 0);
   const capTotal = Object.values(cap).reduce((a, b) => a + b, 0);
+  const couvertureTotal = besoinTotal > 0.001 ? round1((100 * allocTotal) / besoinTotal) : null;
+
+  // Backlog: per-profile demand lines from submitted projects that an admin
+  // hasn't validated yet (same untreated/proposed statuses as the "Demandes
+  // à affecter" queue, computed the same way so the two numbers never drift).
+  const queueRows = buildDemandQueueRows(projects.filter((p) => p.demandSubmitted));
+  const backlogCount = queueRows.filter((r) => r.status !== "validated").length;
+
+  // Pool utilization right now (periods[0] is always the current week): sum
+  // of every resource's current load against the pool's theoretical
+  // 100%-each capacity, plus how many are sitting completely idle.
+  const currentPeriod = periods[0];
+  let loadSum = 0, availableCount = 0;
+  for (const p of resourceLoad.pool) {
+    const load = resourceLoad.overAllocGrid[p.id]?.[currentPeriod] || 0;
+    loadSum += load;
+    if (load < 0.001) availableCount++;
+  }
+  const poolUtilizationPct = resourceLoad.pool.length > 0 ? round1((100 * loadSum) / resourceLoad.pool.length) : 0;
+
+  projectStats.sort((a, b) => a.ecart - b.ecart);
+  const topProjects = projectStats.slice(0, 5);
 
   res.json({
     scope: "all",
     periods,
     totals: {
       besoinTotal: round1(besoinTotal),
+      allocTotal: round1(allocTotal),
       capTotal,
+      ecartTotal: round1(allocTotal - besoinTotal),
+      couvertureTotal,
+      poolUtilizationPct,
+      availableCount,
+      backlogCount,
+      releasePendingCount,
+      draftCount,
+      submittedCount,
     },
-    bySquad: PROFILES.map((name) => ({ name, besoin: round1(besoin[name]), capacite: cap[name] })),
+    bySquad: PROFILES.map((name) => {
+      const b = besoin[name], a = alloc[name];
+      return {
+        name, besoin: round1(b), capacite: cap[name], alloue: round1(a),
+        couverture: b > 0.001 ? round1((100 * a) / b) : null,
+      };
+    }),
     demandByMonth,
+    topProjects,
     ...resourceLoad,
     projectsCount: projects.length,
   });
