@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "../api";
-import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, GREEN, AMBER, RED, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, ACCENT, GREEN, AMBER, RED, CARD_SHADOW, btnGhost } from "../styles";
 import { Th, Td, Badge } from "../components/ui";
 
 const STATUS_FILTERS = [
@@ -16,10 +16,8 @@ const STATUS_BADGE = {
   validated: { color: GREEN, text: "Admin ✓✓ (2/2)" },
 };
 
-export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocProjects, canManageAllocations, canProposeAllocations, onOpenProject, onAllocated, refreshKey }) {
+export default function DemandQueue({ canManageAllocations, onOpenProject, refreshKey }) {
   const [rows, setRows] = useState(null);
-  const [openRow, setOpenRow] = useState(null);
-  const [pick, setPick] = useState({ poolMemberId: "", pct: 100 });
   const [hideCovered, setHideCovered] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
   const [error, setError] = useState("");
@@ -36,18 +34,7 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
   const visibleRows = rows
     .filter((r) => !hideCovered || r.ecart < -0.001)
     .filter((r) => statusFilter === "all" || r.status === statusFilter);
-  const canAct = canManageAllocations || canProposeAllocations;
-  // A propose-only viewer only picks from their own team.
-  const candidatePool = canManageAllocations ? pool : (teamPool?.length ? teamPool : pool);
-  // row.profile is now a sous-équipe (e.g. "TPE Android"), not a squad —
-  // Mobile/Digital pool members have a sous-équipe matching their squad
-  // name, so this still works uniformly for all four profiles.
-  const candidatesFor = (row) => candidatePool.filter((r) => r.sousEquipe === row.profile);
   const rangeLabel = (row) => (row.periodStart === row.periodEnd ? row.periodStart : `${row.periodStart} → ${row.periodEnd}`);
-  // Weeks from the resource-load grid that fall within a row's span — the
-  // grid is already keyed by week id, so membership is just string range
-  // comparison, no separate period list needed here.
-  const weeksInRange = (grid, start, end) => Object.keys(grid || {}).filter((w) => w >= start && w <= end);
 
   // One "demande" is submitted per project+période, with one line per profile —
   // group them back into a single row so the queue reflects that, instead of
@@ -63,16 +50,6 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
     groups[groupIndexByKey[gKey]].rows.push(row);
   }
   groups.sort((a, b) => Math.min(...a.rows.map((r) => r.ecart)) - Math.min(...b.rows.map((r) => r.ecart)));
-
-  const submitAllocation = async (row) => {
-    if (!pick.poolMemberId) return;
-    await api.post(`/projects/${row.projectId}/allocation-lines`, {
-      periodStart: row.periodStart, periodEnd: row.periodEnd, poolMemberId: pick.poolMemberId, pct: pick.pct / 100,
-    });
-    setOpenRow(null);
-    load();
-    onAllocated();
-  };
 
   return (
     <div>
@@ -107,106 +84,34 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
-              <Th>Projet</Th><Th>SVO</Th><Th>Période</Th><Th>Profil</Th><Th>Demandé</Th><Th>Alloué</Th><Th>Écart</Th><Th>Statut</Th><Th></Th>
+              <Th>Projet</Th><Th>SVO</Th><Th>Période</Th><Th>Profil</Th><Th>Demandé</Th><Th>Alloué</Th><Th>Écart</Th><Th>Statut</Th>
             </tr>
           </thead>
           <tbody>
             {groups.map((g) => (
               <Fragment key={g.key}>
                 {g.rows.map((row, i) => (
-                  <Fragment key={row.key}>
-                    <tr style={{ borderTop: i === 0 ? `1px solid ${BORDER}` : "none" }}>
-                      {i === 0 && (
-                        <>
-                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>
-                            <button onClick={() => onOpenProject(g.projectId)} style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 13, padding: 0 }}>{g.projectName}</button>
-                          </Td>
-                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.svo}</Td>
-                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.periodLabel}</Td>
-                        </>
-                      )}
-                      <Td>{row.profile}</Td>
-                      <Td>{row.demanded}</Td>
-                      <Td>{row.allocated}</Td>
-                      <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
-                      <Td><Badge color={STATUS_BADGE[row.status]?.color || MUTED} text={STATUS_BADGE[row.status]?.text || row.status} /></Td>
-                      <Td>
-                        {canAct && (
-                          <button onClick={() => { setOpenRow(openRow === row.key ? null : row.key); setPick({ poolMemberId: "", pct: 100 }); }} style={btnGhost}>
-                            {openRow === row.key ? "Fermer" : canManageAllocations ? "Affecter" : "Proposer"}
-                          </button>
-                        )}
-                      </Td>
-                    </tr>
-                    {canAct && openRow === row.key && (
-                      <tr style={{ background: SURFACE2 }}>
-                        <td colSpan={9} style={{ padding: "12px 14px" }}>
-                          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
-                            Choisissez une ressource {row.profile} — sa charge sur ses autres projets sur cette période est affichée pour vous aider à décider.
-                          </div>
-                          <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 10, maxHeight: 220, overflowY: "auto", marginBottom: 10 }}>
-                            {candidatesFor(row).map((r) => {
-                              const weeks = weeksInRange(overAllocGrid[r.id], row.periodStart, row.periodEnd);
-                              const load2 = weeks.length ? Math.max(...weeks.map((w) => overAllocGrid[r.id][w] || 0)) : 0;
-                              const over = load2 > 1.001;
-                              const seenProjects = new Map();
-                              for (const w of weeks) {
-                                for (const e of overAllocProjects?.[`${r.id}:${w}`] || []) {
-                                  if (!seenProjects.has(e.projectId)) seenProjects.set(e.projectId, e);
-                                }
-                              }
-                              const entries = [...seenProjects.values()];
-                              const selected = pick.poolMemberId === r.id;
-                              return (
-                                <div key={r.id} onClick={() => setPick({ ...pick, poolMemberId: r.id })} style={{
-                                  padding: "8px 10px", borderTop: `1px solid ${BORDER}`, cursor: "pointer",
-                                  background: selected ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : "transparent",
-                                }}>
-                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                                    <span style={{ fontSize: 12.5, fontWeight: selected ? 700 : 600, color: selected ? ACCENT : TEXT }}>{r.name}</span>
-                                    <span style={{
-                                      fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
-                                      color: over ? RED : load2 > 0 ? GREEN : MUTED,
-                                      border: `1px solid ${load2 > 0 ? `color-mix(in srgb, ${over ? RED : GREEN} 45%, transparent)` : BORDER}`,
-                                      background: load2 > 0 ? `color-mix(in srgb, ${over ? RED : GREEN} 12%, transparent)` : "transparent",
-                                    }}>
-                                      {load2 > 0 ? `${Math.round(load2 * 100)}%${over ? " ⚠" : ""}` : "Disponible"}
-                                    </span>
-                                  </div>
-                                  {entries.length > 0 && (
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                                      {entries.map((e) => (
-                                        <span key={e.projectId} style={{ fontSize: 10.5, color: MUTED, background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 999, padding: "2px 8px" }}>
-                                          {e.projectName} · {Math.round(e.pct * 100)}%
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                            {candidatesFor(row).length === 0 && (
-                              <div style={{ padding: 10, fontSize: 12, color: MUTED }}>Aucune ressource {row.profile} dans le pool.</div>
-                            )}
-                          </div>
-                          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                            <input type="number" min="0" max="200" value={pick.pct} onChange={(e) => setPick({ ...pick, pct: Number(e.target.value) })}
-                              style={{ ...inputStyle, width: 80 }} />
-                            <span style={{ fontSize: 12.5, color: MUTED }}>%</span>
-                            <button disabled={!pick.poolMemberId} onClick={() => submitAllocation(row)}
-                              style={{ ...btnPrimary, opacity: pick.poolMemberId ? 1 : 0.5, cursor: pick.poolMemberId ? "pointer" : "not-allowed" }}>
-                              {canManageAllocations ? "Ajouter l'affectation" : "Proposer cette affectation"}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                  <tr key={row.key} style={{ borderTop: i === 0 ? `1px solid ${BORDER}` : "none" }}>
+                    {i === 0 && (
+                      <>
+                        <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>
+                          <button onClick={() => onOpenProject(g.projectId)} style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 13, padding: 0 }}>{g.projectName}</button>
+                        </Td>
+                        <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.svo}</Td>
+                        <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.periodLabel}</Td>
+                      </>
                     )}
-                  </Fragment>
+                    <Td>{row.profile}</Td>
+                    <Td>{row.demanded}</Td>
+                    <Td>{row.allocated}</Td>
+                    <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
+                    <Td><Badge color={STATUS_BADGE[row.status]?.color || MUTED} text={STATUS_BADGE[row.status]?.text || row.status} /></Td>
+                  </tr>
                 ))}
               </Fragment>
             ))}
             {visibleRows.length === 0 && (
-              <tr><td colSpan={9} style={{ padding: 24, textAlign: "center", color: MUTED }}>
+              <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: MUTED }}>
                 {hideCovered ? "Aucun besoin en attente — tout est couvert." : "Aucune demande soumise pour l'instant."}
               </td></tr>
             )}

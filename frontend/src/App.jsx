@@ -231,10 +231,8 @@ export default function App() {
         )}
 
         {tab === "demandes" && (can.viewDemandQueue || can.proposeAllocations) && (
-          <DemandQueue pool={pool} teamPool={dashboard?.pool || []} overAllocGrid={dashboard?.overAllocGrid || {}} overAllocProjects={dashboard?.overAllocProjects || {}}
-            canManageAllocations={can.manageAllocations} canProposeAllocations={can.proposeAllocations}
+          <DemandQueue canManageAllocations={can.manageAllocations}
             onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }}
-            onAllocated={() => { refreshProjects(); refreshDashboard(); }}
           />
         )}
 
