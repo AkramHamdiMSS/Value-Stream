@@ -3,12 +3,16 @@ const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { effective, generatePeriods, inRange } = require("../lib/periods");
+const { PROFILES, PROFILE_FIELDS } = require("../lib/profiles");
 
 const router = express.Router();
 router.use(authenticate);
 
 function round1(n) {
   return Math.round((n + Number.EPSILON) * 10) / 10;
+}
+function zeroByProfile() {
+  return Object.fromEntries(PROFILES.map((p) => [p, 0]));
 }
 
 function canViewAllProjects(user) {
@@ -52,7 +56,12 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     }
   }
 
-  return { pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad })), overAllocGrid, overAllocProjects, alertCount };
+  return {
+    pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad, sousEquipe: p.sousEquipe })),
+    overAllocGrid,
+    overAllocProjects,
+    alertCount,
+  };
 }
 
 router.get("/", requirePermission("viewDashboard"), async (req, res) => {
@@ -79,48 +88,36 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
     prisma.project.findMany({ include: { demandLines: true } }),
   ]);
 
-  const map = Object.fromEntries(periods.map((p) => [p, { period: p, Mobile: 0, TPE: 0, Digital: 0 }]));
-  let besoinMobile = 0, besoinTpe = 0, besoinDigital = 0;
+  const map = Object.fromEntries(periods.map((p) => [p, { period: p, ...zeroByProfile() }]));
+  const besoin = zeroByProfile();
   for (const proj of projects) {
     for (const l of proj.demandLines) {
-      const effMobile = effective(l.mobileCount, l.mobilePct);
-      const effTpe = effective(l.tpeCount, l.tpePct);
-      const effDigital = effective(l.digitalCount, l.digitalPct);
-      besoinMobile += effMobile;
-      besoinTpe += effTpe;
-      besoinDigital += effDigital;
-      for (const p of periods) {
-        if (!inRange(p, l.periodStart, l.periodEnd)) continue;
-        map[p].Mobile = round1(map[p].Mobile + effMobile);
-        map[p].TPE = round1(map[p].TPE + effTpe);
-        map[p].Digital = round1(map[p].Digital + effDigital);
+      for (const { profile, countField, pctField } of PROFILE_FIELDS) {
+        const eff = effective(l[countField], l[pctField]);
+        besoin[profile] += eff;
+        for (const p of periods) {
+          if (inRange(p, l.periodStart, l.periodEnd)) map[p][profile] = round1(map[p][profile] + eff);
+        }
       }
     }
   }
   const demandByMonth = periods.map((p) => map[p]);
 
-  const capMobile = resourceLoad.pool.filter((p) => p.squad === "Mobile").length;
-  const capTpe = resourceLoad.pool.filter((p) => p.squad === "TPE").length;
-  const capDigital = resourceLoad.pool.filter((p) => p.squad === "Digital").length;
+  const cap = zeroByProfile();
+  for (const p of resourceLoad.pool) {
+    if (p.sousEquipe in cap) cap[p.sousEquipe] += 1;
+  }
+  const besoinTotal = Object.values(besoin).reduce((a, b) => a + b, 0);
+  const capTotal = Object.values(cap).reduce((a, b) => a + b, 0);
 
   res.json({
     scope: "all",
     periods,
     totals: {
-      besoinMobile: round1(besoinMobile),
-      besoinTpe: round1(besoinTpe),
-      besoinDigital: round1(besoinDigital),
-      besoinTotal: round1(besoinMobile + besoinTpe + besoinDigital),
-      capMobile,
-      capTpe,
-      capDigital,
-      capTotal: capMobile + capTpe + capDigital,
+      besoinTotal: round1(besoinTotal),
+      capTotal,
     },
-    bySquad: [
-      { name: "Mobile", besoin: round1(besoinMobile), capacite: capMobile },
-      { name: "TPE", besoin: round1(besoinTpe), capacite: capTpe },
-      { name: "Digital", besoin: round1(besoinDigital), capacite: capDigital },
-    ],
+    bySquad: PROFILES.map((name) => ({ name, besoin: round1(besoin[name]), capacite: cap[name] })),
     demandByMonth,
     ...resourceLoad,
     projectsCount: projects.length,
@@ -136,47 +133,38 @@ async function buildOwnDashboard(user, periods) {
     include: { demandLines: true, allocationLines: { include: { poolMember: true } } },
   });
 
-  const map = Object.fromEntries(periods.map((p) => [p, { period: p, Mobile: 0, TPE: 0, Digital: 0 }]));
-  let besoinMobile = 0, besoinTpe = 0, besoinDigital = 0;
-  let allocMobile = 0, allocTpe = 0, allocDigital = 0;
+  const map = Object.fromEntries(periods.map((p) => [p, { period: p, ...zeroByProfile() }]));
+  const besoin = zeroByProfile();
+  const alloc = zeroByProfile();
   let draftCount = 0, submittedCount = 0;
 
   const myProjects = projects.map((proj) => {
     if (!proj.demandSubmitted) draftCount++; else submittedCount++;
 
-    let pDemand = { Mobile: 0, TPE: 0, Digital: 0 };
+    const pDemand = zeroByProfile();
     for (const l of proj.demandLines) {
-      const effMobile = effective(l.mobileCount, l.mobilePct);
-      const effTpe = effective(l.tpeCount, l.tpePct);
-      const effDigital = effective(l.digitalCount, l.digitalPct);
-      pDemand.Mobile += effMobile;
-      pDemand.TPE += effTpe;
-      pDemand.Digital += effDigital;
-      besoinMobile += effMobile;
-      besoinTpe += effTpe;
-      besoinDigital += effDigital;
-      for (const p of periods) {
-        if (!inRange(p, l.periodStart, l.periodEnd)) continue;
-        map[p].Mobile = round1(map[p].Mobile + effMobile);
-        map[p].TPE = round1(map[p].TPE + effTpe);
-        map[p].Digital = round1(map[p].Digital + effDigital);
+      for (const { profile, countField, pctField } of PROFILE_FIELDS) {
+        const eff = effective(l[countField], l[pctField]);
+        pDemand[profile] += eff;
+        besoin[profile] += eff;
+        for (const p of periods) {
+          if (inRange(p, l.periodStart, l.periodEnd)) map[p][profile] = round1(map[p][profile] + eff);
+        }
       }
     }
 
-    let pAlloc = { Mobile: 0, TPE: 0, Digital: 0 };
+    const pAlloc = zeroByProfile();
     for (const l of proj.allocationLines) {
       if (l.status !== "approved") continue;
       const pct = Number(l.pct) || 0;
-      const squad = l.poolMember?.squad;
-      if (!squad) continue;
-      pAlloc[squad] += pct;
-      if (squad === "Mobile") allocMobile += pct;
-      else if (squad === "TPE") allocTpe += pct;
-      else if (squad === "Digital") allocDigital += pct;
+      const key = l.poolMember?.sousEquipe;
+      if (!(key in pAlloc)) continue;
+      pAlloc[key] += pct;
+      alloc[key] += pct;
     }
 
-    const demandTotal = pDemand.Mobile + pDemand.TPE + pDemand.Digital;
-    const allocTotal = pAlloc.Mobile + pAlloc.TPE + pAlloc.Digital;
+    const demandTotal = Object.values(pDemand).reduce((a, b) => a + b, 0);
+    const allocTotal = Object.values(pAlloc).reduce((a, b) => a + b, 0);
     return {
       id: proj.id,
       name: proj.name,
@@ -188,27 +176,17 @@ async function buildOwnDashboard(user, periods) {
     };
   });
 
-  const besoinTotal = besoinMobile + besoinTpe + besoinDigital;
-  const allocTotal = allocMobile + allocTpe + allocDigital;
+  const besoinTotal = Object.values(besoin).reduce((a, b) => a + b, 0);
+  const allocTotal = Object.values(alloc).reduce((a, b) => a + b, 0);
 
   return {
     scope: "own",
     totals: {
-      besoinMobile: round1(besoinMobile),
-      besoinTpe: round1(besoinTpe),
-      besoinDigital: round1(besoinDigital),
       besoinTotal: round1(besoinTotal),
-      allocMobile: round1(allocMobile),
-      allocTpe: round1(allocTpe),
-      allocDigital: round1(allocDigital),
       allocTotal: round1(allocTotal),
       ecartTotal: round1(allocTotal - besoinTotal),
     },
-    bySquad: [
-      { name: "Mobile", besoin: round1(besoinMobile), alloue: round1(allocMobile) },
-      { name: "TPE", besoin: round1(besoinTpe), alloue: round1(allocTpe) },
-      { name: "Digital", besoin: round1(besoinDigital), alloue: round1(allocDigital) },
-    ],
+    bySquad: PROFILES.map((name) => ({ name, besoin: round1(besoin[name]), alloue: round1(alloc[name]) })),
     demandByMonth: periods.map((p) => map[p]),
     projectsCount: projects.length,
     draftCount,

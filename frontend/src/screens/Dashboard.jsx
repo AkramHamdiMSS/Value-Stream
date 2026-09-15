@@ -3,8 +3,10 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle } from "lucide-react";
-import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, RED, CARD_SHADOW } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, AMBER, RED, CARD_SHADOW } from "../styles";
 import { Kpi, Th, Td, Badge } from "../components/ui";
+
+const PROFILE_COLORS = { Mobile: ACCENT2, "TPE Android": GREEN, "TPE Engage": AMBER, Digital: ACCENT };
 
 export default function Dashboard({ data, periods: periodDefs, onOpenProject, minimalDashboard }) {
   if (!data) {
@@ -63,9 +65,9 @@ function OwnDashboard({ data, labelFor, onOpenProject, minimalDashboard }) {
                   <YAxis stroke={MUTED} fontSize={11} />
                   <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Line type="monotone" dataKey="Mobile" stroke={ACCENT2} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="TPE" stroke={GREEN} strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="Digital" stroke={ACCENT} strokeWidth={2} dot={false} />
+                  {Object.entries(PROFILE_COLORS).map(([p, color]) => (
+                    <Line key={p} type="monotone" dataKey={p} stroke={color} strokeWidth={2} dot={false} />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -154,9 +156,9 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
               <YAxis stroke={MUTED} fontSize={11} />
               <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="Mobile" stroke={ACCENT2} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="TPE" stroke={GREEN} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="Digital" stroke={ACCENT} strokeWidth={2} dot={false} />
+              {Object.entries(PROFILE_COLORS).map(([p, color]) => (
+                <Line key={p} type="monotone" dataKey={p} stroke={color} strokeWidth={2} dot={false} />
+              ))}
             </LineChart>
           </ResponsiveContainer>
         </div>

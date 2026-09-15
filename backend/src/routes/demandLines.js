@@ -29,10 +29,12 @@ const patchSchema = z.object({
   periodStart: z.string().trim().min(1).optional(),
   periodEnd: z.string().trim().min(1).optional(),
   mobileCount: z.number().nonnegative().optional(),
-  tpeCount: z.number().nonnegative().optional(),
+  tpeAndroidCount: z.number().nonnegative().optional(),
+  tpeEngageCount: z.number().nonnegative().optional(),
   digitalCount: z.number().nonnegative().optional(),
   mobilePct: z.number().min(0).max(2).nullable().optional(),
-  tpePct: z.number().min(0).max(2).nullable().optional(),
+  tpeAndroidPct: z.number().min(0).max(2).nullable().optional(),
+  tpeEngagePct: z.number().min(0).max(2).nullable().optional(),
   digitalPct: z.number().min(0).max(2).nullable().optional(),
 });
 

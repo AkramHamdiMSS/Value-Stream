@@ -2,17 +2,14 @@ import { Fragment, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { SURFACE, SURFACE2, BORDER, TEXT, MUTED, inputStyle, btnGhost } from "../styles";
 import { Th, Td } from "./ui";
+import { PROFILE_FIELDS } from "../lib/profiles";
 
-const SQUADS = [
-  { key: "mobileCount", pctKey: "mobilePct", label: "Mobile" },
-  { key: "tpeCount", pctKey: "tpePct", label: "TPE" },
-  { key: "digitalCount", pctKey: "digitalPct", label: "Digital" },
-];
+const SQUADS = PROFILE_FIELDS.map((p) => ({ key: p.countKey, pctKey: p.pctKey, label: p.profile }));
 
-// One demand line = one Début/Fin spanning three squad rows (Mobile/TPE/
-// Digital), each with its own headcount AND its own allocation % — Début
-// and Fin are shown once per line (rowSpan 3) since the range applies to
-// all three squads, but the % doesn't have to match across them.
+// One demand line = one Début/Fin spanning four profile rows (Mobile/TPE
+// Android/TPE Engage/Digital), each with its own headcount AND its own
+// allocation % — Début and Fin are shown once per line (rowSpan) since the
+// range applies to all four, but the % doesn't have to match across them.
 export default function DemandTable({ lines, periods, editable, onAdd, onPatch, onRemove }) {
   const [local, setLocal] = useState(lines);
   useEffect(() => setLocal(lines), [lines]);
@@ -40,14 +37,14 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
                 <tr key={sq.key} style={{ borderTop: i === 0 ? `1px solid ${BORDER}` : "none" }}>
                   {i === 0 && (
                     <>
-                      <Td rowSpan={3} style={{ verticalAlign: "top" }}>
+                      <Td rowSpan={SQUADS.length} style={{ verticalAlign: "top" }}>
                         {editable ? (
                           <select value={line.periodStart ?? ""} onChange={(e) => { setLocalValue(line.id, "periodStart", e.target.value); onPatch(line.id, "periodStart", e.target.value); }} style={inputStyle}>
                             {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                           </select>
                         ) : <span style={{ color: TEXT }}>{periodLabel(line.periodStart)}</span>}
                       </Td>
-                      <Td rowSpan={3} style={{ verticalAlign: "top" }}>
+                      <Td rowSpan={SQUADS.length} style={{ verticalAlign: "top" }}>
                         {editable ? (
                           <select value={line.periodEnd ?? ""} onChange={(e) => { setLocalValue(line.id, "periodEnd", e.target.value); onPatch(line.id, "periodEnd", e.target.value); }} style={inputStyle}>
                             {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
@@ -75,7 +72,7 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
                     ) : <span style={{ color: MUTED }}>{line[sq.pctKey] === null || line[sq.pctKey] === undefined ? "100%" : `${Math.round(Number(line[sq.pctKey]) * 100)}%`}</span>}
                   </Td>
                   {i === 0 && editable && (
-                    <Td rowSpan={3} style={{ verticalAlign: "top" }}>
+                    <Td rowSpan={SQUADS.length} style={{ verticalAlign: "top" }}>
                       <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
                         <Trash2 size={14} />
                       </button>

@@ -4,8 +4,9 @@ const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { effective, inRange } = require("../lib/periods");
+const { PROFILES, PROFILE_FIELDS } = require("../lib/profiles");
 const { logActivity } = require("../lib/activity");
-const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe, notifyTeamLeadsForSquad, projectLink } = require("../lib/notify");
+const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe, projectLink } = require("../lib/notify");
 
 const router = express.Router();
 router.use(authenticate);
@@ -23,25 +24,24 @@ function rangeLabel(line) {
 }
 
 function computeTotals(project) {
-  let dMobile = 0, dTpe = 0, dDigital = 0;
+  const demand = Object.fromEntries(PROFILES.map((p) => [p, 0]));
   for (const l of project.demandLines) {
-    dMobile += effective(l.mobileCount, l.mobilePct);
-    dTpe += effective(l.tpeCount, l.tpePct);
-    dDigital += effective(l.digitalCount, l.digitalPct);
+    for (const { profile, countField, pctField } of PROFILE_FIELDS) {
+      demand[profile] += effective(l[countField], l[pctField]);
+    }
   }
-  let aMobile = 0, aTpe = 0, aDigital = 0;
+  const alloc = Object.fromEntries(PROFILES.map((p) => [p, 0]));
   // Pending (unapproved) proposals don't count as real capacity yet.
   for (const l of project.allocationLines) {
     if (l.status !== "approved") continue;
-    const pct = Number(l.pct) || 0;
-    const squad = l.poolMember?.squad;
-    if (squad === "Mobile") aMobile += pct;
-    else if (squad === "TPE") aTpe += pct;
-    else if (squad === "Digital") aDigital += pct;
+    const key = l.poolMember?.sousEquipe;
+    if (key in alloc) alloc[key] += Number(l.pct) || 0;
   }
+  const dTotal = Object.values(demand).reduce((a, b) => a + b, 0);
+  const aTotal = Object.values(alloc).reduce((a, b) => a + b, 0);
   return {
-    demand: { Mobile: dMobile, TPE: dTpe, Digital: dDigital, total: dMobile + dTpe + dDigital },
-    alloc: { Mobile: aMobile, TPE: aTpe, Digital: aDigital, total: aMobile + aTpe + aDigital },
+    demand: { ...demand, total: dTotal },
+    alloc: { ...alloc, total: aTotal },
   };
 }
 
@@ -161,10 +161,10 @@ router.patch("/:id", async (req, res) => {
       return res.status(400).json({ error: "Ajoutez au moins une ligne de besoin avant de soumettre la demande." });
     }
     const emptyLine = project.demandLines.find((l) =>
-      Number(l.mobileCount) <= 0 && Number(l.tpeCount) <= 0 && Number(l.digitalCount) <= 0
+      PROFILE_FIELDS.every(({ countField }) => Number(l[countField]) <= 0)
     );
     if (emptyLine) {
-      return res.status(400).json({ error: "Chaque ligne de besoin doit avoir un effectif supérieur à 0 sur au moins un profil (Mobile, TPE ou Digital)." });
+      return res.status(400).json({ error: `Chaque ligne de besoin doit avoir un effectif supérieur à 0 sur au moins un profil (${PROFILES.join(", ")}).` });
     }
   }
 
@@ -198,23 +198,24 @@ router.patch("/:id", async (req, res) => {
       link
     );
 
-    // Team/Tech Leads of each demanded squad get a heads-up too, so they can
-    // start anticipating who they might propose — one demand row spans all
-    // three squads at once, so each is checked independently.
-    const bySquad = {};
+    // Team/Tech Leads of each demanded sous-équipe get a heads-up too, so
+    // they can start anticipating who they might propose — one demand row
+    // spans all four profiles at once, so each is checked independently,
+    // and a TPE Android lead only hears about TPE Android demand.
+    const byProfile = {};
     for (const dl of updated.demandLines) {
-      for (const [squad, countField, pctField] of [["Mobile", "mobileCount", "mobilePct"], ["TPE", "tpeCount", "tpePct"], ["Digital", "digitalCount", "digitalPct"]]) {
+      for (const { profile, countField, pctField } of PROFILE_FIELDS) {
         const eff = effective(dl[countField], dl[pctField]);
         if (eff <= 0) continue;
-        (bySquad[squad] ??= []).push(`${rangeLabel(dl)} (${eff})`);
+        (byProfile[profile] ??= []).push(`${rangeLabel(dl)} (${eff})`);
       }
     }
     await Promise.all(
-      Object.entries(bySquad).map(([squad, lines]) =>
-        notifyTeamLeadsForSquad(
-          squad,
+      Object.entries(byProfile).map(([profile, lines]) =>
+        notifyTeamLeadsForSousEquipe(
+          profile,
           `Demande à prévoir — ${updated.name}`,
-          `${req.user.name} (SVO) a soumis une demande ${squad} pour "${updated.name}" : ${lines.join(", ")}. À vous de proposer une affectation le moment venu.`,
+          `${req.user.name} (SVO) a soumis une demande ${profile} pour "${updated.name}" : ${lines.join(", ")}. À vous de proposer une affectation le moment venu.`,
           link
         )
       )
@@ -244,10 +245,12 @@ const demandLineSchema = z.object({
   periodStart: z.string().trim().min(1),
   periodEnd: z.string().trim().min(1),
   mobileCount: z.number().nonnegative(),
-  tpeCount: z.number().nonnegative(),
+  tpeAndroidCount: z.number().nonnegative(),
+  tpeEngageCount: z.number().nonnegative(),
   digitalCount: z.number().nonnegative(),
   mobilePct: z.number().min(0).max(2).nullable().optional(),
-  tpePct: z.number().min(0).max(2).nullable().optional(),
+  tpeAndroidPct: z.number().min(0).max(2).nullable().optional(),
+  tpeEngagePct: z.number().min(0).max(2).nullable().optional(),
   digitalPct: z.number().min(0).max(2).nullable().optional(),
 });
 
@@ -258,7 +261,7 @@ router.post("/:id/demand-lines", async (req, res) => {
   if (!isOwner) return res.status(403).json({ error: "Seul le SVO du projet peut éditer le besoin." });
   if (project.demandSubmitted) return res.status(409).json({ error: "La demande est soumise — rouvrez-la pour modifier." });
 
-  const parsed = demandLineSchema.partial({ mobileCount: true, tpeCount: true, digitalCount: true }).safeParse(req.body);
+  const parsed = demandLineSchema.partial({ mobileCount: true, tpeAndroidCount: true, tpeEngageCount: true, digitalCount: true }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Ligne invalide." });
   const periodStart = parsed.data.periodStart ?? "";
   const periodEnd = parsed.data.periodEnd ?? periodStart;
@@ -270,10 +273,12 @@ router.post("/:id/demand-lines", async (req, res) => {
       periodStart,
       periodEnd,
       mobileCount: parsed.data.mobileCount ?? 0,
-      tpeCount: parsed.data.tpeCount ?? 0,
+      tpeAndroidCount: parsed.data.tpeAndroidCount ?? 0,
+      tpeEngageCount: parsed.data.tpeEngageCount ?? 0,
       digitalCount: parsed.data.digitalCount ?? 0,
       mobilePct: parsed.data.mobilePct ?? null,
-      tpePct: parsed.data.tpePct ?? null,
+      tpeAndroidPct: parsed.data.tpeAndroidPct ?? null,
+      tpeEngagePct: parsed.data.tpeEngagePct ?? null,
       digitalPct: parsed.data.digitalPct ?? null,
     },
   });
@@ -384,15 +389,15 @@ router.get("/:id/synthesis", async (req, res) => {
   project.allocationLines.forEach((l) => { periods.add(l.periodStart); periods.add(l.periodEnd); });
 
   const rows = [...periods].sort().map((period) => {
-    const row = { period, Mobile: { dem: 0, alloc: 0 }, TPE: { dem: 0, alloc: 0 }, Digital: { dem: 0, alloc: 0 } };
+    const row = { period, ...Object.fromEntries(PROFILES.map((p) => [p, { dem: 0, alloc: 0 }])) };
     project.demandLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
-      row.Mobile.dem += effective(l.mobileCount, l.mobilePct);
-      row.TPE.dem += effective(l.tpeCount, l.tpePct);
-      row.Digital.dem += effective(l.digitalCount, l.digitalPct);
+      for (const { profile, countField, pctField } of PROFILE_FIELDS) {
+        row[profile].dem += effective(l[countField], l[pctField]);
+      }
     });
     project.allocationLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
-      const squad = l.poolMember?.squad;
-      if (squad) row[squad].alloc += Number(l.pct) || 0;
+      const key = l.poolMember?.sousEquipe;
+      if (key in row) row[key].alloc += Number(l.pct) || 0;
     });
     return row;
   });

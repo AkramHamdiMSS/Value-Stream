@@ -3,6 +3,7 @@ const prisma = require("../lib/prisma");
 const { authenticate } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { effective } = require("../lib/periods");
+const { PROFILE_FIELDS } = require("../lib/profiles");
 
 const router = express.Router();
 router.use(authenticate);
@@ -17,11 +18,12 @@ router.get("/", async (req, res) => {
   if (!canViewAll && !canPropose) return res.status(403).json({ error: "Accès refusé." });
 
   // A Team/Tech Lead without the full queue only sees demand for their own
-  // squad, wherever it comes from in the org — not just projects they own.
-  let squadFilter = null;
+  // sous-équipe (e.g. TPE Android, not all of TPE), wherever it comes from
+  // in the org — not just projects they own.
+  let sousEquipeFilter = null;
   if (!canViewAll && canPropose) {
     const self = await prisma.poolMember.findFirst({ where: { name: req.user.name } });
-    squadFilter = self?.squad ?? null;
+    sousEquipeFilter = self?.sousEquipe ?? null;
   }
 
   const projects = await prisma.project.findMany({
@@ -33,10 +35,10 @@ router.get("/", async (req, res) => {
   for (const proj of projects) {
     for (const line of proj.demandLines) {
       if (!line.periodStart || !line.periodEnd) continue;
-      // One demand row now covers all three squads — emit up to one queue
-      // row per squad it actually has headcount for.
-      for (const [profile, countField, pctField] of [["Mobile", "mobileCount", "mobilePct"], ["TPE", "tpeCount", "tpePct"], ["Digital", "digitalCount", "digitalPct"]]) {
-        if (squadFilter && profile !== squadFilter) continue;
+      // One demand row now covers all four profiles — emit up to one queue
+      // row per profile it actually has headcount for.
+      for (const { profile, countField, pctField } of PROFILE_FIELDS) {
+        if (sousEquipeFilter && profile !== sousEquipeFilter) continue;
         const demanded = effective(line[countField], line[pctField]);
         if (demanded <= 0) continue;
         let allocated = 0;
@@ -44,7 +46,7 @@ router.get("/", async (req, res) => {
         for (const a of proj.allocationLines) {
           // Overlap, not exact match — either range can now span multiple weeks.
           if (a.periodStart > line.periodEnd || a.periodEnd < line.periodStart) continue;
-          if (a.poolMember?.squad !== profile) continue;
+          if (a.poolMember?.sousEquipe !== profile) continue;
           if (a.status === "approved") allocated += Number(a.pct) || 0;
           else if (a.status === "pending") hasPending = true;
         }

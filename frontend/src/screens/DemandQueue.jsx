@@ -39,7 +39,10 @@ export default function DemandQueue({ pool, teamPool, overAllocGrid, overAllocPr
   const canAct = canManageAllocations || canProposeAllocations;
   // A propose-only viewer only picks from their own team.
   const candidatePool = canManageAllocations ? pool : (teamPool?.length ? teamPool : pool);
-  const candidatesFor = (row) => candidatePool.filter((r) => r.squad === row.profile);
+  // row.profile is now a sous-équipe (e.g. "TPE Android"), not a squad —
+  // Mobile/Digital pool members have a sous-équipe matching their squad
+  // name, so this still works uniformly for all four profiles.
+  const candidatesFor = (row) => candidatePool.filter((r) => r.sousEquipe === row.profile);
   const rangeLabel = (row) => (row.periodStart === row.periodEnd ? row.periodStart : `${row.periodStart} → ${row.periodEnd}`);
   // Weeks from the resource-load grid that fall within a row's span — the
   // grid is already keyed by week id, so membership is just string range

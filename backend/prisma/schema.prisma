@@ -82,15 +82,20 @@ model DemandLine {
   // both are period ids like "2026-W40", ordered so periodStart <= periodEnd.
   periodStart  String  @map("period_start")
   periodEnd    String  @map("period_end")
-  // One row for the whole squad breakdown of a range, instead of a separate
-  // row per squad — each squad keeps its own headcount AND its own
-  // allocation % (null = 100%), since they don't have to match.
-  mobileCount  Decimal  @default(0) @db.Decimal(10, 2) @map("mobile_count")
-  tpeCount     Decimal  @default(0) @db.Decimal(10, 2) @map("tpe_count")
-  digitalCount Decimal  @default(0) @db.Decimal(10, 2) @map("digital_count")
-  mobilePct    Decimal? @db.Decimal(6, 4) @map("mobile_pct")
-  tpePct       Decimal? @db.Decimal(6, 4) @map("tpe_pct")
-  digitalPct   Decimal? @db.Decimal(6, 4) @map("digital_pct")
+  // One row for the whole profile breakdown of a range, instead of a
+  // separate row per profile — each keeps its own headcount AND its own
+  // allocation % (null = 100%). TPE splits into its two sous-équipes
+  // (Android/Engage) since that squad alone has more than one; Mobile and
+  // Digital each have exactly one sous-équipe matching the squad name, so
+  // they don't need the same split.
+  mobileCount     Decimal  @default(0) @db.Decimal(10, 2) @map("mobile_count")
+  tpeAndroidCount Decimal  @default(0) @db.Decimal(10, 2) @map("tpe_android_count")
+  tpeEngageCount  Decimal  @default(0) @db.Decimal(10, 2) @map("tpe_engage_count")
+  digitalCount    Decimal  @default(0) @db.Decimal(10, 2) @map("digital_count")
+  mobilePct       Decimal? @db.Decimal(6, 4) @map("mobile_pct")
+  tpeAndroidPct   Decimal? @db.Decimal(6, 4) @map("tpe_android_pct")
+  tpeEngagePct    Decimal? @db.Decimal(6, 4) @map("tpe_engage_pct")
+  digitalPct      Decimal? @db.Decimal(6, 4) @map("digital_pct")
 
   @@index([projectId])
   @@map("demand_lines")

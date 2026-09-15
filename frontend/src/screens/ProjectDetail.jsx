@@ -6,6 +6,7 @@ import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADO
 import { Th, Td, Field, SectionTitle, Badge } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 import DemandTable from "../components/DemandTable";
+import { PROFILES, PROFILE_FIELDS } from "../lib/profiles";
 
 export default function ProjectDetail({ projectId, canViewAll, canManageProjects, canManageAllocations, canProposeAllocations, user, svoUsers, pool, teamPool, periods, overAllocProjects, onBack, onProjectsChanged }) {
   const [project, setProject] = useState(null);
@@ -72,18 +73,17 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   };
 
   // ---- demand lines ----
-  // One row = one span of weeks, with a headcount per squad (Mobile/TPE/
-  // Digital) right on that same row — no more picking which squads apply,
-  // they're just three columns.
+  // One row = one span of weeks, with a headcount per profile (Mobile/TPE
+  // Android/TPE Engage/Digital) right on that same row — no more picking
+  // which profiles apply, they're just columns.
   const addDemandLine = async () => {
     const p = periods[0]?.id || "";
-    const line = await api.post(`/projects/${project.id}/demand-lines`, {
-      periodStart: p, periodEnd: p, mobileCount: 0, tpeCount: 0, digitalCount: 0, mobilePct: null, tpePct: null, digitalPct: null,
-    });
+    const blank = Object.fromEntries(PROFILE_FIELDS.flatMap((f) => [[f.countKey, 0], [f.pctKey, null]]));
+    const line = await api.post(`/projects/${project.id}/demand-lines`, { periodStart: p, periodEnd: p, ...blank });
     setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, line] }));
     notifyChanged();
   };
-  const countKeys = ["mobileCount", "tpeCount", "digitalCount"];
+  const countKeys = PROFILE_FIELDS.map((f) => f.countKey);
   const patchDemandLine = async (id, key, value) => {
     const payload = { [key]: countKeys.includes(key) ? Number(value) || 0 : value };
     const updated = await api.patch(`/demand-lines/${id}`, payload);
@@ -157,26 +157,26 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   };
 
   const synthesis = relevantPeriods.map((period) => {
-    const row = { period, Mobile: { dem: 0, alloc: 0 }, TPE: { dem: 0, alloc: 0 }, Digital: { dem: 0, alloc: 0 } };
+    const row = { period, ...Object.fromEntries(PROFILES.map((p) => [p, { dem: 0, alloc: 0 }])) };
     project.demandLines.filter((l) => l.periodStart <= period && period <= l.periodEnd).forEach((l) => {
-      row.Mobile.dem += effective(l.mobileCount, l.mobilePct);
-      row.TPE.dem += effective(l.tpeCount, l.tpePct);
-      row.Digital.dem += effective(l.digitalCount, l.digitalPct);
+      for (const { profile, countKey, pctKey } of PROFILE_FIELDS) {
+        row[profile].dem += effective(l[countKey], l[pctKey]);
+      }
     });
     project.allocationLines.filter((l) => l.status === "approved" && l.periodStart <= period && period <= l.periodEnd).forEach((l) => {
       const res = poolById[l.poolMemberId];
-      if (res) row[res.squad].alloc += Number(l.pct) || 0;
+      if (res && res.sousEquipe in row) row[res.sousEquipe].alloc += Number(l.pct) || 0;
     });
     return row;
   });
 
-  const resteTotal = { Mobile: 0, TPE: 0, Digital: 0 };
+  const resteTotal = Object.fromEntries(PROFILES.map((p) => [p, 0]));
   synthesis.forEach((row) => {
-    ["Mobile", "TPE", "Digital"].forEach((sq) => {
-      resteTotal[sq] += Math.max(0, row[sq].dem - row[sq].alloc);
+    PROFILES.forEach((p) => {
+      resteTotal[p] += Math.max(0, row[p].dem - row[p].alloc);
     });
   });
-  const totalReste = resteTotal.Mobile + resteTotal.TPE + resteTotal.Digital;
+  const totalReste = Object.values(resteTotal).reduce((a, b) => a + b, 0);
 
   const periodOptions = periods.map((p) => p.id);
   const periodLabels = periods.map((p) => p.label);
@@ -232,7 +232,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         border: `1px solid ${totalReste > 0.001 ? AMBER : GREEN}`,
       }}>
         {totalReste > 0.001
-          ? `Reste à affecter : Mobile ${round1(resteTotal.Mobile)} · TPE ${round1(resteTotal.TPE)} · Digital ${round1(resteTotal.Digital)}`
+          ? `Reste à affecter : ${PROFILES.map((p) => `${p} ${round1(resteTotal[p])}`).join(" · ")}`
           : "Besoin entièrement couvert ✓"}
       </div>
 
@@ -381,16 +381,18 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
               <thead>
                 <tr style={{ background: SURFACE2 }}>
                   <Th>Période</Th>
-                  <Th>Dem. Mobile</Th><Th>All. Mobile</Th><Th>Écart</Th>
-                  <Th>Dem. TPE</Th><Th>All. TPE</Th><Th>Écart</Th>
-                  <Th>Dem. Digital</Th><Th>All. Digital</Th><Th>Écart</Th>
+                  {PROFILES.map((p) => (
+                    <Fragment key={p}>
+                      <Th>Dem. {p}</Th><Th>All. {p}</Th><Th>Écart</Th>
+                    </Fragment>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {synthesis.map((row) => (
                   <tr key={row.period} style={{ borderTop: `1px solid ${BORDER}` }}>
                     <Td>{row.period}</Td>
-                    {["Mobile", "TPE", "Digital"].map((sq) => {
+                    {PROFILES.map((sq) => {
                       const ecart = round1(row[sq].alloc - row[sq].dem);
                       return (
                         <Fragment key={sq}>
