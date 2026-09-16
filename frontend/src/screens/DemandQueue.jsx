@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, BellRing, Check } from "lucide-react";
 import { api } from "../api";
+import { showToast } from "../lib/toast";
 import { SURFACE, SURFACE2, BORDER, MUTED, ACCENT, GREEN, AMBER, RED, CARD_SHADOW, btnGhost } from "../styles";
 import { Th, Td, Badge } from "../components/ui";
 
@@ -21,11 +22,31 @@ export default function DemandQueue({ canManageAllocations, onOpenProject, refre
   const [hideCovered, setHideCovered] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
   const [error, setError] = useState("");
+  const [sendingKey, setSendingKey] = useState(null);
+  const [sentKeys, setSentKeys] = useState(() => new Set());
 
   const load = () => {
     api.get("/demand-queue").then(setRows).catch((e) => setError(e.message));
   };
   useEffect(load, [refreshKey]);
+
+  const sendReminder = async (row) => {
+    setSendingKey(row.key);
+    try {
+      const { sentTo } = await api.post(`/demand-queue/${encodeURIComponent(row.key)}/remind`);
+      setSentKeys((prev) => new Set(prev).add(row.key));
+      showToast(
+        sentTo > 0
+          ? `Rappel envoyé à ${sentTo} Team Lead${sentTo > 1 ? "s" : ""} (${row.profile}).`
+          : `Aucun Team Lead configuré pour ${row.profile} — rappel non envoyé.`,
+        sentTo > 0 ? "success" : "error"
+      );
+    } catch {
+      // api.js already toasts the error.
+    } finally {
+      setSendingKey(null);
+    }
+  };
 
   if (!rows) {
     return <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, padding: 40 }}><Loader2 className="animate-spin" size={18} /> Chargement…</div>;
@@ -85,33 +106,56 @@ export default function DemandQueue({ canManageAllocations, onOpenProject, refre
           <thead>
             <tr style={{ background: SURFACE2 }}>
               <Th>Projet</Th><Th>SVO</Th><Th>Période</Th><Th>Profil</Th><Th>Demandé</Th><Th>Alloué</Th><Th>Écart</Th><Th>Statut</Th>
+              {canManageAllocations && <Th></Th>}
             </tr>
           </thead>
           <tbody>
             {groups.map((g) => (
               <Fragment key={g.key}>
-                {g.rows.map((row, i) => (
-                  <tr key={row.key} style={{ borderTop: i === 0 ? `1px solid ${BORDER}` : "none" }}>
-                    {i === 0 && (
-                      <>
-                        <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>
-                          <button onClick={() => onOpenProject(g.projectId)} style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 13, padding: 0 }}>{g.projectName}</button>
+                {g.rows.map((row, i) => {
+                  const sent = sentKeys.has(row.key);
+                  const sending = sendingKey === row.key;
+                  return (
+                    <tr key={row.key} style={{ borderTop: i === 0 ? `1px solid ${BORDER}` : "none" }}>
+                      {i === 0 && (
+                        <>
+                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>
+                            <button onClick={() => onOpenProject(g.projectId)} style={{ background: "none", border: "none", color: ACCENT, cursor: "pointer", fontSize: 13, padding: 0 }}>{g.projectName}</button>
+                          </Td>
+                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.svo}</Td>
+                          <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.periodLabel}</Td>
+                        </>
+                      )}
+                      <Td>{row.profile}</Td>
+                      <Td>{row.demanded}</Td>
+                      <Td>{row.allocated}</Td>
+                      <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
+                      <Td><Badge color={STATUS_BADGE[row.status]?.color || MUTED} text={STATUS_BADGE[row.status]?.text || row.status} /></Td>
+                      {canManageAllocations && (
+                        <Td>
+                          {row.status === "untreated" && (
+                            sent ? (
+                              <span style={{ display: "flex", alignItems: "center", gap: 4, color: GREEN, fontSize: 12, fontWeight: 600 }}>
+                                <Check size={13} /> Envoyé
+                              </span>
+                            ) : (
+                              <button onClick={() => sendReminder(row)} disabled={sending} style={{
+                                ...btnGhost, fontSize: 11.5, padding: "5px 10px", display: "flex", alignItems: "center", gap: 5,
+                                opacity: sending ? 0.6 : 1, cursor: sending ? "not-allowed" : "pointer",
+                              }}>
+                                {sending ? <Loader2 className="animate-spin" size={13} /> : <BellRing size={13} />} Rappel
+                              </button>
+                            )
+                          )}
                         </Td>
-                        <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.svo}</Td>
-                        <Td rowSpan={g.rows.length} style={{ verticalAlign: "top" }}>{g.periodLabel}</Td>
-                      </>
-                    )}
-                    <Td>{row.profile}</Td>
-                    <Td>{row.demanded}</Td>
-                    <Td>{row.allocated}</Td>
-                    <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
-                    <Td><Badge color={STATUS_BADGE[row.status]?.color || MUTED} text={STATUS_BADGE[row.status]?.text || row.status} /></Td>
-                  </tr>
-                ))}
+                      )}
+                    </tr>
+                  );
+                })}
               </Fragment>
             ))}
             {visibleRows.length === 0 && (
-              <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: MUTED }}>
+              <tr><td colSpan={canManageAllocations ? 9 : 8} style={{ padding: 24, textAlign: "center", color: MUTED }}>
                 {hideCovered ? "Aucun besoin en attente — tout est couvert." : "Aucune demande soumise pour l'instant."}
               </td></tr>
             )}

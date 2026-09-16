@@ -111,13 +111,14 @@ async function notifyPoolMember(poolMember, subject, text, link) {
 // whose own pool entry (matched by name, the existing convention in this app)
 // sits in that sous-équipe.
 async function notifyTeamLeadsForSousEquipe(sousEquipe, subject, text, link) {
-  if (!sousEquipe) return;
+  if (!sousEquipe) return 0;
   const members = await prisma.poolMember.findMany({ where: { sousEquipe }, select: { name: true } });
-  if (members.length === 0) return;
+  if (members.length === 0) return 0;
   const leads = await prisma.user.findMany({
     where: { name: { in: members.map((m) => m.name) }, permissions: { has: "proposeAllocations" } },
   });
   await Promise.all(leads.map((u) => sendEmail(u.email, subject, text, link)));
+  return leads.length;
 }
 
 module.exports = { sendEmail, notifyHSV, notifyUser, notifyPoolMember, notifyTeamLeadsForSousEquipe, projectLink };
