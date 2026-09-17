@@ -180,6 +180,11 @@ router.patch("/:id", async (req, res) => {
     const svo = await prisma.user.findUnique({ where: { id: data.svoUserId } });
     if (!svo || svo.role !== "svo") return res.status(400).json({ error: "SVO invalide." });
   }
+  // The demand comment belongs to the SVO who expressed the need — even a
+  // manageProjects admin (who can otherwise rename/reassign the project)
+  // can't rewrite it, only read it. Symmetric with validationComment on
+  // AllocationLine, which only the approver can ever write.
+  if (!isOwner) delete data.demandComment;
 
   const updated = await prisma.project.update({
     where: { id: project.id },
