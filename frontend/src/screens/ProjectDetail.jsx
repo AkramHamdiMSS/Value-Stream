@@ -271,10 +271,10 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         editable={canEditAlloc}
         rowEditable={isLineOwnedByMe}
         columns={[
-          { key: "periodStart", label: "Début", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
-          { key: "periodEnd", label: "Fin", type: "select", options: periodOptions, optionLabels: periodLabels, width: 100 },
+          { key: "periodStart", label: "Début", type: "select", options: periodOptions, optionLabels: periodLabels, width: 130 },
+          { key: "periodEnd", label: "Fin", type: "select", options: periodOptions, optionLabels: periodLabels, width: 130 },
           {
-            key: "poolMemberId", label: "Ressource", type: "select", options: resourceOptions.map((r) => r.id), optionLabels: resourceOptions.map((r) => `${r.name} (${r.sousEquipe})`), width: 220,
+            key: "poolMemberId", label: "Ressource", type: "select", options: resourceOptions.map((r) => r.id), optionLabels: resourceOptions.map((r) => `${r.name} (${r.sousEquipe})`), width: 260, grow: true,
             // Sous-équipe, not squad — "TPE" alone doesn't say whether this
             // person is Android or Engage, which is exactly what demand is
             // now split on, so the plain squad label invites mismatches.
@@ -303,12 +303,9 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
               );
             },
           },
-          { key: "pct", label: "Allocation %", type: "percent", width: 100 },
-          // Whoever proposes/assigns the line can explain their pick here —
-          // editable by the same people who can touch the rest of the row.
-          { key: "comment", label: "Commentaire", type: "text", width: 160 },
+          { key: "pct", label: "Allocation %", type: "percent", width: 110 },
           ...(canManageAllocations || canProposeAllocations ? [{
-            key: "status", label: "Statut", width: 130,
+            key: "status", label: "Statut", width: 140,
             render: (line) => (
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {line.status === "pending" ? <Badge color={AMBER} text="En attente" /> : <Badge color={GREEN} text="Confirmée" />}
@@ -320,14 +317,19 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
               </div>
             ),
           }] : []),
+          // Whoever proposes/assigns the line can explain their pick here —
+          // editable by the same people who can touch the rest of the row.
+          // Second field row: more room to actually type/read a sentence,
+          // instead of squeezed between five other columns.
+          { key: "comment", label: "Commentaire", type: "text", width: 240, group: "secondary" },
           // Belongs to whoever validates, not whoever proposed — only an
           // admin can ever write it, regardless of who else can touch the row.
           ...(canManageAllocations || canProposeAllocations ? [{
-            key: "validationComment", label: "Commentaire validation", width: 160,
+            key: "validationComment", label: "Commentaire validation", width: 240, group: "secondary",
             editable: () => canManageAllocations,
           }] : []),
           ...(isOwner || canManageAllocations ? [{
-            key: "release", label: "Libération", width: 220,
+            key: "release", label: "Libération", width: 220, group: "full",
             render: (line) => {
               // Releasing only makes sense for an already-confirmed line —
               // a pending proposal gets rejected/retracted instead (see Statut).

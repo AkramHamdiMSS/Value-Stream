@@ -1,14 +1,22 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { TEXT, MUTED, SURFACE, SURFACE2, BORDER, inputStyle, btnGhost } from "../styles";
-import { Th, Td } from "./ui";
 
-// Locally-buffered editable table: keystrokes update local state instantly, and
+// Locally-buffered editable card list: keystrokes update local state instantly, and
 // commit to the server on blur (text/number/percent) or immediately on select change.
 // `editable` gates whether adding new lines is offered at all; `rowEditable(line)`
 // (optional, defaults to `editable`) governs whether a SPECIFIC existing row can be
 // edited/deleted — e.g. a Team Lead who can only touch their own pending proposals,
 // not lines someone else already approved.
+//
+// Each line renders as a card instead of a dense table row — with this many fields
+// (period, resource, %, status, two comments, release), a single wide <tr> squeezed
+// every input down to unreadable/untypeable widths. A column's `group` ("primary",
+// the default, or "secondary") decides which of the card's two field rows it lands
+// in; `full` puts it on its own full-width row below both (release's multi-control
+// block needs the room). A column can also override row-level editability with its
+// own `editable` (bool or `(line) => bool`) — e.g. a validation comment that only
+// whoever approves should ever write, regardless of who else can touch the row.
 export default function LinesTable({ lines, columns, addLabel, editable = true, rowEditable, onAdd, onPatch, onRemove }) {
   const [local, setLocal] = useState(lines);
   useEffect(() => setLocal(lines), [lines]);
@@ -31,19 +39,10 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
     return col.optionLabels ? col.optionLabels[idx] : col.options[idx];
   };
 
-  const colCount = columns.length + (editable ? 1 : 0);
-
-  // A column can override row-level editability with its own — e.g. a
-  // validation comment that only whoever approves should ever write,
-  // regardless of who's otherwise allowed to touch this row.
-  const renderCell = (c, line, lineEditable) => {
-    const cellEditable = c.editable === undefined ? lineEditable : (typeof c.editable === "function" ? c.editable(line) : c.editable);
-    return (
-    c.render ? (
-      c.render(line)
-    ) : !cellEditable ? (
+  const renderControl = (c, line, cellEditable) => (
+    !cellEditable ? (
       <div>
-        <span style={{ color: c.type === "select" ? TEXT : MUTED }}>
+        <span style={{ fontSize: 13.5, color: c.type === "select" ? TEXT : MUTED }}>
           {c.type === "percent"
             ? (line[c.key] === "" || line[c.key] === undefined || line[c.key] === null ? "100%" : `${Math.round(Number(line[c.key]) * 100)}%`)
             : displayLabel(c, line)}
@@ -55,7 +54,7 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
         <select value={line[c.key] ?? ""} onChange={(e) => {
           setLocalValue(line.id, c.key, e.target.value);
           onPatch(line.id, c.key, e.target.value);
-        }} style={{ ...inputStyle, width: c.width }}>
+        }} style={{ ...inputStyle, width: "100%" }}>
           <option value="">—</option>
           {c.options.map((opt, i) => (
             <option key={opt} value={opt}>{c.optionLabels ? c.optionLabels[i] : opt}</option>
@@ -68,51 +67,80 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
         value={line[c.key] === "" || line[c.key] === undefined || line[c.key] === null ? "" : Math.round(Number(line[c.key]) * 100)}
         onChange={(e) => setLocalValue(line.id, c.key, e.target.value === "" ? "" : Number(e.target.value) / 100)}
         onBlur={(e) => onPatch(line.id, c.key, e.target.value === "" ? null : Number(e.target.value) / 100)}
-        style={{ ...inputStyle, width: c.width }} />
+        style={{ ...inputStyle, width: "100%" }} />
     ) : (
       <input type={c.type === "number" ? "number" : "text"} value={line[c.key] ?? ""}
         onChange={(e) => setLocalValue(line.id, c.key, c.type === "number" ? Number(e.target.value) : e.target.value)}
         onBlur={(e) => onPatch(line.id, c.key, c.type === "number" ? Number(e.target.value) : e.target.value)}
-        style={{ ...inputStyle, width: c.width }} />
+        style={{ ...inputStyle, width: "100%" }} />
     )
+  );
+
+  // A column can override row-level editability with its own — see the
+  // file-level note on `group`/`editable` above.
+  const renderField = (c, line, lineEditable) => {
+    const cellEditable = c.editable === undefined ? lineEditable : (typeof c.editable === "function" ? c.editable(line) : c.editable);
+    return (
+      <div key={c.key} style={{ width: c.width || 160, flex: c.grow ? "1 1 220px" : "0 0 auto", minWidth: c.width || 120 }}>
+        <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{c.label}</div>
+        {c.render ? c.render(line) : renderControl(c, line, cellEditable)}
+      </div>
     );
   };
 
-  const renderDeleteCell = (line) => (
-    <Td>
-      {isLineEditable(line) && (
-        <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
-          <Trash2 size={14} />
-        </button>
-      )}
-    </Td>
-  );
-
-  const renderRow = (line) => (
-    <tr key={line.id} style={{ borderTop: `1px solid ${BORDER}` }}>
-      {columns.map((c) => <Td key={c.key}>{renderCell(c, line, isLineEditable(line))}</Td>)}
-      {editable && renderDeleteCell(line)}
-    </tr>
-  );
+  const renderCard = (line) => {
+    const lineEditable = isLineEditable(line);
+    const primary = columns.filter((c) => (c.group || "primary") === "primary");
+    const secondary = columns.filter((c) => c.group === "secondary");
+    const full = columns.filter((c) => c.group === "full");
+    return (
+      <div key={line.id} style={{
+        background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 10,
+      }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+          {primary.map((c) => renderField(c, line, lineEditable))}
+          {editable && lineEditable && (
+            <button onClick={() => onRemove(line.id)} title="Supprimer la ligne" aria-label="Supprimer la ligne" style={{
+              background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4,
+              display: "flex", alignSelf: "flex-end", marginLeft: "auto",
+            }}>
+              <Trash2 size={15} />
+            </button>
+          )}
+        </div>
+        {secondary.length > 0 && (
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+            {secondary.map((c) => renderField({ ...c, grow: true }, line, lineEditable))}
+          </div>
+        )}
+        {full.map((c) => {
+          const content = c.render ? c.render(line) : renderControl(c, line, c.editable === undefined ? lineEditable : (typeof c.editable === "function" ? c.editable(line) : c.editable));
+          // A render() that decides there's nothing to show (e.g. no
+          // release in progress) shouldn't leave a bare divider behind.
+          if (content === null || content === undefined) return null;
+          return (
+            <div key={c.key} style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+              {content}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
-    <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 10 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: SURFACE2 }}>
-            {columns.map((c) => <Th key={c.key}>{c.label}</Th>)}
-            {editable && <Th></Th>}
-          </tr>
-        </thead>
-        <tbody>
-          {local.map(renderRow)}
-          {local.length === 0 && (
-            <tr><td colSpan={colCount} style={{ padding: 16, textAlign: "center", color: MUTED, fontSize: 12.5 }}>Aucune ligne pour l'instant.</td></tr>
-          )}
-        </tbody>
-      </table>
+    <div style={{ marginBottom: 10 }}>
+      {local.map(renderCard)}
+      {local.length === 0 && (
+        <div style={{
+          background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20,
+          textAlign: "center", color: MUTED, fontSize: 12.5,
+        }}>
+          Aucune ligne pour l'instant.
+        </div>
+      )}
       {editable && (
-        <button onClick={() => onAdd()} style={{ ...btnGhost, margin: 10, fontSize: 12.5 }}>
+        <button onClick={() => onAdd()} style={{ ...btnGhost, fontSize: 12.5 }}>
           <Plus size={14} /> {addLabel}
         </button>
       )}

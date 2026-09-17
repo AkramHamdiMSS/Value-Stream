@@ -32,7 +32,7 @@ export const CONTROL_RADIUS = 10;
 
 export const inputStyle = {
   background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: CONTROL_RADIUS, color: TEXT,
-  fontSize: 12.5, padding: "6px 10px", outline: "none", fontFamily: FONT_BODY,
+  fontSize: 13.5, padding: "8px 11px", outline: "none", fontFamily: FONT_BODY, lineHeight: 1.3,
 };
 export const btnPrimary = {
   display: "flex", alignItems: "center", gap: 6, background: ACCENT, color: "#ffffff", border: "none",
