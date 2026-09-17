@@ -301,10 +301,12 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
             ),
           }] : []),
           // Whoever proposes/assigns the line can explain their pick here —
-          // editable by the same people who can touch the rest of the row.
+          // but only THEY can edit it afterward, not whoever else can touch
+          // the row (e.g. the admin approving it) — otherwise a validator
+          // could silently rewrite the Team Lead's own rationale.
           // Second field row: more room to actually type/read a sentence,
           // instead of squeezed between five other columns.
-          { key: "comment", label: "Commentaire", type: "text", width: 240, group: "secondary" },
+          { key: "comment", label: "Commentaire", type: "text", width: 240, group: "secondary", editable: (line) => line.createdById === user.id },
           // Belongs to whoever validates, not whoever proposed — only an
           // admin can ever write it, regardless of who else can touch the row.
           ...(canManageAllocations || canProposeAllocations ? [{

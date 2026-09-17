@@ -59,6 +59,10 @@ router.patch("/:id", async (req, res) => {
   // their own still-pending line can't backdate one for themselves.
   const data = { ...parsed.data };
   if (!canManage) delete data.validationComment;
+  // The proposal comment belongs to whoever created the line — an admin
+  // editing/approving someone else's proposal can change the resource, %
+  // or status, but can't silently rewrite the Team Lead's own rationale.
+  if (data.comment !== undefined && line.createdById !== req.user.id) delete data.comment;
 
   const updated = await prisma.allocationLine.update({
     where: { id: req.params.id },
