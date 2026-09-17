@@ -51,6 +51,7 @@ function serializeProject(project) {
     name: project.name,
     status: project.status,
     demandSubmitted: project.demandSubmitted,
+    demandComment: project.demandComment,
     svoUserId: project.svoUserId,
     svo: project.svo ? { id: project.svo.id, name: project.svo.name } : null,
     createdAt: project.createdAt,
@@ -128,6 +129,8 @@ router.get("/:id", async (req, res) => {
       poolMemberId: l.poolMemberId,
       pct: l.pct,
       status: l.status,
+      comment: l.comment,
+      validationComment: l.validationComment,
       createdById: l.createdById,
       releaseRequested: l.releaseRequested,
       releaseNote: l.releaseNote,
@@ -148,6 +151,7 @@ router.patch("/:id", async (req, res) => {
     name: z.string().trim().min(1).optional(),
     status: z.string().trim().min(1).optional(),
     demandSubmitted: z.boolean().optional(),
+    demandComment: z.string().trim().max(2000).nullable().optional(),
     svoUserId: z.string().uuid().optional(),
   });
   const parsed = schema.safeParse(req.body);
@@ -188,6 +192,7 @@ router.patch("/:id", async (req, res) => {
   else if ("svoUserId" in data) action = `a réaffecté le projet à ${updated.svo.name}`;
   else if ("name" in data) action = `a renommé le projet en "${data.name}"`;
   else if ("status" in data) action = `a changé le statut en "${data.status}"`;
+  else if ("demandComment" in data) action = "a modifié le commentaire de la demande";
   if (action) await logActivity({ user: req.user, action, project: updated });
 
   if (data.demandSubmitted === true) {
@@ -299,6 +304,7 @@ const allocationLineSchema = z.object({
   periodEnd: z.string().trim().min(1),
   poolMemberId: z.string().uuid(),
   pct: z.number().min(0).max(2),
+  comment: z.string().trim().max(1000).optional(),
 });
 
 router.post("/:id/allocation-lines", async (req, res) => {
@@ -336,6 +342,7 @@ router.post("/:id/allocation-lines", async (req, res) => {
       periodEnd,
       poolMemberId: parsed.data.poolMemberId,
       pct: parsed.data.pct ?? 1,
+      comment: parsed.data.comment || null,
       createdById: req.user.id,
       status,
     },

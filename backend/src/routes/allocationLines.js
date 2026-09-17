@@ -14,6 +14,12 @@ const patchSchema = z.object({
   periodEnd: z.string().trim().min(1).optional(),
   poolMemberId: z.string().uuid().optional(),
   pct: z.number().min(0).max(2).optional(),
+  comment: z.string().trim().max(1000).optional(),
+  validationComment: z.string().trim().max(1000).optional(),
+});
+
+const approveSchema = z.object({
+  validationComment: z.string().trim().max(1000).optional(),
 });
 
 function rangeLabel(line) {
@@ -49,9 +55,14 @@ router.patch("/:id", async (req, res) => {
   const nextEnd = parsed.data.periodEnd ?? line.periodEnd;
   if (nextStart > nextEnd) return res.status(400).json({ error: "La semaine de fin doit être après la semaine de début." });
 
+  // The validation comment belongs to whoever approves — a proposer editing
+  // their own still-pending line can't backdate one for themselves.
+  const data = { ...parsed.data };
+  if (!canManage) delete data.validationComment;
+
   const updated = await prisma.allocationLine.update({
     where: { id: req.params.id },
-    data: { ...parsed.data, ...(canManage ? { status: "approved" } : {}) },
+    data: { ...data, ...(canManage ? { status: "approved" } : {}) },
     include: { poolMember: true },
   });
   await logActivity({
@@ -95,9 +106,15 @@ async function notifyApproval({ line, project, approver }) {
 
 // Validates a Team/Tech Lead's proposal.
 router.post("/:id/approve", requirePermission("manageAllocations"), async (req, res) => {
+  const parsed = approveSchema.safeParse(req.body || {});
+  if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
   const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true, createdBy: true } });
   if (!line) return res.status(404).json({ error: "Ligne introuvable." });
-  const updated = await prisma.allocationLine.update({ where: { id: req.params.id }, data: { status: "approved" }, include: { poolMember: true } });
+  const updated = await prisma.allocationLine.update({
+    where: { id: req.params.id },
+    data: { status: "approved", ...(parsed.data.validationComment !== undefined ? { validationComment: parsed.data.validationComment } : {}) },
+    include: { poolMember: true },
+  });
   await logActivity({ user: req.user, action: `a validé l'affectation de ${line.poolMember.name} (${rangeLabel(line)})`, project: line.project });
   await notifyApproval({ line, project: line.project, approver: req.user });
   res.json(updated);

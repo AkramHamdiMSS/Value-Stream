@@ -33,10 +33,15 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
 
   const colCount = columns.length + (editable ? 1 : 0);
 
-  const renderCell = (c, line, lineEditable) => (
+  // A column can override row-level editability with its own — e.g. a
+  // validation comment that only whoever approves should ever write,
+  // regardless of who's otherwise allowed to touch this row.
+  const renderCell = (c, line, lineEditable) => {
+    const cellEditable = c.editable === undefined ? lineEditable : (typeof c.editable === "function" ? c.editable(line) : c.editable);
+    return (
     c.render ? (
       c.render(line)
-    ) : !lineEditable ? (
+    ) : !cellEditable ? (
       <div>
         <span style={{ color: c.type === "select" ? TEXT : MUTED }}>
           {c.type === "percent"
@@ -70,7 +75,8 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
         onBlur={(e) => onPatch(line.id, c.key, c.type === "number" ? Number(e.target.value) : e.target.value)}
         style={{ ...inputStyle, width: c.width }} />
     )
-  );
+    );
+  };
 
   const renderDeleteCell = (line) => (
     <Td>

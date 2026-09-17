@@ -65,6 +65,10 @@ model Project {
   svo              User     @relation("ProjectSvo", fields: [svoUserId], references: [id])
   status           String
   demandSubmitted  Boolean  @default(false) @map("demand_submitted")
+  // Free-text note the SVO can attach when expressing/submitting the need —
+  // context a headcount/period breakdown alone can't carry (why it's urgent,
+  // a constraint on who can do it, etc).
+  demandComment    String?  @map("demand_comment")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
@@ -130,6 +134,12 @@ model AllocationLine {
   createdById  String     @map("created_by")
   createdBy    User       @relation("AllocationCreatedBy", fields: [createdById], references: [id])
   status       AllocationStatus @default(approved)
+  // Whoever creates the line (a Team/Tech Lead proposing, or an admin
+  // assigning directly) can explain their pick here — why this person, any
+  // caveat. Separate from validationComment below: that one belongs to
+  // whoever approves, which may be a different person at a different time.
+  comment           String?  @map("comment")
+  validationComment String?  @map("validation_comment")
   // SVO-initiated: "this resource I already got approved is free for
   // something else" — the line stays real/counted until the HSV confirms
   // the release. A null releaseNewPct means a full release (the line is
