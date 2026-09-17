@@ -237,7 +237,7 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
 
 function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
   const [expanded, setExpanded] = useState(null);
-  const { pool, overAllocGrid, overAllocProjects, periods } = data;
+  const { pool, overAllocGrid, overAllocProjects, unavailableMembers, periods } = data;
 
   return (
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
@@ -277,17 +277,18 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                     </td>
                     {periods.map((p) => {
                       const v = overAllocGrid[res.id]?.[p] || 0;
+                      const unavailable = unavailableMembers?.[res.id]?.[p];
                       const over = v > 1.001;
-                      const pillColor = over ? RED : v > 0 ? GREEN : MUTED;
+                      const pillColor = unavailable ? AMBER : over ? RED : v > 0 ? GREEN : MUTED;
                       return (
                         <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
-                          <span style={{
+                          <span title={unavailable ? unavailable.join(", ") : undefined} style={{
                             display: "inline-block", minWidth: 40, padding: "3px 6px", borderRadius: 999,
-                            border: `1px solid ${v > 0 ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
-                            background: v > 0 ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
-                            color: pillColor, fontWeight: over ? 700 : 500,
+                            border: `1px solid ${v > 0 || unavailable ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
+                            background: v > 0 || unavailable ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
+                            color: pillColor, fontWeight: over || unavailable ? 700 : 500,
                           }}>
-                            {v > 0 ? `${Math.round(v * 100)}%` : "—"}
+                            {unavailable ? "Congé" : v > 0 ? `${Math.round(v * 100)}%` : "—"}
                           </span>
                         </td>
                       );

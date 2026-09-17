@@ -49,10 +49,36 @@ function inRange(id, start, end) {
   return start <= id && id <= end;
 }
 
+// Same walk as generatePeriods()/generatePeriodObjects(), but yielding each
+// period's Monday date instead of just its id/label — the one place other
+// code should get a period's actual date span from, instead of
+// reimplementing ISO week math independently (which is easy to get subtly
+// wrong: week 1 isn't just "day 1-7 of the year").
+function generatePeriodDates(n = N_WEEKS, from = new Date()) {
+  const out = [];
+  let d = currentWeekMonday(from);
+  for (let i = 0; i < n; i++) {
+    out.push({ id: isoWeekId(d), monday: new Date(d) });
+    d.setDate(d.getDate() + 7);
+  }
+  return out;
+}
+
+// Whether a [rangeStart, rangeEnd] date span (e.g. a leave request) overlaps
+// at all with the Monday..Sunday week starting at `monday` — a full overlap
+// test, not just "does either endpoint fall inside this week", so a leave
+// spanning several weeks correctly covers every week in between too.
+function dateRangeOverlapsWeek(rangeStart, rangeEnd, monday) {
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+  return rangeStart <= sunday && rangeEnd >= monday;
+}
+
 function effective(count, pct) {
   const c = Number(count) || 0;
   const p = pct === null || pct === undefined || pct === "" ? 1 : Number(pct);
   return c * p;
 }
 
-module.exports = { N_WEEKS, currentWeekMonday, isoWeekId, generatePeriods, generatePeriodObjects, effective, inRange };
+module.exports = { N_WEEKS, currentWeekMonday, isoWeekId, generatePeriods, generatePeriodObjects, generatePeriodDates, effective, inRange, dateRangeOverlapsWeek };

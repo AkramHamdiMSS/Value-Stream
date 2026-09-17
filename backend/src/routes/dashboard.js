@@ -2,7 +2,7 @@ const express = require("express");
 const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
-const { effective, generatePeriods, inRange } = require("../lib/periods");
+const { effective, generatePeriods, generatePeriodDates, inRange, dateRangeOverlapsWeek } = require("../lib/periods");
 const { PROFILES, PROFILE_FIELDS } = require("../lib/profiles");
 const { buildDemandQueueRows } = require("../lib/demandQueueRows");
 
@@ -27,18 +27,39 @@ function canViewAllProjects(user) {
 // (viewDashboard and nothing else) only gets their own sous-équipe, not the
 // whole org — see sousEquipeFilter below.
 async function buildResourceLoad(periods, sousEquipeFilter) {
-  const [allMembers, allocationLines] = await Promise.all([
+  const [allMembers, allocationLines, unavailabilities] = await Promise.all([
     prisma.poolMember.findMany(),
     prisma.allocationLine.findMany({
       where: { status: "approved" },
       select: { poolMemberId: true, periodStart: true, periodEnd: true, pct: true, project: { select: { id: true, name: true } } },
+    }),
+    prisma.unavailability.findMany({
+      select: { poolMemberId: true, startDate: true, endDate: true, type: true }
     }),
   ]);
   const pool = sousEquipeFilter ? allMembers.filter((m) => m.sousEquipe === sousEquipeFilter) : allMembers;
 
   const overAllocGrid = {};
   const overAllocProjects = {};
+  const unavailableMembers = {}; // Track unavailability by member and period
+
   for (const res of pool) overAllocGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
+
+  // `periods` is just id strings — pair each one back up with its actual
+  // Monday date (via the same walk generatePeriods() itself uses) so a
+  // multi-week leave can be tested for overlap, not just whether its start
+  // or end date happens to land inside a given week.
+  const periodDates = generatePeriodDates(periods.length).filter((pd) => periods.includes(pd.id));
+  for (const u of unavailabilities) {
+    if (!overAllocGrid[u.poolMemberId]) continue;
+    for (const { id: p, monday } of periodDates) {
+      if (!dateRangeOverlapsWeek(u.startDate, u.endDate, monday)) continue;
+      if (!unavailableMembers[u.poolMemberId]) unavailableMembers[u.poolMemberId] = {};
+      if (!unavailableMembers[u.poolMemberId][p]) unavailableMembers[u.poolMemberId][p] = [];
+      unavailableMembers[u.poolMemberId][p].push(u.type);
+    }
+  }
+  
   for (const l of allocationLines) {
     if (!overAllocGrid[l.poolMemberId]) continue;
     for (const p of periods) {
@@ -61,6 +82,7 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad, sousEquipe: p.sousEquipe })),
     overAllocGrid,
     overAllocProjects,
+    unavailableMembers,
     alertCount,
   };
 }

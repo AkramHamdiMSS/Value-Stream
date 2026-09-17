@@ -12,6 +12,16 @@ router.get("/", async (req, res) => {
   res.json(pool);
 });
 
+// GET unavailabilities is available for anyone (read-only)
+router.get("/:id/unavailabilities", async (req, res) => {
+  const unavailabilities = await prisma.unavailability.findMany({
+    where: { poolMemberId: req.params.id },
+    orderBy: { startDate: 'asc' }
+  });
+  res.json(unavailabilities);
+});
+
+// All other pool operations require managePool permission
 router.use(requirePermission("managePool"));
 
 const memberSchema = z.object({
@@ -66,6 +76,77 @@ router.delete("/:id", async (req, res) => {
   }
   await prisma.poolMember.delete({ where: { id: req.params.id } });
   await logActivity({ user: req.user, action: `a retiré ${member.name} du pool` });
+  res.json({ ok: true });
+});
+
+// Routes pour les indisponibilités (protégées)
+const unavailabilitySchema = z.object({
+  startDate: z.string().transform(val => new Date(val)),
+  endDate: z.string().transform(val => new Date(val)),
+  type: z.enum(["congé", "maladie", "formation", "autre"]),
+  comment: z.string().optional()
+});
+
+router.post("/:id/unavailabilities", async (req, res) => {
+  const parsed = unavailabilitySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
+  
+  const member = await prisma.poolMember.findUnique({ where: { id: req.params.id } });
+  if (!member) return res.status(404).json({ error: "Personne introuvable." });
+
+  const unavailability = await prisma.unavailability.create({
+    data: {
+      poolMemberId: req.params.id,
+      ...parsed.data,
+      source: "manual"
+    }
+  });
+
+  await logActivity({ 
+    user: req.user, 
+    action: `a ajouté une indisponibilité pour ${member.name} (${parsed.data.type} du ${parsed.data.startDate.toLocaleDateString('fr-FR')} au ${parsed.data.endDate.toLocaleDateString('fr-FR')})` 
+  });
+  
+  res.status(201).json(unavailability);
+});
+
+router.patch("/:id/unavailabilities/:unavailabilityId", async (req, res) => {
+  const parsed = unavailabilitySchema.partial().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
+
+  const unavailability = await prisma.unavailability.findFirst({
+    where: { id: req.params.unavailabilityId, poolMemberId: req.params.id }
+  });
+  
+  if (!unavailability) return res.status(404).json({ error: "Indisponibilité introuvable." });
+
+  const updated = await prisma.unavailability.update({
+    where: { id: req.params.unavailabilityId },
+    data: parsed.data
+  });
+
+  await logActivity({ 
+    user: req.user, 
+    action: `a modifié une indisponibilité (ID: ${req.params.unavailabilityId})` 
+  });
+
+  res.json(updated);
+});
+
+router.delete("/:id/unavailabilities/:unavailabilityId", async (req, res) => {
+  const unavailability = await prisma.unavailability.findFirst({
+    where: { id: req.params.unavailabilityId, poolMemberId: req.params.id }
+  });
+  
+  if (!unavailability) return res.status(404).json({ error: "Indisponibilité introuvable." });
+
+  await prisma.unavailability.delete({ where: { id: req.params.unavailabilityId } });
+
+  await logActivity({ 
+    user: req.user, 
+    action: `a supprimé une indisponibilité (ID: ${req.params.unavailabilityId})` 
+  });
+
   res.json({ ok: true });
 });
 

@@ -54,6 +54,7 @@ model PoolMember {
   roleTitle  String  @map("role_title")
 
   allocationLines AllocationLine[]
+  unavailabilities Unavailability[]
 
   @@map("pool_members")
 }
@@ -153,4 +154,20 @@ model AllocationLine {
   @@index([poolMemberId, periodStart, periodEnd])
   @@index([projectId])
   @@map("allocation_lines")
+}
+
+model Unavailability {
+  id           String     @id @default(uuid())
+  poolMemberId String     @map("pool_member_id")
+  poolMember   PoolMember @relation(fields: [poolMemberId], references: [id], onDelete: Cascade)
+  startDate    DateTime   @map("start_date")
+  endDate      DateTime   @map("end_date")
+  type         String     // congé, maladie, formation, autre
+  comment      String?
+  source       String     @default("manual") // manual, ascii
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@index([poolMemberId, startDate, endDate])
+  @@map("unavailabilities")
 }

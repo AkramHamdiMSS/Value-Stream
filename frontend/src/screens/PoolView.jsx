@@ -1,14 +1,23 @@
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Calendar, X } from "lucide-react";
 import { api } from "../api";
 import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, RED, CARD_SHADOW, inputStyle, btnPrimary, iconBtn } from "../styles";
 import { Th, Td } from "../components/ui";
 import { isValidEmail } from "../lib/validate";
 import { showToast } from "../lib/toast";
 
-export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
+export default function PoolView({ pool, overAllocGrid, periods, onChanged, unavailabilitiesData = {} }) {
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState({});
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [unavailabilities, setUnavailabilities] = useState([]);
+  const [showUnavailabilityModal, setShowUnavailabilityModal] = useState(false);
+  const [newUnavailability, setNewUnavailability] = useState({
+    startDate: "",
+    endDate: "",
+    type: "congé",
+    comment: ""
+  });
 
   const addPerson = async () => {
     try {
@@ -41,6 +50,60 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
   const draftValue = (p, key) => drafts[p.id]?.[key] ?? p[key];
   const setDraft = (id, key, value) => setDrafts((d) => ({ ...d, [id]: { ...d[id], [key]: value } }));
 
+  const handleOpenUnavailability = async (member) => {
+    setSelectedMember(member);
+    try {
+      const rows = await api.get(`/pool/${member.id}/unavailabilities`);
+      setUnavailabilities(rows);
+      setShowUnavailabilityModal(true);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const handleAddUnavailability = async () => {
+    if (!newUnavailability.startDate || !newUnavailability.endDate) {
+      showToast("Veuillez remplir les dates de début et de fin", "error");
+      return;
+    }
+    try {
+      await api.post(`/pool/${selectedMember.id}/unavailabilities`, newUnavailability);
+      const rows = await api.get(`/pool/${selectedMember.id}/unavailabilities`);
+      setUnavailabilities(rows);
+      setNewUnavailability({ startDate: "", endDate: "", type: "congé", comment: "" });
+      showToast("Indisponibilité ajoutée", "success");
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const handleDeleteUnavailability = async (unavailabilityId) => {
+    try {
+      await api.delete(`/pool/${selectedMember.id}/unavailabilities/${unavailabilityId}`);
+      const rows = await api.get(`/pool/${selectedMember.id}/unavailabilities`);
+      setUnavailabilities(rows);
+      showToast("Indisponibilité supprimée", "success");
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const getUnavailabilitySummary = (memberId) => {
+    const memberUnavailabilities = unavailabilitiesData?.[memberId] || [];
+    if (memberUnavailabilities.length === 0) return null;
+    
+    const count = memberUnavailabilities.length;
+    const types = memberUnavailabilities.map(u => u.type);
+    const uniqueTypes = [...new Set(types)];
+    
+    return `${count} ${uniqueTypes.join(', ')}`;
+  };
+
   const peakFor = (id) => {
     let max = 0;
     for (const p of periods) max = Math.max(max, overAllocGrid?.[id]?.[p] || 0);
@@ -65,7 +128,7 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
-              <Th>Nom</Th><Th>Email</Th><Th>Squad</Th><Th>Sous-équipe</Th><Th>Rôle</Th><Th>Pic de charge</Th><Th></Th>
+              <Th>Nom</Th><Th>Email</Th><Th>Squad</Th><Th>Sous-équipe</Th><Th>Rôle</Th><Th>Indisponibilités</Th><Th>Pic de charge</Th><Th></Th>
             </tr>
           </thead>
           <tbody>
@@ -87,6 +150,24 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
                   <Td><input value={draftValue(p, "roleTitle")} onChange={(e) => setDraft(p.id, "roleTitle", e.target.value)}
                     onBlur={(e) => patchPerson(p.id, "roleTitle", e.target.value)} style={inputStyle} /></Td>
                   <Td>
+                    <button 
+                      onClick={() => handleOpenUnavailability(p)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 4,
+                        color: getUnavailabilitySummary(p.id) ? MUTED : GREEN,
+                        fontSize: 12
+                      }}
+                    >
+                      <Calendar size={14} />
+                      {getUnavailabilitySummary(p.id) || 'Gérer'}
+                    </button>
+                  </Td>
+                  <Td>
                     <span style={{ color: peak > 1.001 ? RED : peak > 0 ? GREEN : MUTED, fontWeight: 600 }}>
                       {Math.round(peak * 100)}%
                     </span>
@@ -100,6 +181,135 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged }) {
           </tbody>
         </table>
       </div>
+
+      {showUnavailabilityModal && selectedMember && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: SURFACE,
+            borderRadius: 16,
+            padding: 24,
+            maxWidth: 600,
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'auto',
+            boxShadow: CARD_SHADOW
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
+                Indisponibilités - {selectedMember.name}
+              </h2>
+              <button onClick={() => setShowUnavailabilityModal(false)} style={iconBtn}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Ajouter une indisponibilité</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: MUTED, marginBottom: 4, display: 'block' }}>Date de début</label>
+                  <input
+                    type="date"
+                    value={newUnavailability.startDate}
+                    onChange={(e) => setNewUnavailability({ ...newUnavailability, startDate: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: MUTED, marginBottom: 4, display: 'block' }}>Date de fin</label>
+                  <input
+                    type="date"
+                    value={newUnavailability.endDate}
+                    onChange={(e) => setNewUnavailability({ ...newUnavailability, endDate: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: MUTED, marginBottom: 4, display: 'block' }}>Type</label>
+                <select
+                  value={newUnavailability.type}
+                  onChange={(e) => setNewUnavailability({ ...newUnavailability, type: e.target.value })}
+                  style={inputStyle}
+                >
+                  <option value="congé">Congé</option>
+                  <option value="maladie">Maladie</option>
+                  <option value="formation">Formation</option>
+                  <option value="autre">Autre</option>
+                </select>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: MUTED, marginBottom: 4, display: 'block' }}>Commentaire (optionnel)</label>
+                <input
+                  type="text"
+                  value={newUnavailability.comment}
+                  onChange={(e) => setNewUnavailability({ ...newUnavailability, comment: e.target.value })}
+                  placeholder="Détails..."
+                  style={inputStyle}
+                />
+              </div>
+              <button onClick={handleAddUnavailability} style={btnPrimary}>
+                Ajouter
+              </button>
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Indisponibilités existantes</h3>
+              {unavailabilities.length === 0 ? (
+                <p style={{ color: MUTED, fontSize: 13 }}>Aucune indisponibilité</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {unavailabilities.map((u) => (
+                    <div
+                      key={u.id}
+                      style={{
+                        background: SURFACE2,
+                        padding: 12,
+                        borderRadius: 8,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>
+                          {u.type} - {formatDate(u.startDate)} au {formatDate(u.endDate)}
+                        </div>
+                        {u.comment && (
+                          <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{u.comment}</div>
+                        )}
+                        <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>
+                          Source: {u.source === 'ascii' ? 'ASCII (auto)' : 'Manuel'}
+                        </div>
+                      </div>
+                      {u.source === 'manual' && (
+                        <button
+                          onClick={() => handleDeleteUnavailability(u.id)}
+                          style={iconBtn}
+                          aria-label="Supprimer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

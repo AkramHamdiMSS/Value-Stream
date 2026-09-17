@@ -28,6 +28,7 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [svoUsers, setSvoUsers] = useState([]);
+  const [unavailabilitiesData, setUnavailabilitiesData] = useState({});
 
   const [tab, setTab] = useState("dashboard");
   const [selectedId, setSelectedId] = useState(null);
@@ -78,6 +79,18 @@ export default function App() {
   const refreshProjects = () => api.get("/projects").then(setProjects);
   const refreshDashboard = () => (can.viewDashboard ? api.get("/dashboard").then(setDashboard) : Promise.resolve());
   const refreshSvoUsers = () => api.get("/users?role=svo").then(setSvoUsers);
+  const refreshUnavailabilities = async () => {
+    if (!can.managePool) return;
+    const data = {};
+    for (const member of pool) {
+      try {
+        data[member.id] = await api.get(`/pool/${member.id}/unavailabilities`);
+      } catch (e) {
+        data[member.id] = [];
+      }
+    }
+    setUnavailabilitiesData(data);
+  };
   const refreshAll = () => Promise.all([refreshPool(), refreshProjects(), refreshDashboard(), refreshSvoUsers()]);
 
   useEffect(() => {
@@ -86,6 +99,13 @@ export default function App() {
     refreshAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  useEffect(() => {
+    if (pool.length > 0 && can.managePool) {
+      refreshUnavailabilities();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pool]);
 
   useEffect(() => {
     if (!user || !pendingProjectId) return;
@@ -238,7 +258,8 @@ export default function App() {
 
         {tab === "pool" && can.managePool && (
           <PoolView pool={pool} overAllocGrid={dashboard?.overAllocGrid || {}} periods={periods.map((p) => p.id)}
-            onChanged={() => { refreshPool(); refreshDashboard(); }} />
+            unavailabilitiesData={unavailabilitiesData}
+            onChanged={() => { refreshPool(); refreshDashboard(); refreshUnavailabilities(); }} />
         )}
 
         {tab === "roles" && can.manageRoles && (
