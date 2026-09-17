@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { SURFACE, SURFACE2, BORDER, TEXT, MUTED, inputStyle, btnGhost } from "../styles";
+import { Plus, Trash2, Check } from "lucide-react";
+import { SURFACE, SURFACE2, BORDER, TEXT, MUTED, ACCENT, inputStyle, btnGhost } from "../styles";
 import { Th, Td } from "./ui";
 import { PROFILE_FIELDS } from "../lib/profiles";
 
@@ -10,7 +10,11 @@ const SQUADS = PROFILE_FIELDS.map((p) => ({ key: p.countKey, pctKey: p.pctKey, l
 // Android/TPE Engage/Digital), each with its own headcount AND its own
 // allocation % — Début and Fin are shown once per line (rowSpan) since the
 // range applies to all four, but the % doesn't have to match across them.
-export default function DemandTable({ lines, periods, editable, onAdd, onPatch, onRemove }) {
+//
+// Keystrokes only update local state — nothing reaches the server until the
+// line's own "Enregistrer" button is clicked, which sends every changed
+// field on that line in one request, instead of auto-saving on blur.
+export default function DemandTable({ lines, periods, editable, onAdd, onSave, onRemove }) {
   const [local, setLocal] = useState(lines);
   useEffect(() => setLocal(lines), [lines]);
 
@@ -18,6 +22,27 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
     setLocal((prev) => prev.map((l) => (l.id === id ? { ...l, [key]: value } : l)));
   };
   const periodLabel = (id) => periods.find((p) => p.id === id)?.label || id || "—";
+
+  const FIELD_KEYS = ["periodStart", "periodEnd", ...SQUADS.map((sq) => sq.key), ...SQUADS.map((sq) => sq.pctKey), "comment"];
+  const normalize = (key, v) => {
+    if (SQUADS.some((sq) => sq.key === key)) return v === "" || v === undefined || v === null ? 0 : Number(v);
+    if (SQUADS.some((sq) => sq.pctKey === key)) return v === "" || v === undefined || v === null ? null : Number(v);
+    return v === undefined || v === "" ? null : v;
+  };
+  const isDirty = (line) => {
+    const orig = lines.find((l) => l.id === line.id);
+    if (!orig) return false;
+    return FIELD_KEYS.some((k) => normalize(k, line[k]) !== normalize(k, orig[k]));
+  };
+  const saveLine = (line) => {
+    const orig = lines.find((l) => l.id === line.id);
+    const patch = {};
+    for (const k of FIELD_KEYS) {
+      const a = normalize(k, line[k]);
+      if (a !== normalize(k, orig?.[k])) patch[k] = a;
+    }
+    if (Object.keys(patch).length > 0) onSave(line.id, patch);
+  };
 
   const colCount = 6 + (editable ? 1 : 0);
 
@@ -31,7 +56,9 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
           </tr>
         </thead>
         <tbody>
-          {local.map((line) => (
+          {local.map((line) => {
+            const dirty = editable && isDirty(line);
+            return (
             <Fragment key={line.id}>
               {SQUADS.map((sq, i) => (
                 <tr key={sq.key} style={{ borderTop: i === 0 ? `1px solid ${BORDER}` : "none" }}>
@@ -39,14 +66,14 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
                     <>
                       <Td rowSpan={SQUADS.length} style={{ verticalAlign: "top" }}>
                         {editable ? (
-                          <select value={line.periodStart ?? ""} onChange={(e) => { setLocalValue(line.id, "periodStart", e.target.value); onPatch(line.id, "periodStart", e.target.value); }} style={inputStyle}>
+                          <select value={line.periodStart ?? ""} onChange={(e) => setLocalValue(line.id, "periodStart", e.target.value)} style={inputStyle}>
                             {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                           </select>
                         ) : <span style={{ color: TEXT }}>{periodLabel(line.periodStart)}</span>}
                       </Td>
                       <Td rowSpan={SQUADS.length} style={{ verticalAlign: "top" }}>
                         {editable ? (
-                          <select value={line.periodEnd ?? ""} onChange={(e) => { setLocalValue(line.id, "periodEnd", e.target.value); onPatch(line.id, "periodEnd", e.target.value); }} style={inputStyle}>
+                          <select value={line.periodEnd ?? ""} onChange={(e) => setLocalValue(line.id, "periodEnd", e.target.value)} style={inputStyle}>
                             {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                           </select>
                         ) : <span style={{ color: TEXT }}>{periodLabel(line.periodEnd)}</span>}
@@ -58,7 +85,6 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
                     {editable ? (
                       <input type="number" min="0" value={line[sq.key] ?? 0}
                         onChange={(e) => setLocalValue(line.id, sq.key, e.target.value === "" ? "" : Number(e.target.value))}
-                        onBlur={(e) => onPatch(line.id, sq.key, Number(e.target.value) || 0)}
                         style={{ ...inputStyle, width: 80 }} />
                     ) : <span style={{ color: MUTED }}>{line[sq.key] ?? 0}</span>}
                   </Td>
@@ -67,7 +93,6 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
                       <input type="number" min="0" max="200" placeholder="100"
                         value={line[sq.pctKey] === "" || line[sq.pctKey] === undefined || line[sq.pctKey] === null ? "" : Math.round(Number(line[sq.pctKey]) * 100)}
                         onChange={(e) => setLocalValue(line.id, sq.pctKey, e.target.value === "" ? "" : Number(e.target.value) / 100)}
-                        onBlur={(e) => onPatch(line.id, sq.pctKey, e.target.value === "" ? null : Number(e.target.value) / 100)}
                         style={{ ...inputStyle, width: 90 }} />
                     ) : <span style={{ color: MUTED }}>{line[sq.pctKey] === null || line[sq.pctKey] === undefined ? "100%" : `${Math.round(Number(line[sq.pctKey]) * 100)}%`}</span>}
                   </Td>
@@ -76,7 +101,6 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
                       {editable ? (
                         <input value={line.comment ?? ""} placeholder="Contexte, urgence…"
                           onChange={(e) => setLocalValue(line.id, "comment", e.target.value)}
-                          onBlur={(e) => onPatch(line.id, "comment", e.target.value || null)}
                           style={{ ...inputStyle, width: 200 }} />
                       ) : (
                         <span style={{ color: line.comment ? TEXT : MUTED, fontStyle: line.comment ? "normal" : "italic" }}>
@@ -87,15 +111,24 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
                   )}
                   {i === 0 && editable && (
                     <Td rowSpan={SQUADS.length} style={{ verticalAlign: "top" }}>
-                      <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
-                        <Trash2 size={14} />
-                      </button>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => saveLine(line)} disabled={!dirty} title="Enregistrer" aria-label="Enregistrer" style={{
+                          background: "transparent", border: "none", color: dirty ? ACCENT : MUTED, cursor: dirty ? "pointer" : "default",
+                          opacity: dirty ? 1 : 0.4, padding: 4, display: "flex",
+                        }}>
+                          <Check size={14} />
+                        </button>
+                        <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </Td>
                   )}
                 </tr>
               ))}
             </Fragment>
-          ))}
+            );
+          })}
           {local.length === 0 && (
             <tr><td colSpan={colCount} style={{ padding: 16, textAlign: "center", color: MUTED, fontSize: 12.5 }}>Aucune ligne pour l'instant.</td></tr>
           )}

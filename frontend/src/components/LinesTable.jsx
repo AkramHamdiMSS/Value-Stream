@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { TEXT, MUTED, SURFACE, SURFACE2, BORDER, inputStyle, btnGhost } from "../styles";
+import { Plus, Trash2, Check } from "lucide-react";
+import { TEXT, MUTED, ACCENT, SURFACE, SURFACE2, BORDER, inputStyle, btnGhost } from "../styles";
 
-// Locally-buffered editable card list: keystrokes update local state instantly, and
-// commit to the server on blur (text/number/percent) or immediately on select change.
+// Locally-buffered editable card list: keystrokes only update local state —
+// nothing reaches the server until the card's own "Enregistrer" button is
+// clicked, which sends every changed field on that line in one request. No
+// more silent auto-save on blur, which made it too easy to commit a change
+// by accident just by clicking away. `render`-based columns (status,
+// release) are exempt — they already have their own explicit action button
+// (Valider/Libérer/Confirmer), so nothing here duplicates that.
+//
 // `editable` gates whether adding new lines is offered at all; `rowEditable(line)`
 // (optional, defaults to `editable`) governs whether a SPECIFIC existing row can be
 // edited/deleted — e.g. a Team Lead who can only touch their own pending proposals,
@@ -17,7 +23,7 @@ import { TEXT, MUTED, SURFACE, SURFACE2, BORDER, inputStyle, btnGhost } from "..
 // block needs the room). A column can also override row-level editability with its
 // own `editable` (bool or `(line) => bool`) — e.g. a validation comment that only
 // whoever approves should ever write, regardless of who else can touch the row.
-export default function LinesTable({ lines, columns, addLabel, editable = true, rowEditable, onAdd, onPatch, onRemove }) {
+export default function LinesTable({ lines, columns, addLabel, editable = true, rowEditable, onAdd, onSave, onRemove }) {
   const [local, setLocal] = useState(lines);
   useEffect(() => setLocal(lines), [lines]);
 
@@ -39,6 +45,34 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
     return col.optionLabels ? col.optionLabels[idx] : col.options[idx];
   };
 
+  // Plain (non-render) columns are the ones this card's single Enregistrer
+  // button covers — a render() column already manages its own commit.
+  const plainColumns = columns.filter((c) => !c.render);
+  const normalize = (c, v) => {
+    if (c.type === "percent") return v === "" || v === undefined || v === null ? null : Number(v);
+    if (v === undefined || v === "") return null;
+    return v;
+  };
+  const isDirty = (line) => {
+    const orig = lines.find((l) => l.id === line.id);
+    if (!orig) return false;
+    return plainColumns.some((c) => normalize(c, line[c.key]) !== normalize(c, orig[c.key]));
+  };
+  const buildPatch = (line) => {
+    const orig = lines.find((l) => l.id === line.id);
+    const patch = {};
+    for (const c of plainColumns) {
+      const a = normalize(c, line[c.key]);
+      const b = normalize(c, orig?.[c.key]);
+      if (a !== b) patch[c.key] = a;
+    }
+    return patch;
+  };
+  const saveLine = (line) => {
+    const patch = buildPatch(line);
+    if (Object.keys(patch).length > 0) onSave(line.id, patch);
+  };
+
   const renderControl = (c, line, cellEditable) => (
     !cellEditable ? (
       <div>
@@ -51,10 +85,7 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
       </div>
     ) : c.type === "select" ? (
       <div>
-        <select value={line[c.key] ?? ""} onChange={(e) => {
-          setLocalValue(line.id, c.key, e.target.value);
-          onPatch(line.id, c.key, e.target.value);
-        }} style={{ ...inputStyle, width: "100%" }}>
+        <select value={line[c.key] ?? ""} onChange={(e) => setLocalValue(line.id, c.key, e.target.value)} style={{ ...inputStyle, width: "100%" }}>
           <option value="">—</option>
           {c.options.map((opt, i) => (
             <option key={opt} value={opt}>{c.optionLabels ? c.optionLabels[i] : opt}</option>
@@ -66,12 +97,10 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
       <input type="number" min="0" max="200" placeholder="100"
         value={line[c.key] === "" || line[c.key] === undefined || line[c.key] === null ? "" : Math.round(Number(line[c.key]) * 100)}
         onChange={(e) => setLocalValue(line.id, c.key, e.target.value === "" ? "" : Number(e.target.value) / 100)}
-        onBlur={(e) => onPatch(line.id, c.key, e.target.value === "" ? null : Number(e.target.value) / 100)}
         style={{ ...inputStyle, width: "100%" }} />
     ) : (
       <input type={c.type === "number" ? "number" : "text"} value={line[c.key] ?? ""}
         onChange={(e) => setLocalValue(line.id, c.key, c.type === "number" ? Number(e.target.value) : e.target.value)}
-        onBlur={(e) => onPatch(line.id, c.key, c.type === "number" ? Number(e.target.value) : e.target.value)}
         style={{ ...inputStyle, width: "100%" }} />
     )
   );
@@ -90,22 +119,30 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
 
   const renderCard = (line) => {
     const lineEditable = isLineEditable(line);
+    const dirty = lineEditable && isDirty(line);
     const primary = columns.filter((c) => (c.group || "primary") === "primary");
     const secondary = columns.filter((c) => c.group === "secondary");
     const full = columns.filter((c) => c.group === "full");
     return (
       <div key={line.id} style={{
-        background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 10,
+        background: SURFACE2, border: `1px solid ${dirty ? ACCENT : BORDER}`, borderRadius: 12, padding: 14, marginBottom: 10,
       }}>
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
           {primary.map((c) => renderField(c, line, lineEditable))}
           {editable && lineEditable && (
-            <button onClick={() => onRemove(line.id)} title="Supprimer la ligne" aria-label="Supprimer la ligne" style={{
-              background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4,
-              display: "flex", alignSelf: "flex-end", marginLeft: "auto",
-            }}>
-              <Trash2 size={15} />
-            </button>
+            <div style={{ display: "flex", gap: 4, alignSelf: "flex-end", marginLeft: "auto" }}>
+              <button onClick={() => saveLine(line)} disabled={!dirty} title="Enregistrer" aria-label="Enregistrer" style={{
+                background: "transparent", border: "none", color: dirty ? ACCENT : MUTED, cursor: dirty ? "pointer" : "default",
+                opacity: dirty ? 1 : 0.4, padding: 4, display: "flex",
+              }}>
+                <Check size={15} />
+              </button>
+              <button onClick={() => onRemove(line.id)} title="Supprimer la ligne" aria-label="Supprimer la ligne" style={{
+                background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex",
+              }}>
+                <Trash2 size={15} />
+              </button>
+            </div>
           )}
         </div>
         {secondary.length > 0 && (

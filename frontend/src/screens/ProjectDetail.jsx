@@ -14,11 +14,15 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const [error, setError] = useState("");
   const [releaseDrafts, setReleaseDrafts] = useState({});
   const [releasingId, setReleasingId] = useState(null);
+  // Last-saved snapshot of the top fields, so typing in Nom/Statut/SVO only
+  // updates the draft shown on screen — nothing reaches the server until
+  // "Enregistrer" is clicked, which sends every changed field at once.
+  const [savedTop, setSavedTop] = useState(null);
 
   const load = () => {
     setLoading(true);
     api.get(`/projects/${projectId}`)
-      .then((p) => { setProject(p); setError(""); })
+      .then((p) => { setProject(p); setSavedTop({ name: p.name, status: p.status, svoUserId: p.svoUserId }); setError(""); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -72,6 +76,19 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     notifyChanged();
   };
 
+  const topDirty = !!savedTop && (project.name !== savedTop.name || project.status !== savedTop.status || project.svoUserId !== savedTop.svoUserId);
+  const saveTopFields = async () => {
+    if (!topDirty) return;
+    const patch = {};
+    if (project.name !== savedTop.name) patch.name = project.name;
+    if (project.status !== savedTop.status) patch.status = project.status;
+    if (project.svoUserId !== savedTop.svoUserId) patch.svoUserId = project.svoUserId;
+    const updated = await api.patch(`/projects/${project.id}`, patch);
+    setProject((prev) => ({ ...prev, ...updated }));
+    setSavedTop({ name: updated.name, status: updated.status, svoUserId: updated.svoUserId });
+    notifyChanged();
+  };
+
   // ---- demand lines ----
   // One row = one span of weeks, with a headcount per profile (Mobile/TPE
   // Android/TPE Engage/Digital) right on that same row — no more picking
@@ -83,10 +100,8 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, line] }));
     notifyChanged();
   };
-  const countKeys = PROFILE_FIELDS.map((f) => f.countKey);
-  const patchDemandLine = async (id, key, value) => {
-    const payload = { [key]: countKeys.includes(key) ? Number(value) || 0 : value };
-    const updated = await api.patch(`/demand-lines/${id}`, payload);
+  const saveDemandLine = async (id, patch) => {
+    const updated = await api.patch(`/demand-lines/${id}`, patch);
     setProject((prev) => ({ ...prev, demandLines: prev.demandLines.map((l) => (l.id === id ? updated : l)) }));
     notifyChanged();
   };
@@ -110,8 +125,8 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, line] }));
     notifyChanged();
   };
-  const patchAllocationLine = async (id, key, value) => {
-    const updated = await api.patch(`/allocation-lines/${id}`, { [key]: value });
+  const saveAllocationLine = async (id, patch) => {
+    const updated = await api.patch(`/allocation-lines/${id}`, patch);
     setProject((prev) => ({ ...prev, allocationLines: prev.allocationLines.map((l) => (l.id === id ? updated : l)) }));
     notifyChanged();
   };
@@ -189,10 +204,10 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
 
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
         <Field label="Nom du projet" value={project.name} onChange={(v) => setProject((p) => ({ ...p, name: v }))}
-          onBlur={() => patchProject("name", project.name)} width={260} disabled={!canEditNameStatus} />
+          width={260} disabled={!canEditNameStatus} />
         <div style={{ width: 200 }}>
           <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>SVO</div>
-          <select value={project.svoUserId} onChange={(e) => patchProject("svoUserId", e.target.value)} disabled={!canManageProjects}
+          <select value={project.svoUserId} onChange={(e) => setProject((p) => ({ ...p, svoUserId: e.target.value }))} disabled={!canManageProjects}
             style={{ ...inputStyle, width: "100%", opacity: canManageProjects ? 1 : 0.7 }}>
             {!svoUsers.some((s) => s.id === project.svoUserId) && (
               <option value={project.svoUserId}>{project.svo?.name} (retiré des rôles)</option>
@@ -201,7 +216,12 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
           </select>
         </div>
         <Field label="Statut" value={project.status} onChange={(v) => setProject((p) => ({ ...p, status: v }))}
-          onBlur={() => patchProject("status", project.status)} width={200} disabled={!canEditNameStatus} />
+          width={200} disabled={!canEditNameStatus} />
+        {(canEditNameStatus || canManageProjects) && (
+          <button onClick={saveTopFields} disabled={!topDirty} style={{ ...btnPrimary, opacity: topDirty ? 1 : 0.5, cursor: topDirty ? "pointer" : "not-allowed" }}>
+            <Check size={14} /> Enregistrer
+          </button>
+        )}
       </div>
 
       {isOwner && (
@@ -242,7 +262,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         periods={periods}
         editable={canEditDemand}
         onAdd={addDemandLine}
-        onPatch={patchDemandLine}
+        onSave={saveDemandLine}
         onRemove={removeDemandLine}
       />
 
@@ -385,7 +405,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         ]}
         addLabel={canManageAllocations ? "Ajouter une affectation" : "Proposer une affectation"}
         onAdd={addAllocationLine}
-        onPatch={patchAllocationLine}
+        onSave={saveAllocationLine}
         onRemove={removeAllocationLine}
       />
 
