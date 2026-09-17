@@ -71,10 +71,16 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     }
   }
 
+  // A resource staffed on a project during a week they're also marked
+  // unavailable (congé/maladie/...) is a real scheduling conflict — the
+  // allocation exists but the person won't actually be there.
   let alertCount = 0;
+  let conflictCount = 0;
   for (const res of pool) {
     for (const p of periods) {
-      if ((overAllocGrid[res.id]?.[p] || 0) > 1.001) alertCount++;
+      const load = overAllocGrid[res.id]?.[p] || 0;
+      if (load > 1.001) alertCount++;
+      if (load > 0.001 && unavailableMembers[res.id]?.[p]) conflictCount++;
     }
   }
 
@@ -84,6 +90,7 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     overAllocProjects,
     unavailableMembers,
     alertCount,
+    conflictCount,
   };
 }
 
@@ -202,6 +209,7 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
       releasePendingCount,
       draftCount,
       submittedCount,
+      conflictCount: resourceLoad.conflictCount,
     },
     bySquad: PROFILES.map((name) => {
       const b = besoin[name], a = alloc[name];

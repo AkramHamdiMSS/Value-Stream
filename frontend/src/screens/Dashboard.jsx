@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge, UserCheck, Inbox, Unlock, FileText } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge, UserCheck, Inbox, Unlock, FileText, CalendarOff } from "lucide-react";
 import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, AMBER, RED, CARD_SHADOW } from "../styles";
 import { Kpi, Th, Td, Badge } from "../components/ui";
 
@@ -149,6 +149,7 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
         <Kpi label="Écart" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
         <Kpi label="Capacité pool" value={totals.capTotal} icon={<Users size={18} />} />
         <Kpi label="Ressources en sur-allocation" value={alertCount} accent={alertCount > 0 ? RED : GREEN} icon={<AlertTriangle size={18} />} />
+        <Kpi label="Conflits congé / affectation" value={totals.conflictCount} accent={totals.conflictCount > 0 ? RED : GREEN} icon={<CalendarOff size={18} />} />
       </div>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
@@ -278,17 +279,22 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                     {periods.map((p) => {
                       const v = overAllocGrid[res.id]?.[p] || 0;
                       const unavailable = unavailableMembers?.[res.id]?.[p];
+                      // On leave AND staffed that same week is a real
+                      // conflict (the allocation exists but the person
+                      // won't be there) — flagged red, not just amber.
+                      const conflict = unavailable && v > 0.001;
                       const over = v > 1.001;
-                      const pillColor = unavailable ? AMBER : over ? RED : v > 0 ? GREEN : MUTED;
+                      const pillColor = conflict ? RED : unavailable ? AMBER : over ? RED : v > 0 ? GREEN : MUTED;
+                      const tooltip = unavailable ? (conflict ? `${unavailable.join(", ")} — mais affecté(e) à ${Math.round(v * 100)}% cette semaine` : unavailable.join(", ")) : undefined;
                       return (
                         <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
-                          <span title={unavailable ? unavailable.join(", ") : undefined} style={{
+                          <span title={tooltip} style={{
                             display: "inline-block", minWidth: 40, padding: "3px 6px", borderRadius: 999,
                             border: `1px solid ${v > 0 || unavailable ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
                             background: v > 0 || unavailable ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
                             color: pillColor, fontWeight: over || unavailable ? 700 : 500,
                           }}>
-                            {unavailable ? "Congé" : v > 0 ? `${Math.round(v * 100)}%` : "—"}
+                            {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? "Congé" : v > 0 ? `${Math.round(v * 100)}%` : "—"}
                           </span>
                         </td>
                       );
