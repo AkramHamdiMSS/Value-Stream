@@ -236,6 +236,19 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
 // regardless of what you personally manage. Click a resource to expand the
 // projects behind their load, per week.
 
+const fmtDay = (d) => new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+// A leave spanning several weeks shows up once per week in unavailableMembers —
+// dedupe back down to the underlying records so the tooltip lists each leave
+// once, with its actual days, not one entry per week it touches.
+function leaveDetails(entries) {
+  const seen = new Map();
+  for (const u of entries || []) {
+    const key = `${u.type}|${u.startDate}|${u.endDate}`;
+    if (!seen.has(key)) seen.set(key, `${u.type} (${fmtDay(u.startDate)} → ${fmtDay(u.endDate)})`);
+  }
+  return [...seen.values()];
+}
+
 function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
   const [expanded, setExpanded] = useState(null);
   const { pool, overAllocGrid, overAllocProjects, unavailableMembers, periods } = data;
@@ -285,7 +298,8 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                       const conflict = unavailable && v > 0.001;
                       const over = v > 1.001;
                       const pillColor = conflict ? RED : unavailable ? AMBER : over ? RED : v > 0 ? GREEN : MUTED;
-                      const tooltip = unavailable ? (conflict ? `${unavailable.join(", ")} — mais affecté(e) à ${Math.round(v * 100)}% cette semaine` : unavailable.join(", ")) : undefined;
+                      const leaves = unavailable ? leaveDetails(unavailable).join(", ") : "";
+                      const tooltip = unavailable ? (conflict ? `${leaves} — mais affecté(e) à ${Math.round(v * 100)}% cette semaine` : leaves) : undefined;
                       return (
                         <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
                           <span title={tooltip} style={{

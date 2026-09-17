@@ -56,7 +56,9 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
       if (!dateRangeOverlapsWeek(u.startDate, u.endDate, monday)) continue;
       if (!unavailableMembers[u.poolMemberId]) unavailableMembers[u.poolMemberId] = {};
       if (!unavailableMembers[u.poolMemberId][p]) unavailableMembers[u.poolMemberId][p] = [];
-      unavailableMembers[u.poolMemberId][p].push(u.type);
+      // Full record (not just the type), so the UI can show the actual
+      // days involved instead of just "en congé cette semaine".
+      unavailableMembers[u.poolMemberId][p].push({ type: u.type, startDate: u.startDate, endDate: u.endDate });
     }
   }
   

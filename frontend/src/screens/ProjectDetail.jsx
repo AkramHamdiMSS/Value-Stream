@@ -288,22 +288,30 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
             hint: (line) => {
               if (!line.poolMemberId || !line.periodStart || !line.periodEnd) return null;
               const seen = new Map();
-              const leaveWeeks = new Set();
+              // A leave spanning several weeks shows up once per week here —
+              // dedupe back to the underlying record so it's shown once,
+              // with its actual days, not just a week count.
+              const leaves = new Map();
               for (const w of periodsBetween(line.periodStart, line.periodEnd)) {
                 for (const e of overAllocProjects?.[`${line.poolMemberId}:${w}`] || []) {
                   if (e.projectId !== project.id && !seen.has(e.projectId)) seen.set(e.projectId, e);
                 }
-                if (unavailableMembers?.[line.poolMemberId]?.[w]) leaveWeeks.add(w);
+                for (const u of unavailableMembers?.[line.poolMemberId]?.[w] || []) {
+                  const key = `${u.type}|${u.startDate}|${u.endDate}`;
+                  if (!leaves.has(key)) leaves.set(key, u);
+                }
               }
               const entries = [...seen.values()];
-              if (entries.length === 0 && leaveWeeks.size === 0) return null;
+              const leaveList = [...leaves.values()];
+              if (entries.length === 0 && leaveList.length === 0) return null;
+              const fmtDay = (d) => new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
               return (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                  {leaveWeeks.size > 0 && (
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: RED, background: `color-mix(in srgb, ${RED} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${RED} 45%, transparent)`, borderRadius: 999, padding: "2px 8px" }}>
-                      ⚠ En congé {leaveWeeks.size > 1 ? `sur ${leaveWeeks.size} semaines` : "cette semaine-là"}
+                  {leaveList.map((u, i) => (
+                    <span key={i} style={{ fontSize: 10.5, fontWeight: 700, color: RED, background: `color-mix(in srgb, ${RED} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${RED} 45%, transparent)`, borderRadius: 999, padding: "2px 8px" }}>
+                      ⚠ {u.type} ({fmtDay(u.startDate)} → {fmtDay(u.endDate)})
                     </span>
-                  )}
+                  ))}
                   {entries.map((e) => (
                     <span key={e.projectId} style={{ fontSize: 10.5, color: MUTED, background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 999, padding: "2px 8px" }}>
                       {e.projectName} · {Math.round(e.pct * 100)}%
