@@ -75,10 +75,27 @@ function dateRangeOverlapsWeek(rangeStart, rangeEnd, monday) {
   return rangeStart <= sunday && rangeEnd >= monday;
 }
 
+// Reverse of isoWeekId(), computed directly rather than by walking from
+// "today" — needed for an arbitrary period id (a demand/allocation line's
+// periodStart/periodEnd can be any week, not just one of the 52 currently
+// on screen). ISO 8601: week 1 is always the week containing 4 January.
+function periodIdToDates(periodId) {
+  const [yearStr, weekStr] = periodId.split("-W");
+  const year = Number(yearStr), week = Number(weekStr);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - jan4Day + 1 + (week - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  sunday.setUTCHours(23, 59, 59, 999);
+  return { monday, sunday };
+}
+
 function effective(count, pct) {
   const c = Number(count) || 0;
   const p = pct === null || pct === undefined || pct === "" ? 1 : Number(pct);
   return c * p;
 }
 
-module.exports = { N_WEEKS, currentWeekMonday, isoWeekId, generatePeriods, generatePeriodObjects, generatePeriodDates, effective, inRange, dateRangeOverlapsWeek };
+module.exports = { N_WEEKS, currentWeekMonday, isoWeekId, generatePeriods, generatePeriodObjects, generatePeriodDates, periodIdToDates, effective, inRange, dateRangeOverlapsWeek };

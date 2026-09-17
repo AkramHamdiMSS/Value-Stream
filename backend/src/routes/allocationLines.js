@@ -5,6 +5,7 @@ const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { logActivity } = require("../lib/activity");
 const { notifyHSV, notifyUser, notifyPoolMember, notifyTeamLeadsForSousEquipe, projectLink } = require("../lib/notify");
+const { findUnavailabilityConflicts } = require("../lib/unavailability");
 
 const router = express.Router();
 router.use(authenticate);
@@ -79,6 +80,7 @@ router.patch("/:id", async (req, res) => {
 
   if (canManage && line.status === "pending") {
     await notifyApproval({ line, project: line.project, approver: req.user });
+    await alertIfUnavailable({ ...updated, project: line.project }, "validée");
   }
 
   res.json(updated);
@@ -121,8 +123,22 @@ router.post("/:id/approve", requirePermission("manageAllocations"), async (req, 
   });
   await logActivity({ user: req.user, action: `a validé l'affectation de ${line.poolMember.name} (${rangeLabel(line)})`, project: line.project });
   await notifyApproval({ line, project: line.project, approver: req.user });
+  await alertIfUnavailable(line, "validée");
   res.json(updated);
 });
+
+// Flags to the Team Lead + HSV when a line lands on a resource who's also
+// marked unavailable for that same span — worth catching at the moment of
+// validation too, not just when the line was first proposed/assigned.
+async function alertIfUnavailable(line, verb) {
+  const conflicts = await findUnavailabilityConflicts(line.poolMemberId, line.periodStart, line.periodEnd);
+  if (conflicts.length === 0) return;
+  const types = [...new Set(conflicts.map((c) => c.type))].join(", ");
+  const link = projectLink(line.project.id);
+  const text = `⚠ L'affectation ${verb} de ${line.poolMember.name} sur "${line.project.name}" (${rangeLabel(line)}) chevauche un(e) ${types}.`;
+  await notifyTeamLeadsForSousEquipe(line.poolMember.sousEquipe, `⚠ Conflit congé — ${line.project.name}`, text, link);
+  await notifyHSV(`⚠ Conflit congé — ${line.project.name}`, text, link);
+}
 
 // Removing a line: manageAllocations can remove anything (this doubles as
 // "reject a proposal"); a proposeAllocations-only holder can only retract

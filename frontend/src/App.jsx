@@ -245,6 +245,7 @@ export default function App() {
             canViewAll={can.viewAllProjects} canManageProjects={can.manageProjects} canManageAllocations={can.manageAllocations} canProposeAllocations={can.proposeAllocations}
             user={user}
             svoUsers={svoUsers} pool={pool} teamPool={dashboard?.pool || []} periods={periods} overAllocProjects={dashboard?.overAllocProjects || {}}
+            unavailableMembers={dashboard?.unavailableMembers || {}}
             onBack={() => setSelectedId(null)}
             onProjectsChanged={() => { refreshProjects(); refreshDashboard(); }}
           />
