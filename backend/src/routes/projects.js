@@ -7,7 +7,7 @@ const { effective, inRange } = require("../lib/periods");
 const { PROFILES, PROFILE_FIELDS } = require("../lib/profiles");
 const { logActivity } = require("../lib/activity");
 const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe, projectLink } = require("../lib/notify");
-const { findUnavailabilityConflicts } = require("../lib/unavailability");
+const { findUnavailabilityConflicts, conflictErrorMessage } = require("../lib/unavailability");
 
 const router = express.Router();
 router.use(authenticate);
@@ -333,6 +333,14 @@ router.post("/:id/allocation-lines", async (req, res) => {
     }
   }
 
+  // A resource on leave that week can't be proposed or assigned at all —
+  // block outright rather than just warning after the fact.
+  const conflicts = await findUnavailabilityConflicts(parsed.data.poolMemberId, periodStart, periodEnd);
+  if (conflicts.length > 0) {
+    const target = await prisma.poolMember.findUnique({ where: { id: parsed.data.poolMemberId } });
+    return res.status(409).json({ error: conflictErrorMessage(target.name, conflicts) });
+  }
+
   const status = canManage ? "approved" : "pending";
   const line = await prisma.allocationLine.create({
     data: {
@@ -379,17 +387,6 @@ router.post("/:id/allocation-lines", async (req, res) => {
       `${req.user.name} a affecté ${line.poolMember.name} sur "${project.name}" (${label}, ${Math.round(Number(line.pct) * 100)}%).`,
       allocLink
     );
-  }
-
-  // Proposed or assigned during a week they're also marked unavailable —
-  // flag it right away to the Team Lead and HSV, not just after the fact
-  // on the dashboard.
-  const conflicts = await findUnavailabilityConflicts(line.poolMemberId, line.periodStart, line.periodEnd);
-  if (conflicts.length > 0) {
-    const types = [...new Set(conflicts.map((c) => c.type))].join(", ");
-    const alertText = `⚠ ${line.poolMember.name} a été ${status === "pending" ? "proposé(e)" : "affecté(e)"} sur "${project.name}" (${label}) alors qu'un(e) ${types} chevauche cette période.`;
-    await notifyTeamLeadsForSousEquipe(line.poolMember.sousEquipe, `⚠ Conflit congé — ${project.name}`, alertText, allocLink);
-    await notifyHSV(`⚠ Conflit congé — ${project.name}`, alertText, allocLink);
   }
 
   res.status(201).json(line);

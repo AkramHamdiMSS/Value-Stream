@@ -12,4 +12,13 @@ async function findUnavailabilityConflicts(poolMemberId, periodStart, periodEnd)
   return rows.filter((u) => u.startDate <= rangeEnd && rangeStart <= u.endDate);
 }
 
-module.exports = { findUnavailabilityConflicts };
+const fmtDay = (d) => new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+
+// Message for the 409 rejection when a conflict blocks an allocation —
+// names the resource and lists every overlapping leave with its real dates.
+function conflictErrorMessage(memberName, conflicts) {
+  const list = conflicts.map((c) => `${c.type} (${fmtDay(c.startDate)} → ${fmtDay(c.endDate)})`).join(", ");
+  return `${memberName} est indisponible sur cette période : ${list}.`;
+}
+
+module.exports = { findUnavailabilityConflicts, conflictErrorMessage };

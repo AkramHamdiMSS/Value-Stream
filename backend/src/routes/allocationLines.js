@@ -5,7 +5,7 @@ const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { logActivity } = require("../lib/activity");
 const { notifyHSV, notifyUser, notifyPoolMember, notifyTeamLeadsForSousEquipe, projectLink } = require("../lib/notify");
-const { findUnavailabilityConflicts } = require("../lib/unavailability");
+const { findUnavailabilityConflicts, conflictErrorMessage } = require("../lib/unavailability");
 
 const router = express.Router();
 router.use(authenticate);
@@ -56,6 +56,21 @@ router.patch("/:id", async (req, res) => {
   const nextEnd = parsed.data.periodEnd ?? line.periodEnd;
   if (nextStart > nextEnd) return res.status(400).json({ error: "La semaine de fin doit être après la semaine de début." });
 
+  // A resource on leave that week can't end up assigned here at all — check
+  // whenever the resource/period actually changes, or whenever this edit is
+  // about to confirm a pending line (even with no field changes, in case the
+  // leave was registered after the original proposal).
+  const nextPoolMemberId = parsed.data.poolMemberId ?? line.poolMemberId;
+  const willApprove = canManage && line.status === "pending";
+  const fieldsChanging = parsed.data.poolMemberId !== undefined || parsed.data.periodStart !== undefined || parsed.data.periodEnd !== undefined;
+  if (fieldsChanging || willApprove) {
+    const conflicts = await findUnavailabilityConflicts(nextPoolMemberId, nextStart, nextEnd);
+    if (conflicts.length > 0) {
+      const target = nextPoolMemberId === line.poolMemberId ? line.poolMember : await prisma.poolMember.findUnique({ where: { id: nextPoolMemberId } });
+      return res.status(409).json({ error: conflictErrorMessage(target.name, conflicts) });
+    }
+  }
+
   // The validation comment belongs to whoever approves — a proposer editing
   // their own still-pending line can't backdate one for themselves.
   const data = { ...parsed.data };
@@ -80,7 +95,6 @@ router.patch("/:id", async (req, res) => {
 
   if (canManage && line.status === "pending") {
     await notifyApproval({ line, project: line.project, approver: req.user });
-    await alertIfUnavailable({ ...updated, project: line.project }, "validée");
   }
 
   res.json(updated);
@@ -116,6 +130,12 @@ router.post("/:id/approve", requirePermission("manageAllocations"), async (req, 
   if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
   const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true, createdBy: true } });
   if (!line) return res.status(404).json({ error: "Ligne introuvable." });
+
+  const conflicts = await findUnavailabilityConflicts(line.poolMemberId, line.periodStart, line.periodEnd);
+  if (conflicts.length > 0) {
+    return res.status(409).json({ error: conflictErrorMessage(line.poolMember.name, conflicts) });
+  }
+
   const updated = await prisma.allocationLine.update({
     where: { id: req.params.id },
     data: { status: "approved", ...(parsed.data.validationComment !== undefined ? { validationComment: parsed.data.validationComment } : {}) },
@@ -123,22 +143,8 @@ router.post("/:id/approve", requirePermission("manageAllocations"), async (req, 
   });
   await logActivity({ user: req.user, action: `a validé l'affectation de ${line.poolMember.name} (${rangeLabel(line)})`, project: line.project });
   await notifyApproval({ line, project: line.project, approver: req.user });
-  await alertIfUnavailable(line, "validée");
   res.json(updated);
 });
-
-// Flags to the Team Lead + HSV when a line lands on a resource who's also
-// marked unavailable for that same span — worth catching at the moment of
-// validation too, not just when the line was first proposed/assigned.
-async function alertIfUnavailable(line, verb) {
-  const conflicts = await findUnavailabilityConflicts(line.poolMemberId, line.periodStart, line.periodEnd);
-  if (conflicts.length === 0) return;
-  const types = [...new Set(conflicts.map((c) => c.type))].join(", ");
-  const link = projectLink(line.project.id);
-  const text = `⚠ L'affectation ${verb} de ${line.poolMember.name} sur "${line.project.name}" (${rangeLabel(line)}) chevauche un(e) ${types}.`;
-  await notifyTeamLeadsForSousEquipe(line.poolMember.sousEquipe, `⚠ Conflit congé — ${line.project.name}`, text, link);
-  await notifyHSV(`⚠ Conflit congé — ${line.project.name}`, text, link);
-}
 
 // Removing a line: manageAllocations can remove anything (this doubles as
 // "reject a proposal"); a proposeAllocations-only holder can only retract
