@@ -36,6 +36,7 @@ const patchSchema = z.object({
   tpeAndroidPct: z.number().min(0).max(2).nullable().optional(),
   tpeEngagePct: z.number().min(0).max(2).nullable().optional(),
   digitalPct: z.number().min(0).max(2).nullable().optional(),
+  comment: z.string().trim().max(1000).nullable().optional(),
 });
 
 function rangeLabel(line) {

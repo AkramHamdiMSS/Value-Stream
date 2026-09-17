@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Loader2, Check } from "lucide-react";
 import { api } from "../api";
 import { round1, effective } from "../lib/util";
-import { MUTED, TEXT, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
 import { Th, Td, Field, SectionTitle, Badge } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 import DemandTable from "../components/DemandTable";
@@ -245,23 +245,6 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         onPatch={patchDemandLine}
         onRemove={removeDemandLine}
       />
-
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Commentaire de la demande (SVO)</div>
-        {canEditDemand ? (
-          <textarea
-            value={project.demandComment || ""}
-            onChange={(e) => setProject((p) => ({ ...p, demandComment: e.target.value }))}
-            onBlur={() => patchProject("demandComment", project.demandComment || null)}
-            placeholder="Contexte, urgence, contrainte particulière…" rows={2}
-            style={{ ...inputStyle, width: "100%", maxWidth: 520, resize: "vertical", fontFamily: "inherit" }}
-          />
-        ) : project.demandComment ? (
-          <div style={{ fontSize: 13, color: TEXT, maxWidth: 520, whiteSpace: "pre-wrap" }}>{project.demandComment}</div>
-        ) : (
-          <div style={{ fontSize: 12.5, color: MUTED, fontStyle: "italic" }}>Aucun commentaire.</div>
-        )}
-      </div>
 
       <SectionTitle style={{ marginTop: 28 }}>
         Affectation des ressources {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}

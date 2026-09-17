@@ -19,14 +19,14 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
   };
   const periodLabel = (id) => periods.find((p) => p.id === id)?.label || id || "—";
 
-  const colCount = 5 + (editable ? 1 : 0);
+  const colCount = 6 + (editable ? 1 : 0);
 
   return (
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 10 }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
           <tr style={{ background: SURFACE2 }}>
-            <Th>Début</Th><Th>Fin</Th><Th>Profil</Th><Th>Nombre de personnes</Th><Th>Allocation % (vide = 100%)</Th>
+            <Th>Début</Th><Th>Fin</Th><Th>Profil</Th><Th>Nombre de personnes</Th><Th>Allocation % (vide = 100%)</Th><Th>Commentaire</Th>
             {editable && <Th></Th>}
           </tr>
         </thead>
@@ -71,6 +71,20 @@ export default function DemandTable({ lines, periods, editable, onAdd, onPatch, 
                         style={{ ...inputStyle, width: 90 }} />
                     ) : <span style={{ color: MUTED }}>{line[sq.pctKey] === null || line[sq.pctKey] === undefined ? "100%" : `${Math.round(Number(line[sq.pctKey]) * 100)}%`}</span>}
                   </Td>
+                  {i === 0 && (
+                    <Td rowSpan={SQUADS.length} style={{ verticalAlign: "top" }}>
+                      {editable ? (
+                        <input value={line.comment ?? ""} placeholder="Contexte, urgence…"
+                          onChange={(e) => setLocalValue(line.id, "comment", e.target.value)}
+                          onBlur={(e) => onPatch(line.id, "comment", e.target.value || null)}
+                          style={{ ...inputStyle, width: 200 }} />
+                      ) : (
+                        <span style={{ color: line.comment ? TEXT : MUTED, fontStyle: line.comment ? "normal" : "italic" }}>
+                          {line.comment || "Aucun commentaire."}
+                        </span>
+                      )}
+                    </Td>
+                  )}
                   {i === 0 && editable && (
                     <Td rowSpan={SQUADS.length} style={{ verticalAlign: "top" }}>
                       <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">

@@ -65,10 +65,6 @@ model Project {
   svo              User     @relation("ProjectSvo", fields: [svoUserId], references: [id])
   status           String
   demandSubmitted  Boolean  @default(false) @map("demand_submitted")
-  // Free-text note the SVO can attach when expressing/submitting the need —
-  // context a headcount/period breakdown alone can't carry (why it's urgent,
-  // a constraint on who can do it, etc).
-  demandComment    String?  @map("demand_comment")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
@@ -100,6 +96,11 @@ model DemandLine {
   tpeAndroidPct   Decimal? @db.Decimal(6, 4) @map("tpe_android_pct")
   tpeEngagePct    Decimal? @db.Decimal(6, 4) @map("tpe_engage_pct")
   digitalPct      Decimal? @db.Decimal(6, 4) @map("digital_pct")
+  // Free-text note the SVO can attach to this specific period range —
+  // context a headcount breakdown alone can't carry (why it's urgent, a
+  // constraint on who can do it, etc). Per line, not per project: each
+  // period range can have its own story.
+  comment         String?  @map("comment")
 
   @@index([projectId])
   @@map("demand_lines")

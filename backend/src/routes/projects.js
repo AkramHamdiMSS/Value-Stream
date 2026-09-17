@@ -51,7 +51,6 @@ function serializeProject(project) {
     name: project.name,
     status: project.status,
     demandSubmitted: project.demandSubmitted,
-    demandComment: project.demandComment,
     svoUserId: project.svoUserId,
     svo: project.svo ? { id: project.svo.id, name: project.svo.name } : null,
     createdAt: project.createdAt,
@@ -151,7 +150,6 @@ router.patch("/:id", async (req, res) => {
     name: z.string().trim().min(1).optional(),
     status: z.string().trim().min(1).optional(),
     demandSubmitted: z.boolean().optional(),
-    demandComment: z.string().trim().max(2000).nullable().optional(),
     svoUserId: z.string().uuid().optional(),
   });
   const parsed = schema.safeParse(req.body);
@@ -180,12 +178,6 @@ router.patch("/:id", async (req, res) => {
     const svo = await prisma.user.findUnique({ where: { id: data.svoUserId } });
     if (!svo || svo.role !== "svo") return res.status(400).json({ error: "SVO invalide." });
   }
-  // The demand comment belongs to the SVO who expressed the need — even a
-  // manageProjects admin (who can otherwise rename/reassign the project)
-  // can't rewrite it, only read it. Symmetric with validationComment on
-  // AllocationLine, which only the approver can ever write.
-  if (!isOwner) delete data.demandComment;
-
   const updated = await prisma.project.update({
     where: { id: project.id },
     data,
@@ -197,7 +189,6 @@ router.patch("/:id", async (req, res) => {
   else if ("svoUserId" in data) action = `a réaffecté le projet à ${updated.svo.name}`;
   else if ("name" in data) action = `a renommé le projet en "${data.name}"`;
   else if ("status" in data) action = `a changé le statut en "${data.status}"`;
-  else if ("demandComment" in data) action = "a modifié le commentaire de la demande";
   if (action) await logActivity({ user: req.user, action, project: updated });
 
   if (data.demandSubmitted === true) {
@@ -262,6 +253,7 @@ const demandLineSchema = z.object({
   tpeAndroidPct: z.number().min(0).max(2).nullable().optional(),
   tpeEngagePct: z.number().min(0).max(2).nullable().optional(),
   digitalPct: z.number().min(0).max(2).nullable().optional(),
+  comment: z.string().trim().max(1000).nullable().optional(),
 });
 
 router.post("/:id/demand-lines", async (req, res) => {
@@ -290,6 +282,7 @@ router.post("/:id/demand-lines", async (req, res) => {
       tpeAndroidPct: parsed.data.tpeAndroidPct ?? null,
       tpeEngagePct: parsed.data.tpeEngagePct ?? null,
       digitalPct: parsed.data.digitalPct ?? null,
+      comment: parsed.data.comment ?? null,
     },
   });
   await logActivity({ user: req.user, action: `a ajouté un besoin (${rangeLabel(line)})`, project });
