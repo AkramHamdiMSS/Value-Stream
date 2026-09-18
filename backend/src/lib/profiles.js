@@ -4,10 +4,10 @@
 // tracks them separately and everything matches against
 // poolMember.sousEquipe (never .squad, which would conflate the two).
 const PROFILE_FIELDS = [
-  { profile: "Mobile", countField: "mobileCount", pctField: "mobilePct" },
-  { profile: "TPE Android", countField: "tpeAndroidCount", pctField: "tpeAndroidPct" },
-  { profile: "TPE Engage", countField: "tpeEngageCount", pctField: "tpeEngagePct" },
-  { profile: "Digital", countField: "digitalCount", pctField: "digitalPct" },
+  { profile: "Mobile", countField: "mobileCount", pctField: "mobilePct", jiraKeyField: "jiraProjectKeyMobile" },
+  { profile: "TPE Android", countField: "tpeAndroidCount", pctField: "tpeAndroidPct", jiraKeyField: "jiraProjectKeyTpeAndroid" },
+  { profile: "TPE Engage", countField: "tpeEngageCount", pctField: "tpeEngagePct", jiraKeyField: "jiraProjectKeyTpeEngage" },
+  { profile: "Digital", countField: "digitalCount", pctField: "digitalPct", jiraKeyField: "jiraProjectKeyDigital" },
 ];
 const PROFILES = PROFILE_FIELDS.map((p) => p.profile);
 

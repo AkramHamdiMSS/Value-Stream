@@ -6,14 +6,16 @@
 //
 // Matching is explicit, not fuzzy: a worklog only lands somewhere if its
 // Tempo author accountId is set on a PoolMember.jiraAccountId, and its
-// issue's project key is set on a Project.jiraProjectKey — no name
-// matching, which is exactly what broke the ASCII import ("Hamdi AKRAM" vs
-// "Akram Hamdi"). Unmatched worklogs are reported, not guessed at.
+// Jira project key is set on one of a Project's per-espace jiraProjectKey*
+// fields — no name matching, which is exactly what broke the ASCII import
+// ("Hamdi AKRAM" vs "Akram Hamdi"). Unmatched worklogs are reported, not
+// guessed at.
 
 require("dotenv").config();
 const prisma = require("../src/lib/prisma");
 const { fetchWorklogs, fetchWorklogsForProject } = require("../src/lib/tempo");
 const { isoWeekId } = require("../src/lib/periods");
+const { PROFILE_FIELDS } = require("../src/lib/profiles");
 
 function dateStr(d) {
   return d.toISOString().slice(0, 10);
@@ -33,20 +35,31 @@ async function syncTempoWorklogs() {
 
   const [members, projects] = await Promise.all([
     prisma.poolMember.findMany({ where: { jiraAccountId: { not: null } } }),
-    prisma.project.findMany({ where: { jiraProjectKey: { not: null } } }),
+    prisma.project.findMany({
+      where: { OR: PROFILE_FIELDS.map(({ jiraKeyField }) => ({ [jiraKeyField]: { not: null } })) },
+    }),
   ]);
   const memberByAccountId = new Map(members.map((m) => [m.jiraAccountId, m]));
 
+  // A single Pilotage project can span up to 4 Jira projects (one per
+  // espace — Mobile/Digital/TPE Android/TPE Engage), each with its own key.
+  const projectKeyPairs = projects.flatMap((project) =>
+    PROFILE_FIELDS.filter(({ jiraKeyField }) => project[jiraKeyField]).map(({ jiraKeyField }) => ({
+      projectId: project.id,
+      key: project[jiraKeyField],
+    }))
+  );
+
   // Tempo API v4 dropped `issue.key` from worklog responses (only the
   // numeric `issue.id` remains), so a project can no longer be resolved
-  // from the global fetch above. Instead, ask Tempo per mapped project
+  // from the global fetch above. Instead, ask Tempo per mapped key
   // (GET /worklogs/project/{key}) — every worklog it returns is known to
   // belong to that project — and use that to tag the global worklogs by
   // their `tempoWorklogId`, so each worklog still only gets counted once.
   const worklogProjectId = new Map();
-  for (const project of projects) {
-    const projectWorklogs = await fetchWorklogsForProject(project.jiraProjectKey, fromStr, toStr);
-    for (const w of projectWorklogs) worklogProjectId.set(w.tempoWorklogId, project.id);
+  for (const { projectId, key } of projectKeyPairs) {
+    const projectWorklogs = await fetchWorklogsForProject(key, fromStr, toStr);
+    for (const w of projectWorklogs) worklogProjectId.set(w.tempoWorklogId, projectId);
   }
 
   // Aggregate seconds per (poolMemberId, projectId|null, period) before
@@ -90,7 +103,7 @@ async function syncTempoWorklogs() {
 
   const withProject = worklogProjectId.size;
   console.log(`\n${upserted} lignes agrégées enregistrées dans logged_time.`);
-  console.log(`${withProject} worklog(s) rattaché(s) à un projet mappé (sur ${projects.length} projet(s) avec une clé Jira).`);
+  console.log(`${withProject} worklog(s) rattaché(s) à un projet mappé (sur ${projectKeyPairs.length} clé(s) Jira mappée(s), ${projects.length} projet(s)).`);
   if (unmatchedAccounts.size > 0) {
     console.log(`\n⚠ ${unmatchedAccounts.size} compte(s) Jira non rattaché(s) à une ressource (PoolMember.jiraAccountId) :`);
     unmatchedAccounts.forEach((id) => console.log(`  - ${id}`));

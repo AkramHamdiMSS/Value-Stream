@@ -73,10 +73,14 @@ model Project {
   svo              User     @relation("ProjectSvo", fields: [svoUserId], references: [id])
   status           String
   demandSubmitted  Boolean  @default(false) @map("demand_submitted")
-  // Jira project key (the prefix before the dash in an issue key, e.g.
-  // "PROJ" for PROJ-123) — how a Tempo worklog's issue gets matched back to
-  // this project when syncing logged time.
-  jiraProjectKey   String?  @map("jira_project_key")
+  // Jira project keys — one per espace, since a single Pilotage project can
+  // span up to 4 different Jira projects (Mobile/Digital/TPE Android/TPE
+  // Engage each have their own Jira space). Any subset may be set; the sync
+  // fetches worklogs per key and aggregates them all under this Project.
+  jiraProjectKeyMobile     String?  @map("jira_project_key_mobile")
+  jiraProjectKeyTpeAndroid String?  @map("jira_project_key_tpe_android")
+  jiraProjectKeyTpeEngage  String?  @map("jira_project_key_tpe_engage")
+  jiraProjectKeyDigital    String?  @map("jira_project_key_digital")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 

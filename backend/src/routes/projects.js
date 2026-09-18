@@ -52,7 +52,10 @@ function serializeProject(project) {
     name: project.name,
     status: project.status,
     demandSubmitted: project.demandSubmitted,
-    jiraProjectKey: project.jiraProjectKey,
+    jiraProjectKeyMobile: project.jiraProjectKeyMobile,
+    jiraProjectKeyTpeAndroid: project.jiraProjectKeyTpeAndroid,
+    jiraProjectKeyTpeEngage: project.jiraProjectKeyTpeEngage,
+    jiraProjectKeyDigital: project.jiraProjectKeyDigital,
     svoUserId: project.svoUserId,
     svo: project.svo ? { id: project.svo.id, name: project.svo.name } : null,
     createdAt: project.createdAt,
@@ -154,9 +157,13 @@ router.patch("/:id", async (req, res) => {
     status: z.string().trim().min(1).optional(),
     demandSubmitted: z.boolean().optional(),
     svoUserId: z.string().uuid().optional(),
-    // Jira project key (e.g. "PROJ") — how Tempo worklogs get matched back
-    // to this project when syncing logged time.
-    jiraProjectKey: z.string().trim().max(50).nullable().optional(),
+    // Jira project keys — one per espace (e.g. "PROJ"), since a single
+    // Pilotage project can span up to 4 different Jira projects. How Tempo
+    // worklogs get matched back to this project when syncing logged time.
+    jiraProjectKeyMobile: z.string().trim().max(50).nullable().optional(),
+    jiraProjectKeyTpeAndroid: z.string().trim().max(50).nullable().optional(),
+    jiraProjectKeyTpeEngage: z.string().trim().max(50).nullable().optional(),
+    jiraProjectKeyDigital: z.string().trim().max(50).nullable().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
@@ -195,7 +202,14 @@ router.patch("/:id", async (req, res) => {
   else if ("svoUserId" in data) action = `a réaffecté le projet à ${updated.svo.name}`;
   else if ("name" in data) action = `a renommé le projet en "${data.name}"`;
   else if ("status" in data) action = `a changé le statut en "${data.status}"`;
-  else if ("jiraProjectKey" in data) action = `a lié le projet Jira "${data.jiraProjectKey}"`;
+  else {
+    const changedJira = PROFILE_FIELDS.filter(({ jiraKeyField }) => jiraKeyField in data);
+    if (changedJira.length > 0) {
+      action = changedJira
+        .map(({ profile, jiraKeyField }) => `a lié le projet Jira "${data[jiraKeyField]}" (${profile})`)
+        .join(", ");
+    }
+  }
   if (action) await logActivity({ user: req.user, action, project: updated });
 
   if (data.demandSubmitted === true) {

@@ -22,7 +22,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const load = () => {
     setLoading(true);
     api.get(`/projects/${projectId}`)
-      .then((p) => { setProject(p); setSavedTop({ name: p.name, status: p.status, svoUserId: p.svoUserId, jiraProjectKey: p.jiraProjectKey }); setError(""); })
+      .then((p) => { setProject(p); setSavedTop({ name: p.name, status: p.status, svoUserId: p.svoUserId, ...Object.fromEntries(PROFILE_FIELDS.map(({ jiraKeyField }) => [jiraKeyField, p[jiraKeyField]])) }); setError(""); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -78,7 +78,8 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
 
   const topDirty = !!savedTop && (
     project.name !== savedTop.name || project.status !== savedTop.status ||
-    project.svoUserId !== savedTop.svoUserId || (project.jiraProjectKey || "") !== (savedTop.jiraProjectKey || "")
+    project.svoUserId !== savedTop.svoUserId ||
+    PROFILE_FIELDS.some(({ jiraKeyField }) => (project[jiraKeyField] || "") !== (savedTop[jiraKeyField] || ""))
   );
   const saveTopFields = async () => {
     if (!topDirty) return;
@@ -86,10 +87,12 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     if (project.name !== savedTop.name) patch.name = project.name;
     if (project.status !== savedTop.status) patch.status = project.status;
     if (project.svoUserId !== savedTop.svoUserId) patch.svoUserId = project.svoUserId;
-    if ((project.jiraProjectKey || "") !== (savedTop.jiraProjectKey || "")) patch.jiraProjectKey = project.jiraProjectKey || null;
+    for (const { jiraKeyField } of PROFILE_FIELDS) {
+      if ((project[jiraKeyField] || "") !== (savedTop[jiraKeyField] || "")) patch[jiraKeyField] = project[jiraKeyField] || null;
+    }
     const updated = await api.patch(`/projects/${project.id}`, patch);
     setProject((prev) => ({ ...prev, ...updated }));
-    setSavedTop({ name: updated.name, status: updated.status, svoUserId: updated.svoUserId, jiraProjectKey: updated.jiraProjectKey });
+    setSavedTop({ name: updated.name, status: updated.status, svoUserId: updated.svoUserId, ...Object.fromEntries(PROFILE_FIELDS.map(({ jiraKeyField }) => [jiraKeyField, updated[jiraKeyField]])) });
     notifyChanged();
   };
 
@@ -261,8 +264,11 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         </div>
         <Field label="Statut" value={project.status} onChange={(v) => setProject((p) => ({ ...p, status: v }))}
           width={200} disabled={!canEditNameStatus} />
-        <Field label="Clé Jira" value={project.jiraProjectKey || ""} onChange={(v) => setProject((p) => ({ ...p, jiraProjectKey: v }))}
-          width={120} disabled={!canEditNameStatus} />
+        {PROFILE_FIELDS.map(({ profile, jiraKeyField }) => (
+          <Field key={jiraKeyField} label={`Jira ${profile}`} value={project[jiraKeyField] || ""}
+            onChange={(v) => setProject((p) => ({ ...p, [jiraKeyField]: v }))}
+            width={100} disabled={!canEditNameStatus} />
+        ))}
         {(canEditNameStatus || canManageProjects) && (
           <button onClick={saveTopFields} disabled={!topDirty} style={{ ...btnPrimary, opacity: topDirty ? 1 : 0.5, cursor: topDirty ? "pointer" : "not-allowed" }}>
             <Check size={14} /> Enregistrer
