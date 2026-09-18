@@ -114,10 +114,50 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   // ---- allocation lines ----
   // One row = one resource for one span of weeks. The resource picker
   // (`resourceOptions`) is already scoped to the actor's own team for a
-  // propose-only holder and to the whole pool for a manager, so a fresh row
-  // just needs some starting resource — the row is immediately editable.
+  // propose-only holder and to the whole pool for a manager.
+  //
+  // Pre-fills one line per still-missing headcount the SVO actually asked
+  // for — a demand of "Mobile: 3" seeds 3 Mobile lines on the SVO's own
+  // period range, not one line pinned to today's week — so the Team Lead
+  // only has to pick WHO for each slot, not retype the dates from scratch.
+  // A propose-only Team Lead's resourceOptions only cover their own
+  // sous-équipe, so this naturally only seeds their own profile's gaps.
+  // Tops up whatever's still short on repeat clicks (existing pending
+  // proposals count as already covering a slot); falls back to a single
+  // blank line once everything demanded is already covered.
   const addAllocationLine = async () => {
     if (resourceOptions.length === 0) return;
+
+    const seeds = [];
+    for (const dl of project.demandLines) {
+      for (const { profile, countKey, pctKey } of PROFILE_FIELDS) {
+        const needed = Math.max(0, Math.round(Number(dl[countKey]) || 0));
+        if (needed <= 0) continue;
+        const candidates = resourceOptions.filter((r) => r.sousEquipe === profile);
+        if (candidates.length === 0) continue;
+        const existing = project.allocationLines.filter((al) =>
+          al.periodStart === dl.periodStart && al.periodEnd === dl.periodEnd && poolById[al.poolMemberId]?.sousEquipe === profile
+        ).length;
+        const pctValue = dl[pctKey] === null || dl[pctKey] === undefined || dl[pctKey] === "" ? 1 : Number(dl[pctKey]);
+        for (let i = existing; i < needed; i++) {
+          seeds.push({ periodStart: dl.periodStart, periodEnd: dl.periodEnd, poolMemberId: candidates[i % candidates.length].id, pct: pctValue });
+        }
+      }
+    }
+
+    if (seeds.length > 0) {
+      // allSettled, not all — a resource on leave gets rejected (409) by
+      // the server for that one seed; the rest should still land instead
+      // of the whole batch vanishing because of one conflict.
+      const results = await Promise.allSettled(seeds.map((s) => api.post(`/projects/${project.id}/allocation-lines`, s)));
+      const created = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+      if (created.length > 0) {
+        setProject((prev) => ({ ...prev, allocationLines: [...prev.allocationLines, ...created] }));
+        notifyChanged();
+      }
+      return;
+    }
+
     const p = periods[0]?.id || "";
     const line = await api.post(`/projects/${project.id}/allocation-lines`, {
       periodStart: p, periodEnd: p, poolMemberId: resourceOptions[0].id, pct: 1,
