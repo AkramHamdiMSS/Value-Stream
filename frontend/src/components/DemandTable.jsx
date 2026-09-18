@@ -112,11 +112,11 @@ export default function DemandTable({ lines, periods, editable, onAdd, onSave, o
                   {i === 0 && editable && (
                     <Td rowSpan={SQUADS.length} style={{ verticalAlign: "top" }}>
                       <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={() => saveLine(line)} disabled={!dirty} title="Enregistrer" aria-label="Enregistrer" style={{
-                          background: "transparent", border: "none", color: dirty ? ACCENT : MUTED, cursor: dirty ? "pointer" : "default",
-                          opacity: dirty ? 1 : 0.4, padding: 4, display: "flex",
+                        <button onClick={() => saveLine(line)} disabled={!dirty} style={{
+                          ...btnGhost, fontSize: 11.5, padding: "4px 9px",
+                          ...(dirty ? { color: ACCENT, borderColor: ACCENT, cursor: "pointer" } : { opacity: 0.4, cursor: "default" }),
                         }}>
-                          <Check size={14} />
+                          <Check size={12} /> Valider
                         </button>
                         <button onClick={() => onRemove(line.id)} style={{ background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex" }} aria-label="Supprimer la ligne">
                           <Trash2 size={14} />

@@ -130,12 +130,12 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
           {primary.map((c) => renderField(c, line, lineEditable))}
           {editable && lineEditable && (
-            <div style={{ display: "flex", gap: 4, alignSelf: "flex-end", marginLeft: "auto" }}>
-              <button onClick={() => saveLine(line)} disabled={!dirty} title="Enregistrer" aria-label="Enregistrer" style={{
-                background: "transparent", border: "none", color: dirty ? ACCENT : MUTED, cursor: dirty ? "pointer" : "default",
-                opacity: dirty ? 1 : 0.4, padding: 4, display: "flex",
+            <div style={{ display: "flex", gap: 6, alignSelf: "flex-end", marginLeft: "auto" }}>
+              <button onClick={() => saveLine(line)} disabled={!dirty} style={{
+                ...btnGhost, fontSize: 12, padding: "5px 10px",
+                ...(dirty ? { color: ACCENT, borderColor: ACCENT, cursor: "pointer" } : { opacity: 0.4, cursor: "default" }),
               }}>
-                <Check size={15} />
+                <Check size={13} /> Valider
               </button>
               <button onClick={() => onRemove(line.id)} title="Supprimer la ligne" aria-label="Supprimer la ligne" style={{
                 background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex",
