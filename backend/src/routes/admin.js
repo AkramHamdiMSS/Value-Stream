@@ -15,7 +15,7 @@ router.post("/sync-tempo", async (req, res) => {
     const summary = await syncTempoWorklogs();
     await logActivity({
       user: req.user,
-      action: `a synchronisé les temps Tempo (${summary.matched} ligne(s), ${summary.unmatchedAccounts} compte(s) et ${summary.unmatchedProjects} projet(s) non rattachés)`,
+      action: `a synchronisé les temps Tempo (${summary.matched} ligne(s), ${summary.unmatchedAccounts} compte(s) Jira non rattachés)`,
     });
     res.json(summary);
   } catch (e) {

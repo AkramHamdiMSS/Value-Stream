@@ -111,8 +111,8 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
       const summary = await api.post("/admin/sync-tempo");
       showToast(
         `Synchro Tempo : ${summary.matched} ligne(s) mises à jour` +
-        (summary.unmatchedAccounts || summary.unmatchedProjects
-          ? ` — ${summary.unmatchedAccounts} compte(s) et ${summary.unmatchedProjects} projet(s) Jira non rattachés`
+        (summary.unmatchedAccounts
+          ? ` — ${summary.unmatchedAccounts} compte(s) Jira non rattachés`
           : ""),
         "success"
       );

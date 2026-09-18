@@ -12,18 +12,11 @@
 
 require("dotenv").config();
 const prisma = require("../src/lib/prisma");
-const { fetchWorklogs } = require("../src/lib/tempo");
+const { fetchWorklogs, fetchWorklogsForProject } = require("../src/lib/tempo");
 const { isoWeekId } = require("../src/lib/periods");
 
 function dateStr(d) {
   return d.toISOString().slice(0, 10);
-}
-
-// Jira issue keys are always "<PROJECTKEY>-<number>" — the part before the
-// last dash is the project key, no separate lookup needed.
-function projectKeyFromIssueKey(issueKey) {
-  const idx = issueKey.lastIndexOf("-");
-  return idx === -1 ? issueKey : issueKey.slice(0, idx);
 }
 
 async function syncTempoWorklogs() {
@@ -31,9 +24,11 @@ async function syncTempoWorklogs() {
   from.setDate(from.getDate() - 8 * 7);
   const to = new Date();
   to.setDate(to.getDate() + 4 * 7);
+  const fromStr = dateStr(from);
+  const toStr = dateStr(to);
 
-  console.log(`Récupération des worklogs Tempo du ${dateStr(from)} au ${dateStr(to)}...`);
-  const worklogs = await fetchWorklogs(dateStr(from), dateStr(to));
+  console.log(`Récupération des worklogs Tempo du ${fromStr} au ${toStr}...`);
+  const worklogs = await fetchWorklogs(fromStr, toStr);
   console.log(`${worklogs.length} worklogs récupérés.`);
 
   const [members, projects] = await Promise.all([
@@ -41,13 +36,23 @@ async function syncTempoWorklogs() {
     prisma.project.findMany({ where: { jiraProjectKey: { not: null } } }),
   ]);
   const memberByAccountId = new Map(members.map((m) => [m.jiraAccountId, m]));
-  const projectByKey = new Map(projects.map((p) => [p.jiraProjectKey, p]));
+
+  // Tempo API v4 dropped `issue.key` from worklog responses (only the
+  // numeric `issue.id` remains), so a project can no longer be resolved
+  // from the global fetch above. Instead, ask Tempo per mapped project
+  // (GET /worklogs/project/{key}) — every worklog it returns is known to
+  // belong to that project — and use that to tag the global worklogs by
+  // their `tempoWorklogId`, so each worklog still only gets counted once.
+  const worklogProjectId = new Map();
+  for (const project of projects) {
+    const projectWorklogs = await fetchWorklogsForProject(project.jiraProjectKey, fromStr, toStr);
+    for (const w of projectWorklogs) worklogProjectId.set(w.tempoWorklogId, project.id);
+  }
 
   // Aggregate seconds per (poolMemberId, projectId|null, period) before
   // touching the database — a person can log several worklogs the same week.
   const buckets = new Map();
   const unmatchedAccounts = new Set();
-  const unmatchedProjects = new Set();
 
   for (const w of worklogs) {
     const member = memberByAccountId.get(w.author?.accountId);
@@ -55,12 +60,10 @@ async function syncTempoWorklogs() {
       if (w.author?.accountId) unmatchedAccounts.add(w.author.accountId);
       continue;
     }
-    const issueKey = w.issue?.key;
-    const project = issueKey ? projectByKey.get(projectKeyFromIssueKey(issueKey)) : null;
-    if (issueKey && !project) unmatchedProjects.add(projectKeyFromIssueKey(issueKey));
+    const projectId = worklogProjectId.get(w.tempoWorklogId) ?? null;
 
     const period = isoWeekId(new Date(w.startDate));
-    const key = `${member.id}|${project?.id ?? ""}|${period}`;
+    const key = `${member.id}|${projectId ?? ""}|${period}`;
     buckets.set(key, (buckets.get(key) || 0) + (Number(w.timeSpentSeconds) || 0));
   }
 
@@ -85,17 +88,15 @@ async function syncTempoWorklogs() {
     upserted++;
   }
 
+  const withProject = worklogProjectId.size;
   console.log(`\n${upserted} lignes agrégées enregistrées dans logged_time.`);
+  console.log(`${withProject} worklog(s) rattaché(s) à un projet mappé (sur ${projects.length} projet(s) avec une clé Jira).`);
   if (unmatchedAccounts.size > 0) {
     console.log(`\n⚠ ${unmatchedAccounts.size} compte(s) Jira non rattaché(s) à une ressource (PoolMember.jiraAccountId) :`);
     unmatchedAccounts.forEach((id) => console.log(`  - ${id}`));
   }
-  if (unmatchedProjects.size > 0) {
-    console.log(`\n⚠ ${unmatchedProjects.size} clé(s) projet Jira non rattachée(s) à un projet (Project.jiraProjectKey) :`);
-    unmatchedProjects.forEach((k) => console.log(`  - ${k}`));
-  }
 
-  return { total: worklogs.length, matched: upserted, unmatchedAccounts: unmatchedAccounts.size, unmatchedProjects: unmatchedProjects.size };
+  return { total: worklogs.length, matched: upserted, unmatchedAccounts: unmatchedAccounts.size, worklogsWithProject: withProject };
 }
 
 if (require.main === module) {
