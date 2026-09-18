@@ -330,6 +330,7 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                                 <span style={{ color: MUTED }}>{labelFor(row.period)}</span>
                                 <span style={{ fontWeight: 600 }}>{e.projectName}</span>
                                 <span style={{ color: ACCENT }}>{Math.round(e.pct * 100)}%</span>
+                                {e.backupName && <span style={{ color: MUTED }}>· backup: {e.backupName}</span>}
                               </button>
                             )))}
                           </div>

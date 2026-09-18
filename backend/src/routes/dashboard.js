@@ -31,7 +31,11 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     prisma.poolMember.findMany(),
     prisma.allocationLine.findMany({
       where: { status: "approved" },
-      select: { poolMemberId: true, periodStart: true, periodEnd: true, pct: true, project: { select: { id: true, name: true } } },
+      select: {
+        poolMemberId: true, periodStart: true, periodEnd: true, pct: true,
+        project: { select: { id: true, name: true } },
+        backupPoolMember: { select: { name: true } },
+      },
     }),
     prisma.unavailability.findMany({
       select: { poolMemberId: true, startDate: true, endDate: true, type: true }
@@ -69,7 +73,7 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
       overAllocGrid[l.poolMemberId][p] += Number(l.pct) || 0;
       const key = `${l.poolMemberId}:${p}`;
       if (!overAllocProjects[key]) overAllocProjects[key] = [];
-      overAllocProjects[key].push({ projectId: l.project.id, projectName: l.project.name, pct: round1(Number(l.pct) || 0) });
+      overAllocProjects[key].push({ projectId: l.project.id, projectName: l.project.name, pct: round1(Number(l.pct) || 0), backupName: l.backupPoolMember?.name || null });
     }
   }
 
