@@ -30,6 +30,9 @@ const memberSchema = z.object({
   squad: z.enum(["Mobile", "TPE", "Digital"]),
   sousEquipe: z.string().trim().min(1),
   roleTitle: z.string().trim().min(1),
+  // Atlassian Cloud accountId — how a Tempo worklog's author is matched
+  // back to this person (see scripts/sync-tempo-worklogs.js).
+  jiraAccountId: z.union([z.string().trim(), z.literal("")]),
 });
 
 router.post("/", async (req, res) => {
@@ -54,6 +57,7 @@ router.patch("/:id", async (req, res) => {
   if (!before) return res.status(404).json({ error: "Personne introuvable." });
   const data = { ...parsed.data };
   if (data.email === "") data.email = null;
+  if (data.jiraAccountId === "") data.jiraAccountId = null;
   const member = await prisma.poolMember.update({ where: { id: req.params.id }, data });
 
   let action = null;

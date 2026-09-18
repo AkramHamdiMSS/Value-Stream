@@ -52,10 +52,16 @@ model PoolMember {
   squad      Squad
   sousEquipe String  @map("sous_equipe")
   roleTitle  String  @map("role_title")
+  // Atlassian Cloud accountId — Tempo identifies a worklog's author by this,
+  // not by name, so matching worklogs back to a PoolMember needs it set
+  // explicitly rather than fuzzy-matched (name matching is what broke the
+  // ASCII import on "Hamdi AKRAM" vs "Akram Hamdi").
+  jiraAccountId String? @map("jira_account_id")
 
   allocationLines AllocationLine[] @relation("AllocationPrimary")
   backupAllocationLines AllocationLine[] @relation("AllocationBackup")
   unavailabilities Unavailability[]
+  loggedTime       LoggedTime[]
 
   @@map("pool_members")
 }
@@ -67,11 +73,16 @@ model Project {
   svo              User     @relation("ProjectSvo", fields: [svoUserId], references: [id])
   status           String
   demandSubmitted  Boolean  @default(false) @map("demand_submitted")
+  // Jira project key (the prefix before the dash in an issue key, e.g.
+  // "PROJ" for PROJ-123) — how a Tempo worklog's issue gets matched back to
+  // this project when syncing logged time.
+  jiraProjectKey   String?  @map("jira_project_key")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   demandLines     DemandLine[]
   allocationLines AllocationLine[]
+  loggedTime      LoggedTime[]
 
   @@map("projects")
 }
@@ -160,6 +171,26 @@ model AllocationLine {
   @@index([poolMemberId, periodStart, periodEnd])
   @@index([projectId])
   @@map("allocation_lines")
+}
+
+// Weekly-aggregated hours pulled from Tempo (or, in principle, any future
+// timesheet source) — a cache the sync script upserts into, same pattern as
+// Unavailability. The unique constraint makes re-running the sync
+// idempotent: it updates hours instead of duplicating rows.
+model LoggedTime {
+  id           String     @id @default(uuid())
+  poolMemberId String     @map("pool_member_id")
+  poolMember   PoolMember @relation(fields: [poolMemberId], references: [id], onDelete: Cascade)
+  projectId    String?    @map("project_id")
+  project      Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  period       String     // ISO week id, e.g. "2026-W38" — see lib/periods.js isoWeekId()
+  hours        Decimal    @db.Decimal(6, 2)
+  source       String     @default("tempo")
+  syncedAt     DateTime   @updatedAt @map("synced_at")
+
+  @@unique([poolMemberId, projectId, period, source])
+  @@index([poolMemberId, period])
+  @@map("logged_time")
 }
 
 model Unavailability {

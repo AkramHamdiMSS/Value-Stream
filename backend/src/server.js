@@ -12,6 +12,7 @@ const demandQueueRoutes = require("./routes/demandQueue");
 const dashboardRoutes = require("./routes/dashboard");
 const periodsRoutes = require("./routes/periods");
 const activityRoutes = require("./routes/activity");
+const adminRoutes = require("./routes/admin");
 
 const app = express();
 app.use(cors());
@@ -29,6 +30,7 @@ app.use("/api/demand-queue", demandQueueRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/periods", periodsRoutes);
 app.use("/api/activity", activityRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

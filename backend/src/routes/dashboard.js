@@ -5,6 +5,7 @@ const { hasPermission } = require("../lib/permissions");
 const { effective, generatePeriods, generatePeriodDates, inRange, dateRangeOverlapsWeek } = require("../lib/periods");
 const { PROFILES, PROFILE_FIELDS } = require("../lib/profiles");
 const { buildDemandQueueRows } = require("../lib/demandQueueRows");
+const { STANDARD_WEEK_HOURS } = require("../lib/tempo");
 
 const router = express.Router();
 router.use(authenticate);
@@ -27,7 +28,7 @@ function canViewAllProjects(user) {
 // (viewDashboard and nothing else) only gets their own sous-équipe, not the
 // whole org — see sousEquipeFilter below.
 async function buildResourceLoad(periods, sousEquipeFilter) {
-  const [allMembers, allocationLines, unavailabilities] = await Promise.all([
+  const [allMembers, allocationLines, unavailabilities, loggedTime] = await Promise.all([
     prisma.poolMember.findMany(),
     prisma.allocationLine.findMany({
       where: { status: "approved" },
@@ -41,6 +42,12 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     }),
     prisma.unavailability.findMany({
       select: { poolMemberId: true, startDate: true, endDate: true, type: true }
+    }),
+    // period is already an ISO week id string here (see LoggedTime.period),
+    // no date-range overlap math needed like for Unavailability.
+    prisma.loggedTime.findMany({
+      where: { period: { in: periods } },
+      select: { poolMemberId: true, period: true, hours: true },
     }),
   ]);
   const pool = sousEquipeFilter ? allMembers.filter((m) => m.sousEquipe === sousEquipeFilter) : allMembers;
@@ -94,27 +101,48 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     }
   }
 
+  // Real hours logged (Tempo sync — see scripts/sync-tempo-worklogs.js),
+  // weekly per resource. Compared against overAllocGrid (the plan) below to
+  // flag significant gaps — only for weeks that have already happened, a
+  // future week can't have any hours logged against it yet.
+  const loggedHoursGrid = {};
+  for (const res of pool) loggedHoursGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
+  for (const t of loggedTime) {
+    if (!loggedHoursGrid[t.poolMemberId]) continue;
+    loggedHoursGrid[t.poolMemberId][t.period] = round1((loggedHoursGrid[t.poolMemberId][t.period] || 0) + Number(t.hours));
+  }
+
   // A resource staffed on a project during a week they're also marked
   // unavailable (congé/maladie/...) is a real scheduling conflict — the
   // allocation exists but the person won't actually be there.
   let alertCount = 0;
   let conflictCount = 0;
+  let timesheetGapCount = 0;
+  const currentPeriod = periods[0];
   for (const res of pool) {
     for (const p of periods) {
       const load = overAllocGrid[res.id]?.[p] || 0;
       if (load > 1.001) alertCount++;
       if (load > 0.001 && unavailableMembers[res.id]?.[p]) conflictCount++;
+      if (p > currentPeriod) continue; // no expectation yet for a future week
+      if (!res.jiraAccountId) continue; // no Tempo mapping — "no data" isn't "a gap"
+      const expected = load * STANDARD_WEEK_HOURS;
+      if (expected <= 0.001) continue; // nothing planned — not this KPI's concern
+      const logged = loggedHoursGrid[res.id]?.[p] || 0;
+      if (Math.abs(logged - expected) / expected > 0.2) timesheetGapCount++;
     }
   }
 
   return {
-    pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad, sousEquipe: p.sousEquipe })),
+    pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad, sousEquipe: p.sousEquipe, jiraAccountId: p.jiraAccountId })),
     overAllocGrid,
     overAllocProjects,
     unavailableMembers,
     backupFor,
+    loggedHoursGrid,
     alertCount,
     conflictCount,
+    timesheetGapCount,
   };
 }
 
@@ -234,6 +262,7 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
       draftCount,
       submittedCount,
       conflictCount: resourceLoad.conflictCount,
+      timesheetGapCount: resourceLoad.timesheetGapCount,
     },
     bySquad: PROFILES.map((name) => {
       const b = besoin[name], a = alloc[name];

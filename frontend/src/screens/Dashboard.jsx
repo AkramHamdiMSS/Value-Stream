@@ -2,8 +2,8 @@ import { Fragment, useState } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge, UserCheck, Inbox, Unlock, FileText, CalendarOff } from "lucide-react";
-import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, AMBER, RED, CARD_SHADOW } from "../styles";
+import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge, UserCheck, Inbox, Unlock, FileText, CalendarOff, Timer } from "lucide-react";
+import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, AMBER, RED, CARD_SHADOW, btnGhost } from "../styles";
 import { Kpi, Th, Td, Badge } from "../components/ui";
 
 const PROFILE_COLORS = { Mobile: ACCENT2, "TPE Android": GREEN, "TPE Engage": AMBER, Digital: ACCENT };
@@ -150,6 +150,7 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
         <Kpi label="Capacité pool" value={totals.capTotal} icon={<Users size={18} />} />
         <Kpi label="Ressources en sur-allocation" value={alertCount} accent={alertCount > 0 ? RED : GREEN} icon={<AlertTriangle size={18} />} />
         <Kpi label="Conflits congé / affectation" value={totals.conflictCount} accent={totals.conflictCount > 0 ? RED : GREEN} icon={<CalendarOff size={18} />} />
+        <Kpi label="Écart plan / réel (Tempo)" value={totals.timesheetGapCount} accent={totals.timesheetGapCount > 0 ? RED : GREEN} icon={<Timer size={18} />} />
       </div>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
@@ -249,16 +250,42 @@ function leaveDetails(entries) {
   return [...seen.values()];
 }
 
+// Matches lib/tempo.js's STANDARD_WEEK_HOURS on the backend — kept as a
+// plain local constant here rather than threaded through the API response,
+// same scale of duplication as other small display constants in this file.
+const STANDARD_WEEK_HOURS = 40;
+const VIEW_MODES = [
+  { value: "plan", label: "Planifié" },
+  { value: "reel", label: "Réel (Tempo)" },
+  { value: "ecart", label: "Écart" },
+];
+
 function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
   const [expanded, setExpanded] = useState(null);
-  const { pool, overAllocGrid, overAllocProjects, unavailableMembers, backupFor, periods } = data;
+  const [viewMode, setViewMode] = useState("plan");
+  const { pool, overAllocGrid, overAllocProjects, unavailableMembers, backupFor, loggedHoursGrid, periods } = data;
+  const currentPeriod = periods[0];
 
   return (
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Charge par ressource et par semaine (52 semaines)</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>Charge par ressource et par semaine (52 semaines)</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {VIEW_MODES.map((m) => (
+            <button key={m.value} onClick={() => setViewMode(m.value)} style={{
+              ...btnGhost, fontSize: 11, padding: "4px 9px",
+              ...(viewMode === m.value ? { background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`, color: ACCENT, borderColor: ACCENT } : {}),
+            }}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
-        Rouge = plus de 100% cette semaine-là, tous projets confondus. Cliquez sur une ressource pour voir le détail
-        des projets sur lesquels elle travaille. Défilement horizontal pour voir toute l'année.
+        {viewMode === "plan" && "Rouge = plus de 100% cette semaine-là, tous projets confondus."}
+        {viewMode === "reel" && "Heures réellement loggées dans Tempo, tous projets confondus (nécessite une synchro depuis Pool)."}
+        {viewMode === "ecart" && "Réel moins attendu (planifié × 40h), pour les semaines passées ou en cours seulement."}
+        {" "}Cliquez sur une ressource pour voir le détail des projets sur lesquels elle travaille. Défilement horizontal pour voir toute l'année.
       </div>
       <div style={{ overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", fontSize: 11.5, width: "100%" }}>
@@ -305,21 +332,48 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                       // real load/leave to show instead — it isn't an actual
                       // allocation, just "reachable if needed".
                       const backupOnly = !conflict && !unavailable && v <= 0.001 && backups?.length > 0;
-                      const pillColor = conflict ? RED : unavailable ? AMBER : over ? RED : v > 0 ? GREEN : backupOnly ? ACCENT2 : MUTED;
+
+                      // Congé/conflit/backup stay the same regardless of view
+                      // mode (they're planning facts, not hours) — only the
+                      // "nothing special" case below switches what it shows.
+                      const logged = loggedHoursGrid?.[res.id]?.[p] || 0;
+                      const expected = v * STANDARD_WEEK_HOURS;
+                      const ecart = logged - expected;
+                      const ecartSignificant = expected > 0.001 && Math.abs(ecart) / expected > 0.2;
+                      let normalLabel, normalColor, normalActive;
+                      if (viewMode === "reel") {
+                        normalActive = logged > 0.001;
+                        normalLabel = normalActive ? `${Math.round(logged * 10) / 10}h` : "—";
+                        normalColor = normalActive ? GREEN : MUTED;
+                      } else if (viewMode === "ecart") {
+                        // No Tempo mapping for this person — "no data" isn't
+                        // an écart, don't flag a fake 100% gap.
+                        normalActive = !!res.jiraAccountId && p <= currentPeriod && expected > 0.001;
+                        normalLabel = normalActive ? `${ecart > 0 ? "+" : ""}${Math.round(ecart)}h` : "—";
+                        normalColor = !normalActive ? MUTED : ecartSignificant ? RED : GREEN;
+                      } else {
+                        normalActive = v > 0;
+                        normalLabel = normalActive ? `${Math.round(v * 100)}%` : "—";
+                        normalColor = over ? RED : v > 0 ? GREEN : MUTED;
+                      }
+
+                      const pillColor = conflict ? RED : unavailable ? AMBER : backupOnly ? ACCENT2 : normalColor;
+                      const pillActive = v > 0 || unavailable || backupOnly || normalActive;
                       const leaves = unavailable ? leaveDetails(unavailable).join(", ") : "";
                       const backupList = backups ? backups.map((b) => `${b.projectName} (${b.primaryName})`).join(", ") : "";
                       const tooltip = unavailable
                         ? (conflict ? `${leaves} — mais affecté(e) à ${Math.round(v * 100)}% cette semaine` : leaves)
-                        : backupOnly ? `Backup pour : ${backupList}` : undefined;
+                        : backupOnly ? `Backup pour : ${backupList}`
+                        : viewMode === "ecart" && normalActive ? `Planifié ${Math.round(expected)}h · Réel ${Math.round(logged)}h` : undefined;
                       return (
                         <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
                           <span title={tooltip} style={{
                             display: "inline-block", minWidth: 40, padding: "3px 6px", borderRadius: 999,
-                            border: `1px solid ${v > 0 || unavailable || backupOnly ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
-                            background: v > 0 || unavailable || backupOnly ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
-                            color: pillColor, fontWeight: over || unavailable ? 700 : 500,
+                            border: `1px solid ${pillActive ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
+                            background: pillActive ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
+                            color: pillColor, fontWeight: over || unavailable || ecartSignificant ? 700 : 500,
                           }}>
-                            {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? "Congé" : v > 0 ? `${Math.round(v * 100)}%` : backupOnly ? "Backup" : "—"}
+                            {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? "Congé" : backupOnly ? "Backup" : normalLabel}
                           </span>
                         </td>
                       );

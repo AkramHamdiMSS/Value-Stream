@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Plus, Trash2, Calendar, X } from "lucide-react";
+import { Plus, Trash2, Calendar, X, Timer } from "lucide-react";
 import { api } from "../api";
-import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, RED, CARD_SHADOW, inputStyle, btnPrimary, iconBtn } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, RED, CARD_SHADOW, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
 import { Th, Td } from "../components/ui";
 import { isValidEmail } from "../lib/validate";
 import { showToast } from "../lib/toast";
@@ -9,6 +9,7 @@ import { showToast } from "../lib/toast";
 export default function PoolView({ pool, overAllocGrid, periods, onChanged, unavailabilitiesData = {} }) {
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState({});
+  const [syncingTempo, setSyncingTempo] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
   const [unavailabilities, setUnavailabilities] = useState([]);
   const [showUnavailabilityModal, setShowUnavailabilityModal] = useState(false);
@@ -104,6 +105,25 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
     return `${count} ${uniqueTypes.join(', ')}`;
   };
 
+  const handleSyncTempo = async () => {
+    setSyncingTempo(true);
+    try {
+      const summary = await api.post("/admin/sync-tempo");
+      showToast(
+        `Synchro Tempo : ${summary.matched} ligne(s) mises à jour` +
+        (summary.unmatchedAccounts || summary.unmatchedProjects
+          ? ` — ${summary.unmatchedAccounts} compte(s) et ${summary.unmatchedProjects} projet(s) Jira non rattachés`
+          : ""),
+        "success"
+      );
+      onChanged();
+    } catch (e) {
+      // api.js already toasts the error message.
+    } finally {
+      setSyncingTempo(false);
+    }
+  };
+
   const peakFor = (id) => {
     let max = 0;
     for (const p of periods) max = Math.max(max, overAllocGrid?.[id]?.[p] || 0);
@@ -119,7 +139,12 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
             Ajouter une personne ici la rend aussitôt disponible dans les listes déroulantes d'affectation.
           </p>
         </div>
-        <button onClick={addPerson} style={btnPrimary}><Plus size={15} /> Ajouter une personne</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={handleSyncTempo} disabled={syncingTempo} style={{ ...btnGhost, opacity: syncingTempo ? 0.6 : 1 }}>
+            <Timer size={15} /> {syncingTempo ? "Synchronisation..." : "Synchroniser Tempo"}
+          </button>
+          <button onClick={addPerson} style={btnPrimary}><Plus size={15} /> Ajouter une personne</button>
+        </div>
       </div>
 
       {error && <div style={{ color: RED, fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
@@ -128,7 +153,7 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
-              <Th>Nom</Th><Th>Email</Th><Th>Squad</Th><Th>Sous-équipe</Th><Th>Rôle</Th><Th>Indisponibilités</Th><Th>Pic de charge</Th><Th></Th>
+              <Th>Nom</Th><Th>Email</Th><Th>Jira Account ID</Th><Th>Squad</Th><Th>Sous-équipe</Th><Th>Rôle</Th><Th>Indisponibilités</Th><Th>Pic de charge</Th><Th></Th>
             </tr>
           </thead>
           <tbody>
@@ -140,6 +165,8 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
                     onBlur={(e) => patchPerson(p.id, "name", e.target.value)} style={inputStyle} /></Td>
                   <Td><input type="email" placeholder="email@…" value={draftValue(p, "email") ?? ""} onChange={(e) => setDraft(p.id, "email", e.target.value)}
                     onBlur={(e) => patchPerson(p.id, "email", e.target.value)} style={inputStyle} /></Td>
+                  <Td><input placeholder="accountId Atlassian" value={draftValue(p, "jiraAccountId") ?? ""} onChange={(e) => setDraft(p.id, "jiraAccountId", e.target.value)}
+                    onBlur={(e) => patchPerson(p.id, "jiraAccountId", e.target.value)} style={{ ...inputStyle, width: 140 }} /></Td>
                   <Td>
                     <select value={p.squad} onChange={(e) => patchPerson(p.id, "squad", e.target.value)} style={inputStyle}>
                       <option>Mobile</option><option>TPE</option><option>Digital</option>

@@ -22,7 +22,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   const load = () => {
     setLoading(true);
     api.get(`/projects/${projectId}`)
-      .then((p) => { setProject(p); setSavedTop({ name: p.name, status: p.status, svoUserId: p.svoUserId }); setError(""); })
+      .then((p) => { setProject(p); setSavedTop({ name: p.name, status: p.status, svoUserId: p.svoUserId, jiraProjectKey: p.jiraProjectKey }); setError(""); })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -76,16 +76,20 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     notifyChanged();
   };
 
-  const topDirty = !!savedTop && (project.name !== savedTop.name || project.status !== savedTop.status || project.svoUserId !== savedTop.svoUserId);
+  const topDirty = !!savedTop && (
+    project.name !== savedTop.name || project.status !== savedTop.status ||
+    project.svoUserId !== savedTop.svoUserId || (project.jiraProjectKey || "") !== (savedTop.jiraProjectKey || "")
+  );
   const saveTopFields = async () => {
     if (!topDirty) return;
     const patch = {};
     if (project.name !== savedTop.name) patch.name = project.name;
     if (project.status !== savedTop.status) patch.status = project.status;
     if (project.svoUserId !== savedTop.svoUserId) patch.svoUserId = project.svoUserId;
+    if ((project.jiraProjectKey || "") !== (savedTop.jiraProjectKey || "")) patch.jiraProjectKey = project.jiraProjectKey || null;
     const updated = await api.patch(`/projects/${project.id}`, patch);
     setProject((prev) => ({ ...prev, ...updated }));
-    setSavedTop({ name: updated.name, status: updated.status, svoUserId: updated.svoUserId });
+    setSavedTop({ name: updated.name, status: updated.status, svoUserId: updated.svoUserId, jiraProjectKey: updated.jiraProjectKey });
     notifyChanged();
   };
 
@@ -257,6 +261,8 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         </div>
         <Field label="Statut" value={project.status} onChange={(v) => setProject((p) => ({ ...p, status: v }))}
           width={200} disabled={!canEditNameStatus} />
+        <Field label="Clé Jira" value={project.jiraProjectKey || ""} onChange={(v) => setProject((p) => ({ ...p, jiraProjectKey: v }))}
+          width={120} disabled={!canEditNameStatus} />
         {(canEditNameStatus || canManageProjects) && (
           <button onClick={saveTopFields} disabled={!topDirty} style={{ ...btnPrimary, opacity: topDirty ? 1 : 0.5, cursor: topDirty ? "pointer" : "not-allowed" }}>
             <Check size={14} /> Enregistrer
