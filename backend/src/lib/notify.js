@@ -17,6 +17,13 @@ function getTransporter() {
     port: Number(process.env.SMTP_PORT) || 587,
     secure: process.env.SMTP_SECURE === "true",
     auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+    // A slow or unreachable SMTP server otherwise hangs the connection
+    // indefinitely — sendEmail() below is fire-and-forget precisely so this
+    // never blocks an HTTP response, but an unbounded hung socket would
+    // still leak; keep it bounded regardless.
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
   return transporter;
 }
@@ -72,6 +79,13 @@ function projectLink(projectId) {
   return `${process.env.APP_URL.replace(/\/$/, "")}/?project=${projectId}`;
 }
 
+// Fire-and-forget on purpose: every caller in this app awaits sendEmail (via
+// notifyHSV/notifyUser/etc) before responding to its own HTTP request, so an
+// SMTP round-trip that takes several seconds — or hangs outright, e.g. Gmail
+// unreachable or throttling — turned into the whole action (creating an
+// allocation, submitting a demand, ...) appearing stuck, even though the
+// actual database write had already succeeded. A notification failing to
+// send should never fail or stall the action that triggered it.
 async function sendEmail(to, subject, text, link) {
   if (!to) return;
   const t = getTransporter();
@@ -79,17 +93,13 @@ async function sendEmail(to, subject, text, link) {
     console.log(`[EMAIL SIMULÉ] À: ${to}\nObjet: ${subject}\n${text}${link ? `\nLien: ${link}` : ""}\n`);
     return;
   }
-  try {
-    await t.sendMail({
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to,
-      subject,
-      text: link ? `${text}\n\n${link}` : text,
-      html: buildEmailHtml(subject, text, link),
-    });
-  } catch (e) {
-    console.error(`Échec d'envoi email à ${to}:`, e.message);
-  }
+  t.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to,
+    subject,
+    text: link ? `${text}\n\n${link}` : text,
+    html: buildEmailHtml(subject, text, link),
+  }).catch((e) => console.error(`Échec d'envoi email à ${to}:`, e.message));
 }
 
 async function notifyHSV(subject, text, link) {
