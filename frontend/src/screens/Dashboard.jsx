@@ -251,7 +251,7 @@ function leaveDetails(entries) {
 
 function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
   const [expanded, setExpanded] = useState(null);
-  const { pool, overAllocGrid, overAllocProjects, unavailableMembers, periods } = data;
+  const { pool, overAllocGrid, overAllocProjects, unavailableMembers, backupFor, periods } = data;
 
   return (
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
@@ -276,6 +276,9 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
               const detail = periods
                 .map((p) => ({ period: p, entries: overAllocProjects?.[`${res.id}:${p}`] || [] }))
                 .filter((row) => row.entries.length > 0);
+              const backupDetail = periods
+                .map((p) => ({ period: p, entries: backupFor?.[res.id]?.[p] || [] }))
+                .filter((row) => row.entries.length > 0);
               return (
                 <Fragment key={res.id}>
                   <tr>
@@ -292,23 +295,31 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                     {periods.map((p) => {
                       const v = overAllocGrid[res.id]?.[p] || 0;
                       const unavailable = unavailableMembers?.[res.id]?.[p];
+                      const backups = backupFor?.[res.id]?.[p];
                       // On leave AND staffed that same week is a real
                       // conflict (the allocation exists but the person
                       // won't be there) — flagged red, not just amber.
                       const conflict = unavailable && v > 0.001;
                       const over = v > 1.001;
-                      const pillColor = conflict ? RED : unavailable ? AMBER : over ? RED : v > 0 ? GREEN : MUTED;
+                      // A backup role only gets its own flag when there's no
+                      // real load/leave to show instead — it isn't an actual
+                      // allocation, just "reachable if needed".
+                      const backupOnly = !conflict && !unavailable && v <= 0.001 && backups?.length > 0;
+                      const pillColor = conflict ? RED : unavailable ? AMBER : over ? RED : v > 0 ? GREEN : backupOnly ? ACCENT2 : MUTED;
                       const leaves = unavailable ? leaveDetails(unavailable).join(", ") : "";
-                      const tooltip = unavailable ? (conflict ? `${leaves} — mais affecté(e) à ${Math.round(v * 100)}% cette semaine` : leaves) : undefined;
+                      const backupList = backups ? backups.map((b) => `${b.projectName} (${b.primaryName})`).join(", ") : "";
+                      const tooltip = unavailable
+                        ? (conflict ? `${leaves} — mais affecté(e) à ${Math.round(v * 100)}% cette semaine` : leaves)
+                        : backupOnly ? `Backup pour : ${backupList}` : undefined;
                       return (
                         <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
                           <span title={tooltip} style={{
                             display: "inline-block", minWidth: 40, padding: "3px 6px", borderRadius: 999,
-                            border: `1px solid ${v > 0 || unavailable ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
-                            background: v > 0 || unavailable ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
+                            border: `1px solid ${v > 0 || unavailable || backupOnly ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
+                            background: v > 0 || unavailable || backupOnly ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
                             color: pillColor, fontWeight: over || unavailable ? 700 : 500,
                           }}>
-                            {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? "Congé" : v > 0 ? `${Math.round(v * 100)}%` : "—"}
+                            {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? "Congé" : v > 0 ? `${Math.round(v * 100)}%` : backupOnly ? "Backup" : "—"}
                           </span>
                         </td>
                       );
@@ -317,7 +328,7 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                   {isOpen && (
                     <tr>
                       <td colSpan={periods.length + 1} style={{ background: SURFACE2, padding: "10px 12px", borderBottom: `1px solid ${BORDER}` }}>
-                        {detail.length === 0 ? (
+                        {detail.length === 0 && backupDetail.length === 0 ? (
                           <span style={{ color: MUTED, fontSize: 12 }}>Aucune affectation pour {res.name}.</span>
                         ) : (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -331,6 +342,18 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                                 <span style={{ fontWeight: 600 }}>{e.projectName}</span>
                                 <span style={{ color: ACCENT }}>{Math.round(e.pct * 100)}%</span>
                                 {e.backupName && <span style={{ color: MUTED }}>· backup: {e.backupName}</span>}
+                              </button>
+                            )))}
+                            {backupDetail.map((row) => row.entries.map((e) => (
+                              <button key={`backup-${row.period}-${e.projectId}`} onClick={() => onOpenProject?.(e.projectId)} style={{
+                                background: SURFACE, border: `1px dashed color-mix(in srgb, ${ACCENT2} 55%, transparent)`, borderRadius: 20,
+                                color: TEXT, fontSize: 11.5, padding: "4px 10px", cursor: "pointer",
+                                display: "flex", alignItems: "center", gap: 6,
+                              }}>
+                                <span style={{ color: MUTED }}>{labelFor(row.period)}</span>
+                                <span style={{ color: ACCENT2, fontWeight: 600 }}>Backup</span>
+                                <span style={{ fontWeight: 600 }}>{e.projectName}</span>
+                                <span style={{ color: MUTED }}>pour {e.primaryName}</span>
                               </button>
                             )))}
                           </div>

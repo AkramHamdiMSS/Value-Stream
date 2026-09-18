@@ -34,6 +34,8 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
       select: {
         poolMemberId: true, periodStart: true, periodEnd: true, pct: true,
         project: { select: { id: true, name: true } },
+        poolMember: { select: { name: true } },
+        backupPoolMemberId: true,
         backupPoolMember: { select: { name: true } },
       },
     }),
@@ -77,6 +79,21 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     }
   }
 
+  // The reverse view: for someone LISTED as a backup, which weeks/projects
+  // are they on call for — doesn't touch overAllocGrid (a backup isn't a
+  // real allocation, it shouldn't count as load), just its own map so the
+  // backup's own row can flag it instead of showing a plain "—".
+  const backupFor = {};
+  for (const l of allocationLines) {
+    if (!l.backupPoolMemberId || !overAllocGrid[l.backupPoolMemberId]) continue;
+    for (const p of periods) {
+      if (!inRange(p, l.periodStart, l.periodEnd)) continue;
+      if (!backupFor[l.backupPoolMemberId]) backupFor[l.backupPoolMemberId] = {};
+      if (!backupFor[l.backupPoolMemberId][p]) backupFor[l.backupPoolMemberId][p] = [];
+      backupFor[l.backupPoolMemberId][p].push({ projectId: l.project.id, projectName: l.project.name, primaryName: l.poolMember?.name || null });
+    }
+  }
+
   // A resource staffed on a project during a week they're also marked
   // unavailable (congé/maladie/...) is a real scheduling conflict — the
   // allocation exists but the person won't actually be there.
@@ -95,6 +112,7 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
     overAllocGrid,
     overAllocProjects,
     unavailableMembers,
+    backupFor,
     alertCount,
     conflictCount,
   };
