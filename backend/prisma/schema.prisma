@@ -53,7 +53,8 @@ model PoolMember {
   sousEquipe String  @map("sous_equipe")
   roleTitle  String  @map("role_title")
 
-  allocationLines AllocationLine[]
+  allocationLines AllocationLine[] @relation("AllocationPrimary")
+  backupAllocationLines AllocationLine[] @relation("AllocationBackup")
   unavailabilities Unavailability[]
 
   @@map("pool_members")
@@ -131,7 +132,12 @@ model AllocationLine {
   periodStart  String     @map("period_start")
   periodEnd    String     @map("period_end")
   poolMemberId String     @map("pool_member_id")
-  poolMember   PoolMember @relation(fields: [poolMemberId], references: [id])
+  poolMember   PoolMember @relation("AllocationPrimary", fields: [poolMemberId], references: [id])
+  // Optional alternate candidate for this same slot (same sous-équipe),
+  // picked by whoever proposes/assigns the line — purely informational for
+  // now (who to reach for if the primary falls through), no automatic swap.
+  backupPoolMemberId String?     @map("backup_pool_member_id")
+  backupPoolMember   PoolMember? @relation("AllocationBackup", fields: [backupPoolMemberId], references: [id], onDelete: SetNull)
   pct          Decimal    @db.Decimal(6, 4)
   createdById  String     @map("created_by")
   createdBy    User       @relation("AllocationCreatedBy", fields: [createdById], references: [id])

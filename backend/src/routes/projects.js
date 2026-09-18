@@ -127,6 +127,7 @@ router.get("/:id", async (req, res) => {
       periodStart: l.periodStart,
       periodEnd: l.periodEnd,
       poolMemberId: l.poolMemberId,
+      backupPoolMemberId: l.backupPoolMemberId,
       pct: l.pct,
       status: l.status,
       comment: l.comment,
@@ -302,6 +303,7 @@ const allocationLineSchema = z.object({
   periodStart: z.string().trim().min(1),
   periodEnd: z.string().trim().min(1),
   poolMemberId: z.string().uuid(),
+  backupPoolMemberId: z.string().uuid().nullable().optional(),
   pct: z.number().min(0).max(2),
   comment: z.string().trim().max(1000).optional(),
 });
@@ -333,6 +335,21 @@ router.post("/:id/allocation-lines", async (req, res) => {
     }
   }
 
+  // A backup only makes sense as a substitute for the exact same slot —
+  // same sous-équipe as the primary pick, and an actually different person.
+  if (parsed.data.backupPoolMemberId) {
+    if (parsed.data.backupPoolMemberId === parsed.data.poolMemberId) {
+      return res.status(400).json({ error: "Le backup doit être une personne différente de la ressource principale." });
+    }
+    const [primary, backup] = await Promise.all([
+      prisma.poolMember.findUnique({ where: { id: parsed.data.poolMemberId } }),
+      prisma.poolMember.findUnique({ where: { id: parsed.data.backupPoolMemberId } }),
+    ]);
+    if (!backup || !primary || backup.sousEquipe !== primary.sousEquipe) {
+      return res.status(400).json({ error: "Le backup doit appartenir à la même sous-équipe que la ressource principale." });
+    }
+  }
+
   // A resource on leave that week can't be proposed or assigned at all —
   // block outright rather than just warning after the fact.
   const conflicts = await findUnavailabilityConflicts(parsed.data.poolMemberId, periodStart, periodEnd);
@@ -348,6 +365,7 @@ router.post("/:id/allocation-lines", async (req, res) => {
       periodStart,
       periodEnd,
       poolMemberId: parsed.data.poolMemberId,
+      backupPoolMemberId: parsed.data.backupPoolMemberId || null,
       pct: parsed.data.pct ?? 1,
       comment: parsed.data.comment || null,
       createdById: req.user.id,

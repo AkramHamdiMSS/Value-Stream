@@ -33,16 +33,25 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
     setLocal((prev) => prev.map((l) => (l.id === id ? { ...l, [key]: value } : l)));
   };
 
+  // `options`/`optionLabels` can be a static array or a `(line) => array`
+  // function — e.g. a backup picker whose candidates depend on the row's
+  // own (possibly just-edited) primary resource, not the same fixed list
+  // for every row.
+  const resolveOptions = (col, line) => (typeof col.options === "function" ? col.options(line) : col.options);
+  const resolveOptionLabels = (col, line) => (typeof col.optionLabels === "function" ? col.optionLabels(line) : col.optionLabels);
+
   const displayLabel = (col, line) => {
     if (col.type !== "select") return line[col.key] === "" || line[col.key] === undefined || line[col.key] === null ? "—" : line[col.key];
-    const idx = col.options.indexOf(line[col.key]);
+    const options = resolveOptions(col, line);
+    const optionLabels = resolveOptionLabels(col, line);
+    const idx = options.indexOf(line[col.key]);
     if (idx === -1) {
       // `options` may be a restricted pick-list (e.g. a Team Lead's own
       // team) — fall back to an unrestricted lookup so a read-only row for
       // someone outside that list still shows its real label, not "—".
       return col.fallbackLabel ? (col.fallbackLabel(line[col.key]) ?? "—") : "—";
     }
-    return col.optionLabels ? col.optionLabels[idx] : col.options[idx];
+    return optionLabels ? optionLabels[idx] : options[idx];
   };
 
   // Plain (non-render) columns are the ones this card's single Enregistrer
@@ -87,9 +96,10 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
       <div>
         <select value={line[c.key] ?? ""} onChange={(e) => setLocalValue(line.id, c.key, e.target.value)} style={{ ...inputStyle, width: "100%" }}>
           <option value="">—</option>
-          {c.options.map((opt, i) => (
-            <option key={opt} value={opt}>{c.optionLabels ? c.optionLabels[i] : opt}</option>
-          ))}
+          {resolveOptions(c, line).map((opt, i) => {
+            const optionLabels = resolveOptionLabels(c, line);
+            return <option key={opt} value={opt}>{optionLabels ? optionLabels[i] : opt}</option>;
+          })}
         </select>
         {c.hint && c.hint(line)}
       </div>

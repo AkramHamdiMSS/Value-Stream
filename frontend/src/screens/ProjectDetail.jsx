@@ -361,6 +361,16 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
               );
             },
           },
+          // Alternate candidate for this same slot, in case the primary
+          // resource falls through — restricted to the same sous-équipe as
+          // whichever resource is currently picked on this row, so the
+          // dropdown always narrows itself to real substitutes.
+          {
+            key: "backupPoolMemberId", label: "Backup (optionnel)", type: "select", group: "secondary",
+            options: (line) => resourceOptions.filter((r) => r.sousEquipe === poolById[line.poolMemberId]?.sousEquipe && r.id !== line.poolMemberId).map((r) => r.id),
+            optionLabels: (line) => resourceOptions.filter((r) => r.sousEquipe === poolById[line.poolMemberId]?.sousEquipe && r.id !== line.poolMemberId).map((r) => r.name),
+            fallbackLabel: (id) => (poolById[id] ? poolById[id].name : null),
+          },
           { key: "pct", label: "Allocation %", type: "percent", width: 110 },
           ...(canManageAllocations || canProposeAllocations ? [{
             key: "status", label: "Statut", width: 140,

@@ -14,6 +14,7 @@ const patchSchema = z.object({
   periodStart: z.string().trim().min(1).optional(),
   periodEnd: z.string().trim().min(1).optional(),
   poolMemberId: z.string().uuid().optional(),
+  backupPoolMemberId: z.string().uuid().nullable().optional(),
   pct: z.number().min(0).max(2).optional(),
   comment: z.string().trim().max(1000).optional(),
   validationComment: z.string().trim().max(1000).optional(),
@@ -56,11 +57,29 @@ router.patch("/:id", async (req, res) => {
   const nextEnd = parsed.data.periodEnd ?? line.periodEnd;
   if (nextStart > nextEnd) return res.status(400).json({ error: "La semaine de fin doit être après la semaine de début." });
 
+  const nextPoolMemberId = parsed.data.poolMemberId ?? line.poolMemberId;
+
+  // A backup only makes sense as a substitute for the exact same slot —
+  // same sous-équipe as the (possibly also changing) primary pick, and an
+  // actually different person. Re-checked whenever either side changes.
+  const nextBackupId = "backupPoolMemberId" in parsed.data ? parsed.data.backupPoolMemberId : line.backupPoolMemberId;
+  if (nextBackupId && (parsed.data.poolMemberId !== undefined || "backupPoolMemberId" in parsed.data)) {
+    if (nextBackupId === nextPoolMemberId) {
+      return res.status(400).json({ error: "Le backup doit être une personne différente de la ressource principale." });
+    }
+    const [primary, backup] = await Promise.all([
+      nextPoolMemberId === line.poolMemberId ? Promise.resolve(line.poolMember) : prisma.poolMember.findUnique({ where: { id: nextPoolMemberId } }),
+      prisma.poolMember.findUnique({ where: { id: nextBackupId } }),
+    ]);
+    if (!backup || !primary || backup.sousEquipe !== primary.sousEquipe) {
+      return res.status(400).json({ error: "Le backup doit appartenir à la même sous-équipe que la ressource principale." });
+    }
+  }
+
   // A resource on leave that week can't end up assigned here at all — check
   // whenever the resource/period actually changes, or whenever this edit is
   // about to confirm a pending line (even with no field changes, in case the
   // leave was registered after the original proposal).
-  const nextPoolMemberId = parsed.data.poolMemberId ?? line.poolMemberId;
   const willApprove = canManage && line.status === "pending";
   const fieldsChanging = parsed.data.poolMemberId !== undefined || parsed.data.periodStart !== undefined || parsed.data.periodEnd !== undefined;
   if (fieldsChanging || willApprove) {
