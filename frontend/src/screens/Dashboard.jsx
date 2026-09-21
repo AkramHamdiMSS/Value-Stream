@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
@@ -263,13 +263,21 @@ const VIEW_MODES = [
 function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
   const [expanded, setExpanded] = useState(null);
   const [viewMode, setViewMode] = useState("plan");
-  const { pool, overAllocGrid, overAllocProjects, unavailableMembers, backupFor, loggedHoursGrid, periods } = data;
-  const currentPeriod = periods[0];
+  const { pool, overAllocGrid, overAllocProjects, unavailableMembers, backupFor, loggedHoursGrid, periods, currentPeriod } = data;
+  const scrollRef = useRef(null);
+
+  // The window now reaches 12 weeks into the past, so "today" is no longer
+  // the first column — scroll it into view on load instead of burying it.
+  // Centered, not aligned to the start: the sticky "Ressource" column sits
+  // on top of the scroll container's left edge and would otherwise cover it.
+  useEffect(() => {
+    scrollRef.current?.querySelector('[data-current="true"]')?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [periods]);
 
   return (
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>Charge par ressource et par semaine (52 semaines)</div>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>Charge par ressource et par semaine ({periods.length} semaines, historique inclus)</div>
         <div style={{ display: "flex", gap: 6 }}>
           {VIEW_MODES.map((m) => (
             <button key={m.value} onClick={() => setViewMode(m.value)} style={{
@@ -287,13 +295,13 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
         {viewMode === "ecart" && "Réel moins attendu (planifié × 40h), pour les semaines passées ou en cours seulement."}
         {" "}Cliquez sur une ressource pour voir le détail des projets sur lesquels elle travaille. Défilement horizontal pour voir toute l'année.
       </div>
-      <div style={{ overflowX: "auto" }}>
+      <div ref={scrollRef} style={{ overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", fontSize: 11.5, width: "100%" }}>
           <thead>
             <tr>
               <th style={{ position: "sticky", left: 0, background: SURFACE, textAlign: "left", padding: "4px 8px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}` }}>Ressource</th>
               {periods.map((p) => (
-                <th key={p} style={{ padding: "4px 6px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}`, minWidth: 40, whiteSpace: "nowrap" }}>{labelFor(p)}</th>
+                <th key={p} data-current={p === currentPeriod || undefined} style={{ padding: "4px 6px", color: p === currentPeriod ? ACCENT : MUTED, fontWeight: 600, borderBottom: p === currentPeriod ? `2px solid ${ACCENT}` : `1px solid ${BORDER}`, minWidth: 40, whiteSpace: "nowrap" }}>{labelFor(p)}</th>
               ))}
             </tr>
           </thead>

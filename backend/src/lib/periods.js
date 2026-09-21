@@ -1,4 +1,9 @@
-const N_WEEKS = 52;
+// The visible window reaches into the past too — otherwise nothing on the
+// portail (Dashboard grid, period pickers on demand/allocation lines) could
+// ever show or select a week that's already happened, even though the data
+// for it still exists in the database.
+const N_WEEKS_PAST = 12;
+const N_WEEKS_FUTURE = 52;
 const MONTHS_FR = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 
 // Monday of the week containing `date` — so S1 is always the current week,
@@ -20,23 +25,33 @@ function isoWeekId(date) {
   return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
-function generatePeriods(n = N_WEEKS, from = new Date()) {
+function generatePeriods(nPast = N_WEEKS_PAST, nFuture = N_WEEKS_FUTURE, from = new Date()) {
   const out = [];
   let d = currentWeekMonday(from);
-  for (let i = 0; i < n; i++) {
+  d.setDate(d.getDate() - nPast * 7);
+  for (let i = 0; i < nPast + nFuture; i++) {
     out.push(isoWeekId(d));
     d.setDate(d.getDate() + 7);
   }
   return out;
 }
 
-// Same weeks as generatePeriods(), but with {id, label} — label is a display string
-// like "S1 · 7 sept." formatted from the week's Monday date.
-function generatePeriodObjects(n = N_WEEKS, from = new Date()) {
+// Same weeks as generatePeriods(), but with {id, label, current} — label is
+// a display string like "S1 · 7 sept.". S1 always names the current week
+// (even though it's no longer the first entry once past weeks are
+// included) — a week before it counts down from there (S0, S-1, ...), so
+// the numbering a team already reads by stays meaningful for the history
+// too. `current: true` marks that one entry explicitly, so callers don't
+// have to assume position 0 is "today" (it's the oldest past week now) or
+// reimplement the ISO week math themselves to find it.
+function generatePeriodObjects(nPast = N_WEEKS_PAST, nFuture = N_WEEKS_FUTURE, from = new Date()) {
+  const currentMonday = currentWeekMonday(from);
   const out = [];
-  let d = currentWeekMonday(from);
-  for (let i = 0; i < n; i++) {
-    out.push({ id: isoWeekId(d), label: `S${i + 1} · ${d.getDate()} ${MONTHS_FR[d.getMonth()]}` });
+  let d = new Date(currentMonday);
+  d.setDate(d.getDate() - nPast * 7);
+  for (let i = 0; i < nPast + nFuture; i++) {
+    const offset = Math.round((d - currentMonday) / (7 * 86400000));
+    out.push({ id: isoWeekId(d), label: `S${offset + 1} · ${d.getDate()} ${MONTHS_FR[d.getMonth()]}`, current: offset === 0 });
     d.setDate(d.getDate() + 7);
   }
   return out;
@@ -54,10 +69,11 @@ function inRange(id, start, end) {
 // code should get a period's actual date span from, instead of
 // reimplementing ISO week math independently (which is easy to get subtly
 // wrong: week 1 isn't just "day 1-7 of the year").
-function generatePeriodDates(n = N_WEEKS, from = new Date()) {
+function generatePeriodDates(nPast = N_WEEKS_PAST, nFuture = N_WEEKS_FUTURE, from = new Date()) {
   const out = [];
   let d = currentWeekMonday(from);
-  for (let i = 0; i < n; i++) {
+  d.setDate(d.getDate() - nPast * 7);
+  for (let i = 0; i < nPast + nFuture; i++) {
     out.push({ id: isoWeekId(d), monday: new Date(d) });
     d.setDate(d.getDate() + 7);
   }
@@ -98,4 +114,15 @@ function effective(count, pct) {
   return c * p;
 }
 
-module.exports = { N_WEEKS, currentWeekMonday, isoWeekId, generatePeriods, generatePeriodObjects, generatePeriodDates, periodIdToDates, effective, inRange, dateRangeOverlapsWeek };
+// The current week's period id — now that generatePeriods() reaches into
+// the past, periods[0] is the oldest past week, not "today" anymore, so
+// anything that needs "today" (KPIs, default date pickers) should call this
+// instead of assuming a position in the array.
+function currentPeriodId(from = new Date()) {
+  return isoWeekId(currentWeekMonday(from));
+}
+
+module.exports = {
+  N_WEEKS_PAST, N_WEEKS_FUTURE, currentWeekMonday, isoWeekId, generatePeriods, generatePeriodObjects,
+  generatePeriodDates, periodIdToDates, currentPeriodId, effective, inRange, dateRangeOverlapsWeek,
+};

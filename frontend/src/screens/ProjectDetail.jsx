@@ -96,12 +96,16 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
     notifyChanged();
   };
 
+  // periods[0] is the oldest past week now that the list reaches into
+  // history — the "current" flag (set by the backend) marks the real one.
+  const currentPeriodId = periods.find((p) => p.current)?.id || periods[0]?.id || "";
+
   // ---- demand lines ----
   // One row = one span of weeks, with a headcount per profile (Mobile/TPE
   // Android/TPE Engage/Digital) right on that same row — no more picking
   // which profiles apply, they're just columns.
   const addDemandLine = async () => {
-    const p = periods[0]?.id || "";
+    const p = currentPeriodId;
     const blank = Object.fromEntries(PROFILE_FIELDS.flatMap((f) => [[f.countKey, 0], [f.pctKey, null]]));
     const line = await api.post(`/projects/${project.id}/demand-lines`, { periodStart: p, periodEnd: p, ...blank });
     setProject((prev) => ({ ...prev, demandLines: [...prev.demandLines, line] }));
@@ -165,7 +169,7 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
       return;
     }
 
-    const p = periods[0]?.id || "";
+    const p = currentPeriodId;
     const line = await api.post(`/projects/${project.id}/allocation-lines`, {
       periodStart: p, periodEnd: p, poolMemberId: resourceOptions[0].id, pct: 1,
     });

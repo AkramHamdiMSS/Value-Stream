@@ -2,7 +2,7 @@ const express = require("express");
 const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
-const { effective, generatePeriods, generatePeriodDates, inRange, dateRangeOverlapsWeek } = require("../lib/periods");
+const { effective, generatePeriods, generatePeriodDates, currentPeriodId, inRange, dateRangeOverlapsWeek } = require("../lib/periods");
 const { PROFILES, PROFILE_FIELDS } = require("../lib/profiles");
 const { buildDemandQueueRows } = require("../lib/demandQueueRows");
 const { STANDARD_WEEK_HOURS } = require("../lib/tempo");
@@ -62,7 +62,7 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
   // Monday date (via the same walk generatePeriods() itself uses) so a
   // multi-week leave can be tested for overlap, not just whether its start
   // or end date happens to land inside a given week.
-  const periodDates = generatePeriodDates(periods.length).filter((pd) => periods.includes(pd.id));
+  const periodDates = generatePeriodDates().filter((pd) => periods.includes(pd.id));
   for (const u of unavailabilities) {
     if (!overAllocGrid[u.poolMemberId]) continue;
     for (const { id: p, monday } of periodDates) {
@@ -118,7 +118,7 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
   let alertCount = 0;
   let conflictCount = 0;
   let timesheetGapCount = 0;
-  const currentPeriod = periods[0];
+  const currentPeriod = currentPeriodId();
   for (const res of pool) {
     for (const p of periods) {
       const load = overAllocGrid[res.id]?.[p] || 0;
@@ -148,6 +148,10 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
 
 router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   const periods = generatePeriods();
+  // periods[0] is the oldest past week now that the window reaches into
+  // history, not "today" — send the real current week id explicitly so the
+  // frontend doesn't have to guess a position or reimplement ISO week math.
+  const currentPeriod = currentPeriodId();
 
   // Same "minimal dashboard" cohort the frontend restricts to the grid-only
   // view: viewDashboard granted but no org-wide oversight permission.
@@ -163,7 +167,7 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
 
   if (!canViewAllProjects(req.user)) {
     const own = await buildOwnDashboard(req.user, periods);
-    return res.json({ ...own, ...resourceLoad, periods });
+    return res.json({ ...own, ...resourceLoad, periods, currentPeriod });
   }
 
   const projects = await prisma.project.findMany({
@@ -231,10 +235,9 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   const queueRows = buildDemandQueueRows(projects.filter((p) => p.demandSubmitted));
   const backlogCount = queueRows.filter((r) => r.status !== "validated").length;
 
-  // Pool utilization right now (periods[0] is always the current week): sum
-  // of every resource's current load against the pool's theoretical
-  // 100%-each capacity, plus how many are sitting completely idle.
-  const currentPeriod = periods[0];
+  // Pool utilization right now: sum of every resource's current load
+  // against the pool's theoretical 100%-each capacity, plus how many are
+  // sitting completely idle.
   let loadSum = 0, availableCount = 0;
   for (const p of resourceLoad.pool) {
     const load = resourceLoad.overAllocGrid[p.id]?.[currentPeriod] || 0;
@@ -249,6 +252,7 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   res.json({
     scope: "all",
     periods,
+    currentPeriod,
     totals: {
       besoinTotal: round1(besoinTotal),
       allocTotal: round1(allocTotal),
