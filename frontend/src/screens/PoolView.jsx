@@ -1,15 +1,20 @@
 import { useState } from "react";
-import { Plus, Trash2, Calendar, X, Timer } from "lucide-react";
-import { api } from "../api";
+import { Plus, Trash2, Calendar, X, Timer, Download, Terminal } from "lucide-react";
+import { api, getToken } from "../api";
 import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, RED, CARD_SHADOW, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
 import { Th, Td } from "../components/ui";
 import { isValidEmail } from "../lib/validate";
 import { showToast } from "../lib/toast";
 
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+
 export default function PoolView({ pool, overAllocGrid, periods, onChanged, unavailabilitiesData = {} }) {
   const [error, setError] = useState("");
   const [drafts, setDrafts] = useState({});
   const [syncingTempo, setSyncingTempo] = useState(false);
+  const [extractingAscii, setExtractingAscii] = useState(false);
+  const [asciiLogs, setAsciiLogs] = useState([]);
+  const [showAsciiLogs, setShowAsciiLogs] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
   const [unavailabilities, setUnavailabilities] = useState([]);
   const [showUnavailabilityModal, setShowUnavailabilityModal] = useState(false);
@@ -124,6 +129,49 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
     }
   };
 
+  const handleExtractAscii = async () => {
+    console.log('🔘 Bouton Importer ASCII cliqué');
+    
+    if (!confirm("⚠️ Voulez-vous vraiment importer les congés depuis ASCII ?\n\nCela va :\n- Se connecter à ASCII avec vos identifiants\n- Extraire les congés du calendrier\n- Mettre à jour la base de données\n\nCliquez sur OK pour continuer.")) {
+      console.log('❌ Utilisateur a annulé');
+      return;
+    }
+    
+    console.log('✅ Utilisateur a confirmé');
+    setExtractingAscii(true);
+    setAsciiLogs([]);
+    setShowAsciiLogs(true);
+    
+    try {
+      console.log('🌐 Appel POST /admin/extract-ascii');
+      const response = await api.post("/admin/extract-ascii");
+      console.log('📨 Réponse reçue:', response);
+      
+      if (response.success) {
+        // Afficher les logs capturés
+        if (response.logs && response.logs.length > 0) {
+          setAsciiLogs(response.logs);
+        } else {
+          setAsciiLogs(['Extraction terminée (pas de logs capturés)']);
+        }
+        
+        showToast("Extraction ASCII terminée avec succès !", "success");
+        onChanged();
+      } else {
+        if (response.logs && response.logs.length > 0) {
+          setAsciiLogs(response.logs);
+        }
+        showToast(response.error || "Erreur lors de l'extraction ASCII", "error");
+      }
+    } catch (e) {
+      console.error('❌ Erreur dans handleExtractAscii:', e);
+      setError(e.message);
+      showToast("Erreur lors de l'extraction ASCII", "error");
+    } finally {
+      setExtractingAscii(false);
+    }
+  };
+
   const peakFor = (id) => {
     let max = 0;
     for (const p of periods) max = Math.max(max, overAllocGrid?.[id]?.[p] || 0);
@@ -143,11 +191,68 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
           <button onClick={handleSyncTempo} disabled={syncingTempo} style={{ ...btnGhost, opacity: syncingTempo ? 0.6 : 1 }}>
             <Timer size={15} /> {syncingTempo ? "Synchronisation..." : "Synchroniser Tempo"}
           </button>
+          <button onClick={handleExtractAscii} disabled={extractingAscii} style={{ ...btnGhost, opacity: extractingAscii ? 0.6 : 1 }}>
+            <Download size={15} /> {extractingAscii ? "Extraction..." : "Importer ASCII"}
+          </button>
           <button onClick={addPerson} style={btnPrimary}><Plus size={15} /> Ajouter une personne</button>
         </div>
       </div>
 
       {error && <div style={{ color: RED, fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+
+      {showAsciiLogs && (
+        <div style={{ 
+          background: '#1e1e1e', 
+          color: '#00ff00', 
+          fontFamily: 'monospace', 
+          fontSize: 12, 
+          padding: 16, 
+          borderRadius: 8, 
+          marginBottom: 16,
+          maxHeight: 300,
+          overflow: 'auto',
+          border: `1px solid ${BORDER}`
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Terminal size={16} />
+              <span style={{ fontWeight: 600 }}>Extraction ASCII - Logs en temps réel</span>
+            </div>
+            <button 
+              onClick={() => setShowAsciiLogs(false)}
+              style={{ 
+                background: 'none', 
+                border: 'none', 
+                color: '#fff', 
+                cursor: 'pointer',
+                fontSize: 18
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {asciiLogs.length === 0 && extractingAscii && (
+              <div style={{ color: '#888' }}>⏳ Démarrage de l'extraction...</div>
+            )}
+            {asciiLogs.map((log, index) => (
+              <div key={index} style={{ 
+                color: log.includes('❌') ? '#ff6b6b' : 
+                       log.includes('✅') ? '#51cf66' : 
+                       log.includes('⚠️') ? '#ffd43b' : '#00ff00',
+                whiteSpace: 'pre-wrap'
+              }}>
+                {log}
+              </div>
+            ))}
+            {extractingAscii && (
+              <div style={{ color: '#888', marginTop: 8 }}>
+                ▶ Extraction en cours...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", boxShadow: CARD_SHADOW }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -271,6 +376,9 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
                   style={inputStyle}
                 >
                   <option value="congé">Congé</option>
+                  <option value="congé validé">Congé validé</option>
+                  <option value="congé refusé">Congé refusé</option>
+                  <option value="congé demandé">Congé demandé</option>
                   <option value="maladie">Maladie</option>
                   <option value="formation">Formation</option>
                   <option value="autre">Autre</option>
