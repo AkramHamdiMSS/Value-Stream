@@ -38,4 +38,5 @@ app.use((err, req, res, next) => {
 });
 
 const port = process.env.PORT || 4000;
-app.listen(port, () => console.log(`API en écoute sur http://localhost:${port}`));
+const host = process.env.HOST || "0.0.0.0";
+app.listen(port, host, () => console.log(`API en ecoute sur http://${host}:${port}`));
