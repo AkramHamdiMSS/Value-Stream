@@ -45,8 +45,12 @@ npm install
 echo "🏗️  Build du frontend..."
 npm run build
 
-echo "🚀 Demarrage du backend avec nohup..."
+echo "�️  Autorisation du pare-feu pour node (si necessaire)..."
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$(which node)" --unblockapp 2>/dev/null || true
+
+echo "�🚀 Demarrage du backend avec nohup..."
 cd ${PROJECT_DIR}/backend
+export HOST=0.0.0.0
 nohup npm start > ${LOG_FILE} 2>&1 &
 sleep 3
 
