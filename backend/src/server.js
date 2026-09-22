@@ -13,6 +13,7 @@ const dashboardRoutes = require("./routes/dashboard");
 const periodsRoutes = require("./routes/periods");
 const activityRoutes = require("./routes/activity");
 const adminRoutes = require("./routes/admin");
+const path = require("path");
 
 const app = express();
 app.use(cors());
@@ -31,6 +32,15 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/periods", periodsRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/admin", adminRoutes);
+
+// Serve built frontend in production
+const frontendDist = path.join(__dirname, "../../frontend/dist");
+app.use(express.static(frontendDist));
+
+// SPA fallback: return index.html for non-API routes
+app.get("*", (req, res) => {
+  res.sendFile(path.join(frontendDist, "index.html"));
+});
 
 app.use((err, req, res, next) => {
   console.error(err);
