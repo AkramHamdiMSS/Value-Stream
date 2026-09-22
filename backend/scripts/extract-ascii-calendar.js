@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const prisma = require('../src/lib/prisma');
 const fs = require('fs');
+const { findBestMatch } = require('../src/lib/nameMatcher');
 
 /**
  * Extrait les congés depuis ASCII et les importe dans la base de données
@@ -11,7 +12,7 @@ const fs = require('fs');
  * @param {Function} logCallback - Callback optionnel pour capturer les logs (logMessage)
  */
 
-async function extractAsciiCalendar(logCallback = logCallback) {
+async function extractAsciiCalendar(logCallback = (...args) => console.log(...args)) {
   const username = process.env.ASCII_USERNAME;
   const password = process.env.ASCII_PASSWORD;
 
@@ -365,118 +366,25 @@ async function extractAsciiCalendar(logCallback = logCallback) {
     let imported = 0;
     let skipped = 0;
 
+    const allPoolMembers = await prisma.poolMember.findMany();
+
     for (const entry of calendarData) {
       // Nettoyer le nom (enlever les espaces multiples)
       const cleanName = entry.name.replace(/\s+/g, ' ').trim();
-      
-      // Fonction pour générer toutes les variations de noms/prénoms
-      const generateNameVariations = (name) => {
-        const words = name.split(' ').filter(w => w.length > 0);
-        if (words.length === 0) return [name];
-        
-        const variations = new Set();
-        
-        // Ajouter le nom original
-        variations.add(name);
-        
-        // Générer toutes les permutations
-        if (words.length === 2) {
-          // Prénom Nom -> Nom Prénom
-          variations.add(words.reverse().join(' '));
-          words.reverse(); // Remettre dans l'ordre
-        } else if (words.length > 2) {
-          // Pour plus de 2 mots, générer toutes les permutations
-          const permute = (arr) => {
-            if (arr.length <= 1) return [arr];
-            const result = [];
-            for (let i = 0; i < arr.length; i++) {
-              const current = arr[i];
-              const remaining = arr.slice(0, i).concat(arr.slice(i + 1));
-              const remainingPerms = permute(remaining);
-              for (const perm of remainingPerms) {
-                result.push([current, ...perm]);
-              }
-            }
-            return result;
-          };
-          const permutations = permute(words);
-          permutations.forEach(perm => variations.add(perm.join(' ')));
-        }
-        
-        // Générer des correspondances partielles (contient au moins un mot)
-        words.forEach(word => {
-          variations.add(word);
-          // Essayer avec chaque mot en premier
-          words.forEach(otherWord => {
-            if (word !== otherWord) {
-              variations.add(`${word} ${otherWord}`);
-            }
-          });
-        });
-        
-        return Array.from(variations);
-      };
-      
-      const nameVariations = generateNameVariations(cleanName);
-      
-      // Trouver le pool member correspondant avec scoring
-      let poolMember = null;
-      let bestScore = 0;
-      
-      const allPoolMembers = await prisma.poolMember.findMany();
-      
-      for (const variation of nameVariations) {
-        for (const member of allPoolMembers) {
-          const memberName = member.name.toLowerCase();
-          const variationLower = variation.toLowerCase();
-          
-          // Score de similarité
-          let score = 0;
-          
-          // Correspondance exacte
-          if (memberName === variationLower) {
-            score = 100;
-          }
-          // Contient la variation
-          else if (memberName.includes(variationLower)) {
-            score = 80;
-          }
-          // La variation contient le nom du membre
-          else if (variationLower.includes(memberName)) {
-            score = 80;
-          }
-          // Correspondance partielle (au moins un mot en commun)
-          else {
-            const memberWords = memberName.split(' ');
-            const variationWords = variationLower.split(' ');
-            const commonWords = memberWords.filter(w => variationWords.includes(w));
-            if (commonWords.length > 0) {
-              score = commonWords.length * 30; // 30 points par mot en commun
-            }
-          }
-          
-          if (score > bestScore) {
-            bestScore = score;
-            poolMember = member;
-          }
-        }
-        
-        // Si on a une correspondance parfaite, on arrête
-        if (bestScore >= 100) break;
-      }
-      
-      // Seuil minimum de similarité
-      if (bestScore < 30) {
-        poolMember = null;
-      }
+
+      // Matching flou : ordre nom/prénom indifférent, accents ignorés,
+      // tolérance orthographique (Oussema ECHIKH -> Oussama Cheikh)
+      const { member: poolMember, score: bestScore, runnerUp } = findBestMatch(cleanName, allPoolMembers);
 
       if (!poolMember) {
-        logCallback(`⚠️  Personne non trouvée: ${cleanName} (score max: ${bestScore}, variations testées: ${nameVariations.length})`);
+        const hint = runnerUp ? `, plus proche: "${runnerUp.name}" (${runnerUp.score})` : '';
+        logCallback(`⚠️  Personne non trouvée: ${cleanName} (score max: ${bestScore}${hint})`);
         skipped++;
         continue;
       }
-      
-      logCallback(`✅ Personne trouvée: ${poolMember.name} (score: ${bestScore}, match: "${cleanName}")`);
+
+      const ambiguous = runnerUp && runnerUp.score >= bestScore - 10 ? ` ⚠️ ambigu avec "${runnerUp.name}" (${runnerUp.score})` : '';
+      logCallback(`✅ Personne trouvée: ${poolMember.name} (score: ${bestScore}, match: "${cleanName}")${ambiguous}`);
 
       // Parser les dates - essayer plusieurs formats
       let startDate, endDate;
@@ -551,7 +459,7 @@ async function extractAsciiCalendar(logCallback = logCallback) {
 if (require.main === module) {
   extractAsciiCalendar()
     .then(() => {
-      logCallback('✅ Extraction terminée avec succès');
+      console.log('✅ Extraction terminée avec succès');
       process.exit(0);
     })
     .catch((error) => {
