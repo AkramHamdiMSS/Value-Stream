@@ -3,3 +3,7 @@ dist/
 .env
 *.local
 .DS_Store
+
+# Deployment scripts with environment-specific config
+deploy.sh
+setup-ssh.sh
