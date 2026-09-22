@@ -203,9 +203,10 @@ model Unavailability {
   poolMember   PoolMember @relation(fields: [poolMemberId], references: [id], onDelete: Cascade)
   startDate    DateTime   @map("start_date")
   endDate      DateTime   @map("end_date")
-  type         String     // congé, maladie, formation, autre
+  type         String     // congé, maladie, formation, autre, congé validé, congé refusé, congé demandé
   comment      String?
   source       String     @default("manual") // manual, ascii
+  color        String?    // Pour stocker la couleur originale ASCII
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 

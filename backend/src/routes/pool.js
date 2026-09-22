@@ -87,8 +87,9 @@ router.delete("/:id", async (req, res) => {
 const unavailabilitySchema = z.object({
   startDate: z.string().transform(val => new Date(val)),
   endDate: z.string().transform(val => new Date(val)),
-  type: z.enum(["congé", "maladie", "formation", "autre"]),
-  comment: z.string().optional()
+  type: z.enum(["congé", "maladie", "formation", "autre", "congé validé", "congé refusé", "congé demandé"]),
+  comment: z.string().optional(),
+  color: z.string().optional()
 });
 
 router.post("/:id/unavailabilities", async (req, res) => {
