@@ -7,3 +7,5 @@ dist/
 # Deployment scripts with environment-specific config
 deploy.sh
 setup-ssh.sh
+
+# Keep deploy-local.sh in repo for production deployment
