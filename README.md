@@ -48,9 +48,25 @@ npm run dev   # http://localhost:5173
 
 `frontend/.env` contient `VITE_API_URL` (par défaut `http://localhost:4000/api`).
 
-## Notes de mise en production
+## Production (Mac 172.16.100.17)
 
-- Changer `JWT_SECRET` et le mot de passe HSV par défaut.
-- Passer `DATABASE_URL` sur une instance PostgreSQL managée.
-- `npm run build` dans `frontend/` produit les fichiers statiques (`dist/`) à servir
-  derrière un reverse proxy / CDN, avec `VITE_API_URL` pointant vers l'API déployée.
+L'application tourne sur le Mac de production : frontend `vite preview` sur `:5173`,
+API sur `:4000`, les deux en `nohup`.
+
+```bash
+# Déployer depuis le Mac de développement :
+ssh -i ~/.ssh/svo_deploy_key mssmobile@172.16.100.17 "cd ~/Desktop/SVO && git pull origin main && ./deploy-local.sh"
+
+# ou directement sur le Mac de production :
+cd ~/Desktop/SVO && ./deploy-local.sh
+```
+
+Le script sauvegarde la base (`~/backups/`), pull, installe, migre (additif),
+build et redémarre backend + frontend. Voir `CAHIER_DES_CHARGES.md` §8.
+
+Option CI/CD : enregistrer le runner self-hosted (voir commentaires en tête de
+`.github/workflows/deploy.yml`) ; chaque push sur `main` déploie alors tout seul.
+
+Variables d'env backend (`.env`) : `DATABASE_URL`, `JWT_SECRET`, `PORT`, `HOST`,
+`ASCII_USERNAME`/`ASCII_PASSWORD` (import congés), `TEMPO_API_TOKEN` (temps réels),
+`HOLIDAYS_EXTRA` (fêtes mobiles) et éventuellement le bloc SMTP pour les mails.
