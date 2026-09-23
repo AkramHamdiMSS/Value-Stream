@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-import { Dialog } from "../components/ui/dialog";
-import { Input } from "../components/ui/input";
-import { Button } from "../components/ui/button";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { SURFACE, BORDER, TEXT, MUTED, GREEN, RED, FONT_BODY, inputStyle, btnPrimary, btnGhost } from "../styles";
 
 export default function ChangePasswordModal({ user, hasPassword, onClose }) {
   const [current, setCurrent] = useState("");
@@ -29,43 +26,41 @@ export default function ChangePasswordModal({ user, hasPassword, onClose }) {
   };
 
   return (
-    <Dialog open title={`Mot de passe — ${user.name}`} onClose={onClose}>
-      {done ? (
-        <>
-          <p className="flex items-center gap-2 text-success text-[13px] my-3"><CheckCircle2 size={15} /> Mot de passe mis à jour.</p>
-          <Button onClick={onClose} className="w-full">Fermer</Button>
-        </>
-      ) : (
-        <>
-          <p className="text-muted-foreground text-xs mb-4">
-            {hasPassword ? "Changez votre mot de passe." : "Aucun mot de passe défini — créez-en un."}
-          </p>
-          <div className="flex flex-col gap-3 mb-4">
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+      <div style={{ width: 320, background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 24, color: TEXT, fontFamily: FONT_BODY }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Mot de passe — {user.name}</div>
+        {done ? (
+          <>
+            <p style={{ color: GREEN, fontSize: 13, margin: "12px 0 16px" }}>Mot de passe mis à jour.</p>
+            <button onClick={onClose} style={{ ...btnPrimary, width: "100%", justifyContent: "center" }}>Fermer</button>
+          </>
+        ) : (
+          <>
+            <p style={{ color: MUTED, fontSize: 12, margin: "4px 0 16px" }}>
+              {hasPassword ? "Changez votre mot de passe." : "Aucun mot de passe défini — créez-en un."}
+            </p>
             {hasPassword && (
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Mot de passe actuel</label>
-                <Input type="password" value={current} onChange={(e) => { setCurrent(e.target.value); setError(""); }} />
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Mot de passe actuel</div>
+                <input type="password" value={current} onChange={(e) => { setCurrent(e.target.value); setError(""); }} style={{ ...inputStyle, width: "100%" }} />
               </div>
             )}
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Nouveau mot de passe</label>
-              <Input type="password" value={next} onChange={(e) => { setNext(e.target.value); setError(""); }} />
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Nouveau mot de passe</div>
+              <input type="password" value={next} onChange={(e) => { setNext(e.target.value); setError(""); }} style={{ ...inputStyle, width: "100%" }} />
             </div>
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Confirmer</label>
-              <Input type="password" value={confirm} onChange={(e) => { setConfirm(e.target.value); setError(""); }}
-                onKeyDown={(e) => { if (e.key === "Enter") submit(); }} />
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Confirmer</div>
+              <input type="password" value={confirm} onChange={(e) => { setConfirm(e.target.value); setError(""); }} style={{ ...inputStyle, width: "100%" }} />
             </div>
-          </div>
-          {error && <div className="text-destructive text-[12.5px] mb-3">{error}</div>}
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} className="flex-1">Annuler</Button>
-            <Button onClick={submit} disabled={busy} className="flex-1">
-              {busy && <Loader2 className="animate-spin" />} Valider
-            </Button>
-          </div>
-        </>
-      )}
-    </Dialog>
+            {error && <div style={{ color: RED, fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={onClose} style={{ ...btnGhost, flex: 1, justifyContent: "center" }}>Annuler</button>
+              <button onClick={submit} disabled={busy} style={{ ...btnPrimary, flex: 1, justifyContent: "center", opacity: busy ? 0.6 : 1 }}>Valider</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

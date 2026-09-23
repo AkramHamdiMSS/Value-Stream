@@ -2,13 +2,8 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, Loader2, Check } from "lucide-react";
 import { api } from "../api";
 import { round1, effective } from "../lib/util";
-import { Card, CardContent } from "../components/ui/card";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { SelectNative } from "../components/ui/select";
-import { Badge2 } from "../components/ui/badge";
-import { Table, THead, TBody, TR, TH, TD } from "../components/ui/table";
-import { cn } from "../lib/utils";
+import { MUTED, ACCENT, GREEN, AMBER, RED, SURFACE, SURFACE2, BORDER, CARD_SHADOW, inputStyle, btnGhost, btnPrimary } from "../styles";
+import { Th, Td, Field, SectionTitle, Badge } from "../components/ui";
 import LinesTable from "../components/LinesTable";
 import DemandTable from "../components/DemandTable";
 import { PROFILES, PROFILE_FIELDS } from "../lib/profiles";
@@ -58,10 +53,10 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
   }, [project, periods]);
 
   if (loading) {
-    return <div className="flex items-center gap-2 text-muted-foreground p-10"><Loader2 className="animate-spin" size={18} /> Chargement…</div>;
+    return <div style={{ display: "flex", alignItems: "center", gap: 8, color: MUTED, padding: 40 }}><Loader2 className="animate-spin" size={18} /> Chargement…</div>;
   }
   if (error || !project) {
-    return <div className="text-destructive p-6">{error || "Projet introuvable."}</div>;
+    return <div style={{ color: RED, padding: 24 }}>{error || "Projet introuvable."}</div>;
   }
 
   const isOwner = user.id === project.svoUserId;
@@ -254,68 +249,70 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
 
   return (
     <div>
-      <Button variant="ghost" size="sm" onClick={onBack} className="mb-3 -ml-2 text-muted-foreground">
-        <ChevronLeft /> {canViewAll ? "Tous les projets" : "Mes projets"}
-      </Button>
+      <button onClick={onBack} style={{ ...btnGhost, marginBottom: 12 }}>
+        <ChevronLeft size={15} /> {canViewAll ? "Tous les projets" : "Mes projets"}
+      </button>
 
-      <Card className="mb-4">
-        <CardContent className="p-4 flex gap-3 flex-wrap items-end">
-          <div className="flex flex-col gap-1.5 w-64">
-            <span className="text-xs font-medium text-muted-foreground">Nom du projet</span>
-            <Input value={project.name} onChange={(e) => setProject((p) => ({ ...p, name: e.target.value }))} disabled={!canEditNameStatus} />
-          </div>
-          <div className="flex flex-col gap-1.5 w-48">
-            <span className="text-xs font-medium text-muted-foreground">SVO</span>
-            <SelectNative value={project.svoUserId} onChange={(e) => setProject((p) => ({ ...p, svoUserId: e.target.value }))} disabled={!canManageProjects}>
-              {!svoUsers.some((s) => s.id === project.svoUserId) && (
-                <option value={project.svoUserId}>{project.svo?.name} (retiré des rôles)</option>
-              )}
-              {svoUsers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </SelectNative>
-          </div>
-          <div className="flex flex-col gap-1.5 w-48">
-            <span className="text-xs font-medium text-muted-foreground">Statut</span>
-            <Input value={project.status} onChange={(e) => setProject((p) => ({ ...p, status: e.target.value }))} disabled={!canEditNameStatus} />
-          </div>
-          {PROFILE_FIELDS.map(({ profile, jiraKeyField }) => (
-            <div key={jiraKeyField} className="flex flex-col gap-1.5 w-28">
-              <span className="text-xs font-medium text-muted-foreground">Jira {profile}</span>
-              <Input value={project[jiraKeyField] || ""} onChange={(e) => setProject((p) => ({ ...p, [jiraKeyField]: e.target.value }))} disabled={!canEditNameStatus} />
-            </div>
-          ))}
-          {(canEditNameStatus || canManageProjects) && (
-            <Button onClick={saveTopFields} disabled={!topDirty} size="sm">
-              <Check /> Enregistrer
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <Field label="Nom du projet" value={project.name} onChange={(v) => setProject((p) => ({ ...p, name: v }))}
+          width={260} disabled={!canEditNameStatus} />
+        <div style={{ width: 200 }}>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>SVO</div>
+          <select value={project.svoUserId} onChange={(e) => setProject((p) => ({ ...p, svoUserId: e.target.value }))} disabled={!canManageProjects}
+            style={{ ...inputStyle, width: "100%", opacity: canManageProjects ? 1 : 0.7 }}>
+            {!svoUsers.some((s) => s.id === project.svoUserId) && (
+              <option value={project.svoUserId}>{project.svo?.name} (retiré des rôles)</option>
+            )}
+            {svoUsers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <Field label="Statut" value={project.status} onChange={(v) => setProject((p) => ({ ...p, status: v }))}
+          width={200} disabled={!canEditNameStatus} />
+        {PROFILE_FIELDS.map(({ profile, jiraKeyField }) => (
+          <Field key={jiraKeyField} label={`Jira ${profile}`} value={project[jiraKeyField] || ""}
+            onChange={(v) => setProject((p) => ({ ...p, [jiraKeyField]: v }))}
+            width={100} disabled={!canEditNameStatus} />
+        ))}
+        {(canEditNameStatus || canManageProjects) && (
+          <button onClick={saveTopFields} disabled={!topDirty} style={{ ...btnPrimary, opacity: topDirty ? 1 : 0.5, cursor: topDirty ? "pointer" : "not-allowed" }}>
+            <Check size={14} /> Enregistrer
+          </button>
+        )}
+      </div>
 
       {isOwner && (
-        <div className={cn("flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-lg mb-4 text-[13px] border",
-          project.demandSubmitted ? "bg-success/10 border-success/40 text-success" : "bg-primary/10 border-primary/40 text-primary")}>
-          <span className="font-semibold">
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+          padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13,
+          background: project.demandSubmitted ? `color-mix(in srgb, ${GREEN} 12%, transparent)` : `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
+          border: `1px solid ${project.demandSubmitted ? GREEN : ACCENT}`,
+        }}>
+          <span style={{ fontWeight: 600, color: project.demandSubmitted ? GREEN : ACCENT }}>
             {project.demandSubmitted ? "Demande soumise au Head of Value Stream ✓" : "Demande en brouillon — pas encore visible du HSV"}
           </span>
-          <Button size="sm" variant={project.demandSubmitted ? "outline" : "default"} onClick={() => patchProject("demandSubmitted", !project.demandSubmitted)}>
+          <button onClick={() => patchProject("demandSubmitted", !project.demandSubmitted)} style={project.demandSubmitted ? btnGhost : btnPrimary}>
             {project.demandSubmitted ? "Rouvrir pour modifier" : "Soumettre la demande"}
-          </Button>
+          </button>
         </div>
       )}
       {!isOwner && !project.demandSubmitted && (
-        <div className="px-3.5 py-2.5 rounded-lg mb-4 text-[13px] text-muted-foreground border border-dashed">
+        <div style={{ padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13, color: MUTED, border: `1px dashed color-mix(in srgb, ${MUTED} 40%, transparent)` }}>
           Le SVO ({project.svo?.name}) n'a pas encore soumis sa demande pour ce projet.
         </div>
       )}
 
-      <div className={cn("px-3.5 py-2.5 rounded-lg mb-5 text-[13px] font-semibold border",
-        totalReste > 0.001 ? "bg-warning/10 text-warning border-warning/40" : "bg-success/10 text-success border-success/40")}>
+      <div style={{
+        padding: "10px 14px", borderRadius: 10, marginBottom: 20, fontSize: 13, fontWeight: 600,
+        background: totalReste > 0.001 ? `color-mix(in srgb, ${AMBER} 15%, transparent)` : `color-mix(in srgb, ${GREEN} 15%, transparent)`,
+        color: totalReste > 0.001 ? AMBER : GREEN,
+        border: `1px solid ${totalReste > 0.001 ? AMBER : GREEN}`,
+      }}>
         {totalReste > 0.001
           ? `Reste à affecter : ${PROFILES.map((p) => `${p} ${round1(resteTotal[p])}`).join(" · ")}`
           : "Besoin entièrement couvert ✓"}
       </div>
 
-      <h2 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground mb-2.5">Besoin exprimé par le SVO {!canEditDemand && <span className="font-normal normal-case">(lecture seule)</span>}</h2>
+      <SectionTitle>Besoin exprimé par le SVO {!canEditDemand && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}</SectionTitle>
       <DemandTable
         lines={project.demandLines}
         periods={periods}
@@ -325,9 +322,9 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
         onRemove={removeDemandLine}
       />
 
-      <h2 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground mb-2.5 mt-7">
-        Affectation des ressources {!canEditAlloc && <span className="font-normal normal-case">(lecture seule)</span>}
-      </h2>
+      <SectionTitle style={{ marginTop: 28 }}>
+        Affectation des ressources {!canEditAlloc && <span style={{ fontWeight: 400, textTransform: "none", color: MUTED }}>(lecture seule)</span>}
+      </SectionTitle>
       <LinesTable
         lines={project.allocationLines}
         editable={canEditAlloc}
@@ -365,12 +362,16 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
               if (entries.length === 0 && leaveList.length === 0) return null;
               const fmtDay = (d) => new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
               return (
-                <div className="flex flex-wrap gap-1 mt-1">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
                   {leaveList.map((u, i) => (
-                    <Badge2 key={i} variant="destructive" className="mr-1 mb-1">⚠ {u.type} ({fmtDay(u.startDate)} → {fmtDay(u.endDate)})</Badge2>
+                    <span key={i} style={{ fontSize: 10.5, fontWeight: 700, color: RED, background: `color-mix(in srgb, ${RED} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${RED} 45%, transparent)`, borderRadius: 999, padding: "2px 8px" }}>
+                      ⚠ {u.type} ({fmtDay(u.startDate)} → {fmtDay(u.endDate)})
+                    </span>
                   ))}
                   {entries.map((e) => (
-                    <Badge2 key={e.projectId} variant="secondary" className="mr-1 mb-1">{e.projectName} · {Math.round(e.pct * 100)}%</Badge2>
+                    <span key={e.projectId} style={{ fontSize: 10.5, color: MUTED, background: SURFACE2, border: `1px solid ${BORDER}`, borderRadius: 999, padding: "2px 8px" }}>
+                      {e.projectName} · {Math.round(e.pct * 100)}%
+                    </span>
                   ))}
                 </div>
               );
@@ -390,12 +391,12 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
           ...(canManageAllocations || canProposeAllocations ? [{
             key: "status", label: "Statut", width: 140,
             render: (line) => (
-              <div className="flex items-center gap-1.5">
-                {line.status === "pending" ? <Badge2 variant="warning">En attente</Badge2> : <Badge2 variant="success">Confirmée</Badge2>}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {line.status === "pending" ? <Badge color={AMBER} text="En attente" /> : <Badge color={GREEN} text="Confirmée" />}
                 {line.status === "pending" && canManageAllocations && (
-                  <Button variant="ghost" size="icon" onClick={() => approveAllocationLine(line)} title="Valider" className="h-8 w-8 text-success">
-                    <Check />
-                  </Button>
+                  <button onClick={() => approveAllocationLine(line)} title="Valider" style={{ background: "transparent", border: "none", color: GREEN, cursor: "pointer", padding: 2, display: "flex" }}>
+                    <Check size={14} />
+                  </button>
                 )}
               </div>
             ),
@@ -423,17 +424,17 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
                 const partial = line.releaseNewPct !== null && line.releaseNewPct !== undefined;
                 return (
                   <div>
-                    <Badge2 variant="warning">{partial ? `Libération partielle → ${Math.round(Number(line.releaseNewPct) * 100)}%` : "Libération totale demandée"}</Badge2>
-                    <div className="text-[10.5px] text-muted-foreground mt-1">{line.releaseNote}</div>
-                    <div className="flex gap-1.5 mt-1.5">
+                    <Badge color={AMBER} text={partial ? `Libération partielle → ${Math.round(Number(line.releaseNewPct) * 100)}%` : "Libération totale demandée"} />
+                    <div style={{ fontSize: 10.5, color: MUTED, marginTop: 4 }}>{line.releaseNote}</div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                       {canManageAllocations && (
-                        <Button variant="outline" size="sm" onClick={() => confirmRelease(line.id)} className="text-success border-success/50">
+                        <button onClick={() => confirmRelease(line.id)} style={{ ...btnGhost, fontSize: 11, padding: "3px 8px", color: GREEN, borderColor: GREEN }}>
                           Valider
-                        </Button>
+                        </button>
                       )}
-                      <Button variant="outline" size="sm" onClick={() => cancelRelease(line.id)}>
+                      <button onClick={() => cancelRelease(line.id)} style={{ ...btnGhost, fontSize: 11, padding: "3px 8px" }}>
                         {canManageAllocations ? "Refuser" : "Annuler"}
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 );
@@ -444,40 +445,41 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
                 const currentPct = Math.round(Number(line.pct) * 100);
                 const pctInvalid = draft.partial && (draft.newPct <= 0 || draft.newPct >= currentPct);
                 return (
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex gap-2.5 text-[11px]">
-                      <label className="flex items-center gap-1 cursor-pointer">
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 10, fontSize: 11 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                         <input type="radio" checked={!draft.partial} onChange={() => setReleaseDrafts({ ...releaseDrafts, [line.id]: { ...draft, partial: false } })} />
                         Totale
                       </label>
-                      <label className="flex items-center gap-1 cursor-pointer">
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                         <input type="radio" checked={draft.partial} onChange={() => setReleaseDrafts({ ...releaseDrafts, [line.id]: { ...draft, partial: true } })} />
                         Partielle
                       </label>
                     </div>
                     {draft.partial && (
-                      <div className="flex gap-1.5 items-center">
-                        <Input type="number" min="0" max={Math.max(0, currentPct - 1)} value={draft.newPct}
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input type="number" min="0" max={Math.max(0, currentPct - 1)} value={draft.newPct}
                           onChange={(e) => setReleaseDrafts({ ...releaseDrafts, [line.id]: { ...draft, newPct: Number(e.target.value) } })}
-                          className="h-8 w-20" />
-                        <span className="text-[10.5px] text-muted-foreground">% (au lieu de {currentPct}%)</span>
+                          style={{ ...inputStyle, width: 60 }} />
+                        <span style={{ fontSize: 10.5, color: MUTED }}>% (au lieu de {currentPct}%)</span>
                       </div>
                     )}
-                    <div className="flex gap-1.5 items-center flex-wrap">
-                      <Input value={draft.note} onChange={(e) => setReleaseDrafts({ ...releaseDrafts, [line.id]: { ...draft, note: e.target.value } })}
-                        placeholder="Raison / réaffectation prévue" className="h-8 w-48" />
-                      <Button size="sm" onClick={() => requestRelease(line.id)} disabled={!draft.note.trim() || pctInvalid}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                      <input value={draft.note} onChange={(e) => setReleaseDrafts({ ...releaseDrafts, [line.id]: { ...draft, note: e.target.value } })}
+                        placeholder="Raison / réaffectation prévue" style={{ ...inputStyle, width: 150 }} />
+                      <button onClick={() => requestRelease(line.id)} disabled={!draft.note.trim() || pctInvalid}
+                        style={{ ...btnPrimary, fontSize: 11, padding: "4px 8px", opacity: !draft.note.trim() || pctInvalid ? 0.5 : 1 }}>
                         OK
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => setReleasingId(null)}>Annuler</Button>
+                      </button>
+                      <button onClick={() => setReleasingId(null)} style={{ ...btnGhost, fontSize: 11, padding: "4px 8px" }}>Annuler</button>
                     </div>
                   </div>
                 );
               }
               return (
-                <Button variant="outline" size="sm" onClick={() => setReleasingId(line.id)}>
+                <button onClick={() => setReleasingId(line.id)} style={{ ...btnGhost, fontSize: 11.5, padding: "4px 10px" }}>
                   Libérer
-                </Button>
+                </button>
               );
             },
           }] : []),
@@ -490,40 +492,38 @@ export default function ProjectDetail({ projectId, canViewAll, canManageProjects
 
       {relevantPeriods.length > 0 && (
         <>
-          <h2 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground mb-2.5 mt-7">Synthèse : demandé vs alloué (par semaine)</h2>
-          <Card className="mb-3">
-            <CardContent className="p-0">
-              <Table>
-                <THead>
-                  <tr>
-                    <TH>Période</TH>
-                    {PROFILES.map((p) => (
-                      <Fragment key={p}>
-                        <TH>Dem. {p}</TH><TH>All. {p}</TH><TH>Écart</TH>
-                      </Fragment>
-                    ))}
-                  </tr>
-                </THead>
-                <TBody>
-                  {synthesis.map((row) => (
-                    <TR key={row.period}>
-                      <TD>{row.period}</TD>
-                      {PROFILES.map((sq) => {
-                        const ecart = round1(row[sq].alloc - row[sq].dem);
-                        return (
-                          <Fragment key={sq}>
-                            <TD className="text-muted-foreground">{round1(row[sq].dem)}</TD>
-                            <TD>{round1(row[sq].alloc)}</TD>
-                            <TD><span className={cn("font-semibold", ecart < 0 ? "text-destructive" : "text-success")}>{ecart}</span></TD>
-                          </Fragment>
-                        );
-                      })}
-                    </TR>
+          <SectionTitle style={{ marginTop: 28 }}>Synthèse : demandé vs alloué</SectionTitle>
+          <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", marginBottom: 12, boxShadow: CARD_SHADOW }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ background: SURFACE2 }}>
+                  <Th>Période</Th>
+                  {PROFILES.map((p) => (
+                    <Fragment key={p}>
+                      <Th>Dem. {p}</Th><Th>All. {p}</Th><Th>Écart</Th>
+                    </Fragment>
                   ))}
-                </TBody>
-              </Table>
-            </CardContent>
-          </Card>
+                </tr>
+              </thead>
+              <tbody>
+                {synthesis.map((row) => (
+                  <tr key={row.period} style={{ borderTop: `1px solid ${BORDER}` }}>
+                    <Td>{row.period}</Td>
+                    {PROFILES.map((sq) => {
+                      const ecart = round1(row[sq].alloc - row[sq].dem);
+                      return (
+                        <Fragment key={sq}>
+                          <Td>{round1(row[sq].dem)}</Td>
+                          <Td>{round1(row[sq].alloc)}</Td>
+                          <Td><span style={{ color: ecart < 0 ? RED : GREEN, fontWeight: 600 }}>{ecart}</span></Td>
+                        </Fragment>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>

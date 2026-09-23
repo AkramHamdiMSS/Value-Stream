@@ -1,66 +1,68 @@
 import { Plus, Search, Trash2 } from "lucide-react";
 import { round1 } from "../lib/util";
-import { Button } from "../components/ui/button";
-import { Badge2 } from "../components/ui/badge";
-import { Input } from "../components/ui/input";
-import { Table, THead, TBody, TR, TH, TD } from "../components/ui/table";
+import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, CARD_SHADOW, inputStyle, btnPrimary, iconBtn } from "../styles";
+import { Th, Td, Badge } from "../components/ui";
 
 export default function ProjectsList({ projects, search, setSearch, canViewAll, canManage, user, onSelect, onCreate, onDelete }) {
   return (
     <div>
-      <div className="flex justify-between items-center mb-4 gap-2">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
-          <h1 className="text-xl font-bold tracking-tight">{canViewAll ? "Tous les projets" : "Mes projets"}</h1>
-          <p className="text-muted-foreground text-[13px] mt-1">
+          <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{canViewAll ? "Tous les projets" : "Mes projets"}</h1>
+          <p style={{ color: MUTED, fontSize: 13, margin: "4px 0 0" }}>
             {canViewAll ? "Vue d'ensemble — tous les SVO." : `Projets dont vous êtes le SVO (${user.name}).`}
           </p>
         </div>
         {canManage && (
-          <Button size="sm" onClick={onCreate}><Plus size={14} /> Nouveau projet</Button>
+          <button onClick={onCreate} style={btnPrimary}>
+            <Plus size={15} /> Nouveau projet
+          </button>
         )}
       </div>
 
-      <div className="relative mb-4 max-w-xs">
-        <Search size={14} className="absolute left-2.5 top-2.5 text-muted-foreground" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un projet ou un SVO" className="pl-8" />
+      <div style={{ position: "relative", marginBottom: 16, maxWidth: 320 }}>
+        <Search size={14} style={{ position: "absolute", left: 10, top: 10, color: MUTED }} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un projet ou un SVO"
+          style={{ ...inputStyle, paddingLeft: 32, width: "100%" }} />
       </div>
 
-      <Table>
-        <THead>
-          <tr>
-            <TH>Projet</TH><TH>SVO</TH><TH>Statut</TH><TH>Besoin</TH><TH>Alloué</TH><TH>Demande</TH>{canManage && <TH></TH>}
-          </tr>
-        </THead>
-        <TBody>
-          {projects.map((p) => (
-            <TR key={p.id} className="cursor-pointer" onClick={() => onSelect(p.id)}>
-              <TD className="font-semibold">{p.name}</TD>
-              <TD>{p.svo?.name || <span className="text-muted-foreground">—</span>}</TD>
-              <TD className="text-muted-foreground">{p.status}</TD>
-              <TD>{round1(p.totals.demand.total)}</TD>
-              <TD>{round1(p.totals.alloc.total)}</TD>
-              <TD>
-                {p.demandSubmitted
-                  ? <Badge2 variant="success">Soumise</Badge2>
-                  : <Badge2 variant="secondary">Brouillon</Badge2>}
-              </TD>
-              {canManage && (
-                <TD>
-                  <Button variant="ghost" size="icon" aria-label="Supprimer" className="text-muted-foreground hover:text-destructive h-8 w-8"
-                    onClick={(e) => { e.stopPropagation(); onDelete(p.id); }}>
-                    <Trash2 size={14} />
-                  </Button>
-                </TD>
-              )}
-            </TR>
-          ))}
-          {projects.length === 0 && (
-            <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">
-              {canViewAll ? "Aucun projet." : "Aucun projet ne vous est encore assigné par le Head of Value Stream."}
-            </td></tr>
-          )}
-        </TBody>
-      </Table>
+      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, overflow: "hidden", boxShadow: CARD_SHADOW }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: SURFACE2 }}>
+              <Th>Projet</Th><Th>SVO</Th><Th>Statut</Th><Th>Besoin</Th><Th>Alloué</Th><Th>Demande</Th><Th></Th>
+            </tr>
+          </thead>
+          <tbody>
+            {projects.map((p) => (
+              <tr key={p.id} style={{ borderTop: `1px solid ${BORDER}`, cursor: "pointer" }} onClick={() => onSelect(p.id)}>
+                <Td><span style={{ fontWeight: 600 }}>{p.name}</span></Td>
+                <Td>{p.svo?.name || <span style={{ color: MUTED }}>—</span>}</Td>
+                <Td><span style={{ color: MUTED }}>{p.status}</span></Td>
+                <Td>{round1(p.totals.demand.total)}</Td>
+                <Td>{round1(p.totals.alloc.total)}</Td>
+                <Td>
+                  {p.demandSubmitted
+                    ? <Badge color={GREEN} text="Soumise" />
+                    : <Badge color={MUTED} text="Brouillon" />}
+                </Td>
+                {canManage && (
+                  <Td>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(p.id); }} style={iconBtn} aria-label="Supprimer">
+                      <Trash2 size={14} />
+                    </button>
+                  </Td>
+                )}
+              </tr>
+            ))}
+            {projects.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: 24, textAlign: "center", color: MUTED }}>
+                {canViewAll ? "Aucun projet." : "Aucun projet ne vous est encore assigné par le Head of Value Stream."}
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

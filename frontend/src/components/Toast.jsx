@@ -1,23 +1,20 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { subscribeToast } from "../lib/toast";
-import { cn } from "../lib/utils";
+import { SURFACE, BORDER, TEXT, RED, GREEN, AMBER, CARD_SHADOW, FONT_BODY } from "../styles";
+
+const COLORS = { error: RED, warning: AMBER, success: GREEN };
 
 // Mounted once in App.jsx — every screen (and api.js, for every failed
 // request platform-wide) raises alerts through showToast() without needing
 // this component threaded through props.
-const TONES = {
-  error: { icon: AlertTriangle, text: "text-destructive", border: "border-destructive/40" },
-  warning: { icon: AlertTriangle, text: "text-warning", border: "border-warning/40" },
-  success: { icon: CheckCircle2, text: "text-success", border: "border-success/40" },
-};
-
 export default function ToastContainer() {
   const [toasts, setToasts] = useState([]);
 
   useEffect(() => subscribeToast((toast) => {
     setToasts((prev) => [...prev, toast]);
-    // Warnings carry the precise reason (which week, which %): linger longer.
+    // Warnings carry a precise explanation (which week, which %) — leave
+    // them up a bit longer than a plain success message.
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== toast.id)), toast.type === "warning" ? 12000 : 7000);
   }), []);
 
@@ -26,20 +23,25 @@ export default function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[1000] flex flex-col gap-2 max-w-sm">
-      {toasts.map((t) => {
-        const tone = TONES[t.type] || TONES.success;
-        const Icon = tone.icon;
-        return (
-          <div key={t.id} className={cn("rounded-lg border bg-card p-3 shadow-md flex items-start gap-2.5 text-[13px]", tone.border)}>
-            <Icon size={16} className={cn("shrink-0 mt-0.5", tone.text)} />
-            <span className="text-foreground flex-1 leading-snug">{t.message}</span>
-            <button onClick={() => dismiss(t.id)} aria-label="Fermer" className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer">
-              <X size={14} />
-            </button>
-          </div>
-        );
-      })}
+    <div style={{
+      position: "fixed", top: 16, right: 16, zIndex: 1000, display: "flex", flexDirection: "column", gap: 8,
+      maxWidth: 360, fontFamily: FONT_BODY,
+    }}>
+      {toasts.map((t) => (
+        <div key={t.id} style={{
+          background: SURFACE, border: `1px solid ${COLORS[t.type] || GREEN}`, borderRadius: 10,
+          padding: "10px 12px", boxShadow: CARD_SHADOW, display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13,
+        }}>
+          {t.type === "success"
+            ? <CheckCircle2 size={16} color={GREEN} style={{ flexShrink: 0, marginTop: 1 }} />
+            : <AlertTriangle size={16} color={COLORS[t.type] || RED} style={{ flexShrink: 0, marginTop: 1 }} />}
+          <span style={{ color: TEXT, flex: 1, lineHeight: 1.4 }}>{t.message}</span>
+          <button onClick={() => dismiss(t.id)} aria-label="Fermer"
+            style={{ background: "none", border: "none", cursor: "pointer", color: TEXT, padding: 0, display: "flex", flexShrink: 0 }}>
+            <X size={14} />
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

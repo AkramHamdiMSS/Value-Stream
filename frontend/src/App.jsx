@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard, FolderKanban, Users, ClipboardList, ShieldCheck, LogOut, KeyRound, Loader2, Sun, Moon, History,
-  PanelLeftClose, PanelLeftOpen, Search,
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
+import { NAVY, TEXT, MUTED, FONT_BODY, SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_TEXT, SIDEBAR_MUTED, btnGhostSidebar, themeToggleBtnSidebar } from "./styles";
 import { getInitialTheme, applyTheme } from "./lib/theme";
-import { RailItem, BrandHeader } from "./components/ui";
-import { Button } from "./components/ui/button";
-import { cn } from "./lib/utils";
+import { NavItem, BrandHeader } from "./components/ui";
 import LoginScreen from "./screens/LoginScreen";
 import ChangePasswordModal from "./screens/ChangePasswordModal";
 import Dashboard from "./screens/Dashboard";
@@ -37,8 +35,6 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [showAccount, setShowAccount] = useState(false);
   const [theme, setTheme] = useState(getInitialTheme);
-  const [rail, setRail] = useState(() => localStorage.getItem("pilotage_rail") || "full");
-  useEffect(() => { localStorage.setItem("pilotage_rail", rail); }, [rail]);
   // A notification email's "Voir le projet" button links to ?project=<id> —
   // read once at load, consumed (and stripped from the URL) as soon as a
   // user is available, whether that's immediately or only after login.
@@ -89,7 +85,7 @@ export default function App() {
     for (const member of pool) {
       try {
         data[member.id] = await api.get(`/pool/${member.id}/unavailabilities`);
-      } catch {
+      } catch (e) {
         data[member.id] = [];
       }
     }
@@ -148,7 +144,7 @@ export default function App() {
       <>
         <LoadingBar />
         <ToastContainer />
-        <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground">
+        <div style={{ background: NAVY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontFamily: FONT_BODY }}>
           <Loader2 className="animate-spin" size={20} style={{ marginRight: 8 }} /> Chargement…
         </div>
       </>
@@ -185,96 +181,51 @@ export default function App() {
     if (selectedId === id) setSelectedId(null);
   };
 
-  const NAV_ITEMS = [
-    { group: "Pilotage", items: [
-      { id: "dashboard", icon: LayoutDashboard, label: "Dashboard", show: can.viewDashboard, go: () => { setTab("dashboard"); setSelectedId(null); } },
-      { id: "demandes", icon: ClipboardList, label: can.viewDemandQueue ? "Demandes à affecter" : "Demandes de mon équipe", show: can.viewDemandQueue || can.proposeAllocations, go: () => { setTab("demandes"); setSelectedId(null); } },
-    ]},
-    { group: "Organisation", items: [
-      { id: "projects", icon: FolderKanban, label: can.viewAllProjects ? "Tous les projets" : "Mes projets", show: true, go: () => setTab("projects") },
-      { id: "pool", icon: Users, label: "Pool", show: can.managePool, go: () => setTab("pool") },
-    ]},
-    { group: "Admin", items: [
-      { id: "roles", icon: ShieldCheck, label: "Rôles", show: can.manageRoles, go: () => setTab("roles") },
-      { id: "activity", icon: History, label: "Activité", show: can.viewActivity, go: () => setTab("activity") },
-    ]},
-  ];
-  const railNarrow = rail === "icons";
-
   return (
     <>
       <LoadingBar />
       <ToastContainer />
-      <div className="min-h-screen flex bg-background text-foreground">
-        {/* Nav rail: full labels or icon-only — account/theme/logout live in
-            the top bar now, the rail stays purely about navigation. */}
-        <aside className={cn("sticky top-0 h-screen shrink-0 border-r bg-sidebar transition-[width] duration-150", railNarrow ? "w-14" : "w-56")}>
-          <div className={cn("flex items-center h-14 px-3", railNarrow ? "justify-center" : "justify-between")}>
-            {railNarrow ? (
-              <RailItem icon={<PanelLeftOpen size={17} />} label="Déplier le menu" active={false} onClick={() => setRail("full")} />
-            ) : (
-              <>
-                <BrandHeader />
-                <Button variant="ghost" size="icon" onClick={() => setRail("icons")} aria-label="Réduire le menu" className="text-muted-foreground">
-                  <PanelLeftClose />
-                </Button>
-              </>
-            )}
+      <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex" }}>
+      <div style={{ width: 220, background: SIDEBAR_BG, borderRight: `1px solid ${SIDEBAR_BORDER}`, padding: "20px 12px", flexShrink: 0 }}>
+        <div style={{ marginBottom: 16 }}>
+          <BrandHeader />
+        </div>
+
+        <div style={{ padding: "0 8px 16px" }}>
+          <div style={{ fontSize: 10.5, color: SIDEBAR_MUTED, fontWeight: 600, marginBottom: 5, textTransform: "uppercase" }}>Connecté en tant que</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 8, color: SIDEBAR_TEXT }}>{user.name}</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => setShowAccount(true)} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px", flex: 1 }}>
+              <KeyRound size={13} /> Mot de passe
+            </button>
+            <button onClick={toggleTheme} style={themeToggleBtnSidebar} aria-label="Changer de thème">
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
+            <button onClick={handleLogout} style={{ ...btnGhostSidebar, fontSize: 11.5, padding: "5px 8px" }} aria-label="Se déconnecter">
+              <LogOut size={13} />
+            </button>
           </div>
-          <nav className={cn("flex flex-col", railNarrow ? "items-center px-1" : "px-2")}>
-            {NAV_ITEMS.map((g) => {
-              const items = g.items.filter((i) => i.show);
-              if (items.length === 0) return null;
-              return (
-                <div key={g.group}>
-                  {railNarrow
-                    ? <div className="mx-auto my-2 h-px w-6 bg-border" />
-                    : <div className="px-2 pb-1 pt-4 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{g.group}</div>}
-                  {items.map((i) => railNarrow ? (
-                    <RailItem key={i.id} icon={<i.icon size={19} />} label={i.label} active={tab === i.id} onClick={i.go} />
-                  ) : (
-                    <button key={i.id} onClick={i.go} className={cn(
-                      "mb-0.5 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] transition-colors text-left",
-                      tab === i.id ? "bg-sidebar-accent text-primary font-semibold" : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
-                    )}>
-                      <i.icon size={16} /> {i.label}
-                    </button>
-                  ))}
-                </div>
-              );
-            })}
-          </nav>
-        </aside>
+        </div>
 
-        <div className="flex flex-1 min-w-0 flex-col">
-          {/* Top bar: global search, current week, account block. */}
-          <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-card/80 backdrop-blur px-5">
-            {tab === "projects" && !selectedId && (
-              <div className="relative w-72">
-                <Search size={14} className="absolute left-2.5 top-2.5 text-muted-foreground" />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Projet ou SVO…"
-                  className="h-9 w-full rounded-md border bg-background pl-8 pr-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
-              </div>
-            )}
-            <div className="flex-1" />
-            {dashboard?.currentPeriod && periods.length > 0 && (
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {periods.find((p) => p.id === dashboard.currentPeriod)?.label || dashboard.currentPeriod}
-              </span>
-            )}
-            <span className="text-xs font-semibold">{user.name}</span>
-            <Button variant="outline" size="icon" onClick={() => setShowAccount(true)} title="Changer de mot de passe">
-              <KeyRound />
-            </Button>
-            <Button variant="outline" size="icon" onClick={toggleTheme} aria-label="Changer de thème">
-              {theme === "dark" ? <Sun /> : <Moon />}
-            </Button>
-            <Button variant="outline" size="icon" onClick={handleLogout} title="Se déconnecter" aria-label="Se déconnecter">
-              <LogOut />
-            </Button>
-          </header>
+        {can.viewDashboard && (
+          <NavItem icon={<LayoutDashboard size={16} />} label="Dashboard" active={tab === "dashboard"} onClick={() => { setTab("dashboard"); setSelectedId(null); }} />
+        )}
+        <NavItem icon={<FolderKanban size={16} />} label={can.viewAllProjects ? "Tous les projets" : "Mes projets"} active={tab === "projects"} onClick={() => setTab("projects")} />
+        {(can.viewDemandQueue || can.proposeAllocations) && (
+          <NavItem icon={<ClipboardList size={16} />} label={can.viewDemandQueue ? "Demandes à affecter" : "Demandes de mon équipe"} active={tab === "demandes"} onClick={() => { setTab("demandes"); setSelectedId(null); }} />
+        )}
+        {can.managePool && (
+          <NavItem icon={<Users size={16} />} label="Pool" active={tab === "pool"} onClick={() => { setTab("pool"); setSelectedId(null); }} />
+        )}
+        {can.manageRoles && (
+          <NavItem icon={<ShieldCheck size={16} />} label="Rôles" active={tab === "roles"} onClick={() => { setTab("roles"); setSelectedId(null); }} />
+        )}
+        {can.viewActivity && (
+          <NavItem icon={<History size={16} />} label="Activité" active={tab === "activity"} onClick={() => { setTab("activity"); setSelectedId(null); }} />
+        )}
+      </div>
 
-      <main className="flex-1 p-6 overflow-x-auto">
+      <div style={{ flex: 1, padding: 24, overflowX: "auto" }}>
         {tab === "dashboard" && (
           <Dashboard data={dashboard} periods={periods} minimalDashboard={minimalDashboard} onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }} />
         )}
@@ -320,7 +271,6 @@ export default function App() {
         {tab === "activity" && can.viewActivity && (
           <ActivityLog svoUsers={svoUsers} onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }} />
         )}
-      </main>
       </div>
 
       {showAccount && (
