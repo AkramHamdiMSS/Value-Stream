@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, Loader2 } from "lucide-react";
 import { api } from "../api";
-import { NAVY, SURFACE, BORDER, TEXT, MUTED, RED, FONT_BODY, FONT_DISPLAY, CARD_SHADOW, inputStyle, btnPrimary, themeToggleBtn } from "../styles";
 import { BrandMark } from "../components/ui";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { SelectNative } from "../components/ui/select";
 
 export default function LoginScreen({ onLogin, theme, onToggleTheme }) {
   const [accounts, setAccounts] = useState([]);
@@ -37,40 +39,41 @@ export default function LoginScreen({ onLogin, theme, onToggleTheme }) {
   };
 
   return (
-    <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+    <div className="min-h-screen bg-background text-foreground flex items-center justify-center relative">
       {onToggleTheme && (
-        <button onClick={onToggleTheme} style={{ ...themeToggleBtn, position: "absolute", top: 20, right: 20, zIndex: 1 }} aria-label="Changer de thème">
-          {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
-        </button>
+        <Button variant="outline" size="icon" onClick={onToggleTheme} className="absolute top-5 right-5" aria-label="Changer de thème">
+          {theme === "dark" ? <Sun /> : <Moon />}
+        </Button>
       )}
-      <div style={{ width: 340, background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 28, position: "relative", zIndex: 1, boxShadow: CARD_SHADOW }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <BrandMark size={20} />
-          <div style={{ fontSize: 17, fontWeight: 600, fontFamily: FONT_DISPLAY }}>Pilotage ressources</div>
-        </div>
-        <p style={{ color: MUTED, fontSize: 12.5, margin: "0 0 20px" }}>MS Solutions — connectez-vous pour accéder à votre espace.</p>
 
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Compte</div>
-          <select value={selected} onChange={(e) => { setSelected(e.target.value); setError(""); }} style={{ ...inputStyle, width: "100%" }}>
+      <div className="w-[360px] rounded-xl border bg-card p-7 shadow-sm">
+        <div className="flex items-center gap-2.5 mb-1.5">
+          <BrandMark size={22} />
+          <div className="text-lg font-semibold tracking-tight">Pilotage ressources</div>
+        </div>
+        <p className="text-xs text-muted-foreground mb-6">MS Solutions — connectez-vous pour accéder à votre espace.</p>
+
+        <div className="flex flex-col gap-1.5 mb-4">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="account">Compte</label>
+          <SelectNative id="account" value={selected} onChange={(e) => { setSelected(e.target.value); setError(""); }}>
             {sortedAccounts.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-          </select>
+          </SelectNative>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>Mot de passe</div>
-          <input type="password" value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }}
-            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-            style={{ ...inputStyle, width: "100%" }} />
+        <div className="flex flex-col gap-1.5 mb-5">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor="password">Mot de passe</label>
+          <Input id="password" type="password" value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            onKeyDown={(e) => { if (e.key === "Enter") submit(); }} />
         </div>
 
-        {error && <div style={{ color: RED, fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+        {error && <div className="text-destructive text-xs mb-4">{error}</div>}
 
-        <button onClick={submit} disabled={busy} style={{ ...btnPrimary, width: "100%", justifyContent: "center", opacity: busy ? 0.6 : 1 }}>
-          {busy ? "Connexion…" : "Se connecter"}
-        </button>
+        <Button onClick={submit} disabled={busy} className="w-full">
+          {busy && <Loader2 className="animate-spin" />} {busy ? "Connexion…" : "Se connecter"}
+        </Button>
 
-        <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${BORDER}`, fontSize: 11.5, color: MUTED, lineHeight: 1.5 }}>
+        <div className="mt-5 border-t pt-4 text-[11.5px] leading-relaxed text-muted-foreground">
           Le Head of Value Stream crée le mot de passe initial de chaque SVO dans l'onglet Rôles.
         </div>
       </div>

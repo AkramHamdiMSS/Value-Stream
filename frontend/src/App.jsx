@@ -4,9 +4,10 @@ import {
   PanelLeftClose, PanelLeftOpen, Search,
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
-import { NAVY, TEXT, MUTED, FONT_BODY, SIDEBAR_BG, SIDEBAR_BORDER, SIDEBAR_TEXT, SIDEBAR_MUTED, btnGhostSidebar, themeToggleBtnSidebar } from "./styles";
 import { getInitialTheme, applyTheme } from "./lib/theme";
-import { NavItem, NavGroup, RailItem, BrandHeader } from "./components/ui";
+import { RailItem, BrandHeader } from "./components/ui";
+import { Button } from "./components/ui/button";
+import { cn } from "./lib/utils";
 import LoginScreen from "./screens/LoginScreen";
 import ChangePasswordModal from "./screens/ChangePasswordModal";
 import Dashboard from "./screens/Dashboard";
@@ -147,7 +148,7 @@ export default function App() {
       <>
         <LoadingBar />
         <ToastContainer />
-        <div style={{ background: NAVY, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: MUTED, fontFamily: FONT_BODY }}>
+        <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground">
           <Loader2 className="animate-spin" size={20} style={{ marginRight: 8 }} /> Chargement…
         </div>
       </>
@@ -204,70 +205,76 @@ export default function App() {
     <>
       <LoadingBar />
       <ToastContainer />
-      <div style={{ background: NAVY, color: TEXT, fontFamily: FONT_BODY, minHeight: "100vh", display: "flex" }}>
-      {/* Nav rail: full labels or icon-only — account/theme/logout live in the
-          top bar now, so the rail stays purely about navigation. */}
-      <div style={{ width: railNarrow ? 56 : 220, background: SIDEBAR_BG, borderRight: `1px solid ${SIDEBAR_BORDER}`, padding: railNarrow ? "14px 6px" : "16px 12px", flexShrink: 0, position: "sticky", top: 0, height: "100vh", transition: "width .15s ease" }}>
-        <div style={{ marginBottom: 14, display: "flex", justifyContent: railNarrow ? "center" : "flex-start" }}>
-          {railNarrow ? (
-            <RailItem icon={<PanelLeftOpen size={17} />} label="Déplier le menu" active={false} onClick={() => setRail("full")} />
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-              <BrandHeader />
-              <button onClick={() => setRail("icons")} aria-label="Réduire le menu" style={{ ...btnGhostSidebar, padding: 6 }}>
-                <PanelLeftClose size={14} />
-              </button>
-            </div>
-          )}
-        </div>
+      <div className="min-h-screen flex bg-background text-foreground">
+        {/* Nav rail: full labels or icon-only — account/theme/logout live in
+            the top bar now, the rail stays purely about navigation. */}
+        <aside className={cn("sticky top-0 h-screen shrink-0 border-r bg-sidebar transition-[width] duration-150", railNarrow ? "w-14" : "w-56")}>
+          <div className={cn("flex items-center h-14 px-3", railNarrow ? "justify-center" : "justify-between")}>
+            {railNarrow ? (
+              <RailItem icon={<PanelLeftOpen size={17} />} label="Déplier le menu" active={false} onClick={() => setRail("full")} />
+            ) : (
+              <>
+                <BrandHeader />
+                <Button variant="ghost" size="icon" onClick={() => setRail("icons")} aria-label="Réduire le menu" className="text-muted-foreground">
+                  <PanelLeftClose />
+                </Button>
+              </>
+            )}
+          </div>
+          <nav className={cn("flex flex-col", railNarrow ? "items-center px-1" : "px-2")}>
+            {NAV_ITEMS.map((g) => {
+              const items = g.items.filter((i) => i.show);
+              if (items.length === 0) return null;
+              return (
+                <div key={g.group}>
+                  {railNarrow
+                    ? <div className="mx-auto my-2 h-px w-6 bg-border" />
+                    : <div className="px-2 pb-1 pt-4 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{g.group}</div>}
+                  {items.map((i) => railNarrow ? (
+                    <RailItem key={i.id} icon={<i.icon size={19} />} label={i.label} active={tab === i.id} onClick={i.go} />
+                  ) : (
+                    <button key={i.id} onClick={i.go} className={cn(
+                      "mb-0.5 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] transition-colors text-left",
+                      tab === i.id ? "bg-sidebar-accent text-primary font-semibold" : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+                    )}>
+                      <i.icon size={16} /> {i.label}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </nav>
+        </aside>
 
-        {NAV_ITEMS.map((g) => {
-          const items = g.items.filter((i) => i.show);
-          if (items.length === 0) return null;
-          return (
-            <div key={g.group}>
-              {!railNarrow && <NavGroup>{g.group}</NavGroup>}
-              {railNarrow && <div style={{ height: 8, width: 20, borderBottom: `1px solid ${SIDEBAR_BORDER}`, margin: "4px auto 10px" }} />}
-              {items.map((i) => railNarrow ? (
-                <RailItem key={i.id} icon={<i.icon size={19} />} label={i.label} active={tab === i.id} onClick={i.go} />
-              ) : (
-                <NavItem key={i.id} icon={<i.icon size={16} />} label={i.label} active={tab === i.id} onClick={i.go} />
-              ))}
-            </div>
-          );
-        })}
-      </div>
+        <div className="flex flex-1 min-w-0 flex-col">
+          {/* Top bar: global search, current week, account block. */}
+          <header className="sticky top-0 z-10 flex h-12 items-center gap-3 border-b bg-card/80 backdrop-blur px-5">
+            {tab === "projects" && !selectedId && (
+              <div className="relative w-72">
+                <Search size={14} className="absolute left-2.5 top-2.5 text-muted-foreground" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Projet ou SVO…"
+                  className="h-9 w-full rounded-md border bg-background pl-8 pr-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              </div>
+            )}
+            <div className="flex-1" />
+            {dashboard?.currentPeriod && periods.length > 0 && (
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {periods.find((p) => p.id === dashboard.currentPeriod)?.label || dashboard.currentPeriod}
+              </span>
+            )}
+            <span className="text-xs font-semibold">{user.name}</span>
+            <Button variant="outline" size="icon" onClick={() => setShowAccount(true)} title="Changer de mot de passe">
+              <KeyRound />
+            </Button>
+            <Button variant="outline" size="icon" onClick={toggleTheme} aria-label="Changer de thème">
+              {theme === "dark" ? <Sun /> : <Moon />}
+            </Button>
+            <Button variant="outline" size="icon" onClick={handleLogout} title="Se déconnecter" aria-label="Se déconnecter">
+              <LogOut />
+            </Button>
+          </header>
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* Top bar: global search, current week, then the account block — the
-            stuff every screen shares, taken out of the nav rail. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: `1px solid ${SIDEBAR_BORDER}`, background: SIDEBAR_BG, position: "sticky", top: 0, zIndex: 10 }}>
-          {tab === "projects" && !selectedId && (
-            <div style={{ position: "relative", width: 300 }}>
-              <Search size={14} style={{ position: "absolute", left: 10, top: 9, color: SIDEBAR_MUTED }} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Projet ou SVO…"
-                style={{ width: "100%", background: TEXT === "" ? "" : NAVY, border: `1px solid ${SIDEBAR_BORDER}`, borderRadius: 10, color: SIDEBAR_TEXT, fontSize: 12.5, padding: "7px 10px 7px 30px", outline: "none", fontFamily: FONT_BODY }} />
-            </div>
-          )}
-          <div style={{ flex: 1 }} />
-          {dashboard?.currentPeriod && periods.length > 0 && (
-            <span style={{ fontSize: 12, color: SIDEBAR_MUTED, whiteSpace: "nowrap" }}>
-              {periods.find((p) => p.id === dashboard.currentPeriod)?.label || dashboard.currentPeriod}
-            </span>
-          )}
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: SIDEBAR_TEXT }}>{user.name}</span>
-          <button onClick={() => setShowAccount(true)} style={{ ...btnGhostSidebar, padding: "6px 10px" }} title="Changer de mot de passe">
-            <KeyRound size={14} />
-          </button>
-          <button onClick={toggleTheme} style={themeToggleBtnSidebar} aria-label="Changer de thème">
-            {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
-          <button onClick={handleLogout} style={{ ...btnGhostSidebar, padding: "6px 10px" }} title="Se déconnecter" aria-label="Se déconnecter">
-            <LogOut size={14} />
-          </button>
-        </div>
-
-      <div style={{ flex: 1, padding: 24, overflowX: "auto" }}>
+      <main className="flex-1 p-6 overflow-x-auto">
         {tab === "dashboard" && (
           <Dashboard data={dashboard} periods={periods} minimalDashboard={minimalDashboard} onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }} />
         )}
@@ -313,7 +320,7 @@ export default function App() {
         {tab === "activity" && can.viewActivity && (
           <ActivityLog svoUsers={svoUsers} onOpenProject={(id) => { setTab("projects"); setSelectedId(id); }} />
         )}
-      </div>
+      </main>
       </div>
 
       {showAccount && (

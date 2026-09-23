@@ -1,56 +1,151 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* shadcn/ui design tokens, tuned to the app palette (steel blue accent).
+   Kept next to the *legacy* aliases below so untouched inline-style code
+   keeps working during the migration — new components use the Tailwind
+   utilities these tokens generate (bg-background, text-muted-foreground…). */
+:root {
+  --background: oklch(0.97 0.005 264);
+  --foreground: oklch(0.21 0.02 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.02 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.02 265);
+  --primary: oklch(0.5 0.15 262);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.94 0.01 264);
+  --secondary-foreground: oklch(0.3 0.03 265);
+  --muted: oklch(0.94 0.01 264);
+  --muted-foreground: oklch(0.46 0.02 263);
+  --accent-token: oklch(0.94 0.01 264);
+  --accent-foreground: oklch(0.3 0.03 265);
+  --destructive: oklch(0.55 0.19 25);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-token: oklch(0.62 0.14 155);
+  --warning-token: oklch(0.6 0.13 55);
+  --border-token: oklch(0.9 0.01 265);
+  --input: oklch(0.9 0.01 265);
+  --ring: oklch(0.5 0.15 262);
+  --radius: 0.625rem;
+  --sidebar-t: oklch(0.96 0.008 264);
+  --sidebar-foreground: oklch(0.21 0.02 265);
+  --sidebar-primary: oklch(0.5 0.15 262);
+  --sidebar-accent: oklch(0.92 0.015 262);
+  --sidebar-border: oklch(0.91 0.01 265);
+}
+
+[data-theme="dark"] {
+  --background: oklch(0.16 0.02 264);
+  --foreground: oklch(0.95 0.01 264);
+  --card: oklch(0.21 0.02 263);
+  --card-foreground: oklch(0.95 0.01 264);
+  --popover: oklch(0.21 0.02 263);
+  --popover-foreground: oklch(0.95 0.01 264);
+  --primary: oklch(0.7 0.13 260);
+  --primary-foreground: oklch(0.16 0.02 264);
+  --secondary: oklch(0.27 0.02 262);
+  --secondary-foreground: oklch(0.95 0.01 264);
+  --muted: oklch(0.27 0.02 262);
+  --muted-foreground: oklch(0.71 0.015 262);
+  --accent-token: oklch(0.27 0.02 262);
+  --accent-foreground: oklch(0.95 0.01 264);
+  --destructive: oklch(0.68 0.16 22);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-token: oklch(0.76 0.15 160);
+  --warning-token: oklch(0.76 0.13 68);
+  --border-token: oklch(0.3 0.02 262);
+  --input: oklch(0.3 0.02 262);
+  --ring: oklch(0.7 0.13 260);
+  --sidebar-t: oklch(0.19 0.02 263);
+  --sidebar-foreground: oklch(0.95 0.01 264);
+  --sidebar-primary: oklch(0.7 0.13 260);
+  --sidebar-accent: oklch(0.27 0.02 262);
+  --sidebar-border: oklch(0.3 0.02 262);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent-token);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success-token);
+  --color-warning: var(--warning-token);
+  --color-border: var(--border-token);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+}
+
+/* Legacy tokens — every pre-migration inline style (var(--surface)…) still
+   resolves, mapped onto the shadcn palette above. Screens rewritten to
+   Tailwind drop these entirely; new inline code should avoid them. */
+:root {
+  --bg: var(--background);
+  --surface: var(--card);
+  --surface-2: var(--muted);
+  --text: var(--foreground);
+  --muted: var(--muted-foreground);
+  --border: var(--border-token);
+  --accent: var(--primary);
+  --accent-2: oklch(0.55 0.09 205);
+  --accent-tint: oklch(0.93 0.03 262);
+  --success: var(--success-token);
+  --warning: var(--warning-token);
+  --danger: var(--destructive);
+  --card-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  --glow: oklch(0.5 0.15 262 / 0.22);
+  --sidebar-bg: var(--sidebar-t);
+  --sidebar-border: var(--sidebar-border);
+  --sidebar-text: var(--sidebar-foreground);
+  --sidebar-muted: var(--muted-foreground);
+  --sidebar-active: var(--sidebar-accent);
+}
+[data-theme="dark"] {
+  --bg: var(--background);
+  --surface: var(--card);
+  --surface-2: var(--muted);
+  --text: var(--foreground);
+  --muted: var(--muted-foreground);
+  --border: var(--border-token);
+  --accent: var(--primary);
+  --accent-2: oklch(0.72 0.1 200);
+  --accent-tint: oklch(0.3 0.05 262);
+  --success: var(--success-token);
+  --warning: var(--warning-token);
+  --danger: var(--destructive);
+  --card-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  --glow: oklch(0.7 0.13 260 / 0.3);
+  --sidebar-bg: var(--sidebar-t);
+  --sidebar-border: var(--sidebar-border);
+  --sidebar-text: var(--sidebar-foreground);
+  --sidebar-muted: var(--muted-foreground);
+  --sidebar-active: var(--sidebar-accent);
+}
+
 * {
   box-sizing: border-box;
 }
+html, body {
+  font-family: "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+}
 body {
   margin: 0;
-}
-
-/* Structure (flat cards, subtle border instead of glass/shadow, Nunito Sans,
-   rounded-pill data cells) lifted from the TeamPulse (hr-dashboard-kit)
-   reference; accent kept as the app's own mauve/indigo rather than the
-   reference's teal. Toggled via [data-theme] on <html> — see lib/theme.js. */
-:root {
-  --bg: #f5f5fc;
-  --surface: #ffffff;
-  --surface-2: #efeef9;
-  --text: #14142b;
-  --muted: #5b5d7a;
-  --border: #e1e0f0;
-  --accent: #4359c8;      /* bleu acier — outil pro, moins saturé que l'indigo */
-  --accent-2: #0e7f9c;
-  --accent-tint: #e7eafb;
-  --success: #0e9f6e;
-  --warning: #b45309;     /* ambre plus doux */
-  --danger: #c53434;      /* rouge assagi pour de la planification */
-  --card-shadow: 0 1px 2px rgba(20, 20, 43, 0.05);
-  --glow: rgba(82, 81, 217, 0.22);
-
-  --sidebar-bg: #f2f1fa;
-  --sidebar-border: #e1e0f0;
-  --sidebar-text: #14142b;
-  --sidebar-muted: #5b5d7a;
-  --sidebar-active: #e6e5f7;
-}
-
-:root[data-theme="dark"] {
-  --bg: #0a0a1a;
-  --surface: #12122a;
-  --surface-2: #1a1a35;
-  --text: #f1f1fb;
-  --muted: #9a9ac0;
-  --border: #29294f;
-  --accent: #8b97f6;
-  --accent-2: #4fccd9;
-  --accent-tint: #232953;
-  --success: #34c99b;
-  --warning: #e0a53e;
-  --danger: #ef7c7c;
-  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-  --glow: rgba(135, 136, 255, 0.3);
-
-  --sidebar-bg: #0c0c22;
-  --sidebar-border: #29294f;
-  --sidebar-text: #f1f1fb;
-  --sidebar-muted: #9a9ac0;
-  --sidebar-active: #201f45;
 }

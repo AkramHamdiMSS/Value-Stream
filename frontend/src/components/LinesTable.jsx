@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Check } from "lucide-react";
-import { TEXT, MUTED, ACCENT, SURFACE, SURFACE2, BORDER, inputStyle, btnGhost } from "../styles";
+import { cn } from "../lib/utils";
+import { Input } from "./ui/input";
+import { SelectNative } from "./ui/select";
+import { Button } from "./ui/button";
 
 // Locally-buffered editable card list: keystrokes only update local state —
 // nothing reaches the server until the card's own "Enregistrer" button is
@@ -85,7 +88,7 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
   const renderControl = (c, line, cellEditable) => (
     !cellEditable ? (
       <div>
-        <span style={{ fontSize: 13.5, color: c.type === "select" ? TEXT : MUTED }}>
+        <span className={cn("text-[13.5px]", c.type === "select" ? "text-foreground" : "text-muted-foreground")}>
           {c.type === "percent"
             ? (line[c.key] === "" || line[c.key] === undefined || line[c.key] === null ? "100%" : `${Math.round(Number(line[c.key]) * 100)}%`)
             : displayLabel(c, line)}
@@ -94,24 +97,24 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
       </div>
     ) : c.type === "select" ? (
       <div>
-        <select value={line[c.key] ?? ""} onChange={(e) => setLocalValue(line.id, c.key, e.target.value)} style={{ ...inputStyle, width: "100%" }}>
+        <SelectNative value={line[c.key] ?? ""} onChange={(e) => setLocalValue(line.id, c.key, e.target.value)} className="h-8 w-full">
           <option value="">—</option>
           {resolveOptions(c, line).map((opt, i) => {
             const optionLabels = resolveOptionLabels(c, line);
             return <option key={opt} value={opt}>{optionLabels ? optionLabels[i] : opt}</option>;
           })}
-        </select>
+        </SelectNative>
         {c.hint && c.hint(line)}
       </div>
     ) : c.type === "percent" ? (
-      <input type="number" min="0" max="200" placeholder="100"
+      <Input type="number" min="0" max="200" placeholder="100"
         value={line[c.key] === "" || line[c.key] === undefined || line[c.key] === null ? "" : Math.round(Number(line[c.key]) * 100)}
         onChange={(e) => setLocalValue(line.id, c.key, e.target.value === "" ? "" : Number(e.target.value) / 100)}
-        style={{ ...inputStyle, width: "100%" }} />
+        className="h-8 w-full" />
     ) : (
-      <input type={c.type === "number" ? "number" : "text"} value={line[c.key] ?? ""}
+      <Input type={c.type === "number" ? "number" : "text"} value={line[c.key] ?? ""}
         onChange={(e) => setLocalValue(line.id, c.key, c.type === "number" ? Number(e.target.value) : e.target.value)}
-        style={{ ...inputStyle, width: "100%" }} />
+        className="h-8 w-full" />
     )
   );
 
@@ -121,7 +124,7 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
     const cellEditable = c.editable === undefined ? lineEditable : (typeof c.editable === "function" ? c.editable(line) : c.editable);
     return (
       <div key={c.key} style={{ width: c.width || 160, flex: c.grow ? "1 1 220px" : "0 0 auto", minWidth: c.width || 120 }}>
-        <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{c.label}</div>
+        <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1">{c.label}</div>
         {c.render ? c.render(line) : renderControl(c, line, cellEditable)}
       </div>
     );
@@ -134,29 +137,24 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
     const secondary = columns.filter((c) => c.group === "secondary");
     const full = columns.filter((c) => c.group === "full");
     return (
-      <div key={line.id} style={{
-        background: SURFACE2, border: `1px solid ${dirty ? ACCENT : BORDER}`, borderRadius: 12, padding: 14, marginBottom: 10,
-      }}>
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+      <div key={line.id} className={cn("bg-muted/40 border rounded-xl p-3.5 mb-2.5", dirty ? "border-primary/50" : "border-border")}>
+        <div className="flex gap-3.5 flex-wrap items-start">
           {primary.map((c) => renderField(c, line, lineEditable))}
           {editable && lineEditable && (
-            <div style={{ display: "flex", gap: 6, alignSelf: "flex-end", marginLeft: "auto" }}>
-              <button onClick={() => saveLine(line)} disabled={!dirty} style={{
-                ...btnGhost, fontSize: 12, padding: "5px 10px",
-                ...(dirty ? { color: ACCENT, borderColor: ACCENT, cursor: "pointer" } : { opacity: 0.4, cursor: "default" }),
-              }}>
+            <div className="flex gap-1.5 self-end ml-auto">
+              <Button variant="secondary" size="sm" onClick={() => saveLine(line)} disabled={!dirty}
+                className={cn(dirty && "text-primary")}>
                 <Check size={13} /> Valider
-              </button>
-              <button onClick={() => onRemove(line.id)} title="Supprimer la ligne" aria-label="Supprimer la ligne" style={{
-                background: "transparent", border: "none", color: MUTED, cursor: "pointer", padding: 4, display: "flex",
-              }}>
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => onRemove(line.id)} title="Supprimer la ligne" aria-label="Supprimer la ligne"
+                className="text-muted-foreground hover:text-destructive h-8 w-8">
                 <Trash2 size={15} />
-              </button>
+              </Button>
             </div>
           )}
         </div>
         {secondary.length > 0 && (
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+          <div className="flex gap-3.5 flex-wrap mt-3 pt-3 border-t border-border">
             {secondary.map((c) => renderField({ ...c, grow: true }, line, lineEditable))}
           </div>
         )}
@@ -166,7 +164,7 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
           // release in progress) shouldn't leave a bare divider behind.
           if (content === null || content === undefined) return null;
           return (
-            <div key={c.key} style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+            <div key={c.key} className="mt-3 pt-3 border-t border-border">
               {content}
             </div>
           );
@@ -179,17 +177,14 @@ export default function LinesTable({ lines, columns, addLabel, editable = true, 
     <div style={{ marginBottom: 10 }}>
       {local.map(renderCard)}
       {local.length === 0 && (
-        <div style={{
-          background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20,
-          textAlign: "center", color: MUTED, fontSize: 12.5,
-        }}>
+        <div className="bg-card border border-border rounded-xl p-5 text-center text-muted-foreground text-[12.5px]">
           Aucune ligne pour l'instant.
         </div>
       )}
       {editable && (
-        <button onClick={() => onAdd()} style={{ ...btnGhost, fontSize: 12.5 }}>
-          <Plus size={14} /> {addLabel}
-        </button>
+        <Button variant="outline" size="sm" onClick={() => onAdd()}>
+          <Plus /> {addLabel}
+        </Button>
       )}
     </div>
   );
