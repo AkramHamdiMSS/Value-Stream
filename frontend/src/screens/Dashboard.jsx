@@ -324,41 +324,89 @@ function leaveColor(type) {
   return LEAVE_COLORS.valid;
 }
 
-// Detail panel shown under a resource row when a leave cell is clicked:
-// each underlying leave record once, with its exact days, source and comment,
-// plus what it costs on the clicked week.
-function LeaveDetailPanel({ name, periodLabel, leaves, lostToLeave, cap, load, onClose }) {
+// Detail panel shown under a resource row when a cell is clicked: what
+// makes up that week for that person — each allocation (project, %, full
+// range of the line, backup, comments), backup duties, and each leave record
+// once with its exact days — plus the week's balance (load vs net capacity).
+function CellDetailPanel({ name, periodLabel, labelFor, allocations, backups, leaves, lostToLeave, cap, load, onOpenProject, onClose }) {
+  const over = load > cap + 0.001;
+  const card = (color) => ({
+    background: SURFACE, border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`,
+    borderLeft: `4px solid ${color}`, borderRadius: 8, padding: "8px 12px", minWidth: 260, fontSize: 12,
+  });
+  const section = (title) => <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "8px 0 6px" }}>{title}</div>;
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 600 }}>
-          <CalendarOff size={13} style={{ verticalAlign: -2, marginRight: 6 }} />
-          {name} — semaine {periodLabel}
-        </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600 }}>{name} — semaine {periodLabel}</div>
         <button onClick={onClose} style={{ ...btnGhost, fontSize: 11, padding: "3px 8px" }}>Fermer</button>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-        {leaves.map((u) => (
-          <div key={u.id || `${u.type}${u.startDate}`} style={{
-            background: SURFACE, border: `1px solid color-mix(in srgb, ${leaveColor(u.type)} 45%, transparent)`,
-            borderLeft: `4px solid ${leaveColor(u.type)}`, borderRadius: 8, padding: "8px 12px", minWidth: 260, fontSize: 12,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <span style={{ fontWeight: 700, color: leaveColor(u.type), textTransform: "capitalize" }}>{u.type}</span>
-              <Badge color={u.source === "ascii" ? ACCENT : MUTED} text={u.source === "ascii" ? "ASCII" : "Saisie manuelle"} />
-            </div>
-            <div>{fmtFull(u.startDate)} → {fmtFull(u.endDate)}</div>
-            <div style={{ color: MUTED, marginTop: 2 }}>{calendarDays(u.startDate, u.endDate)} jour(s) calendaire(s)</div>
-            {u.comment && <div style={{ marginTop: 6, fontStyle: "italic", color: MUTED }}>« {u.comment} »</div>}
-          </div>
-        ))}
-      </div>
-      <div style={{ fontSize: 12, color: MUTED }}>
-        Impact cette semaine : <b style={{ color: TEXT }}>{Math.round(lostToLeave * 100)}%</b> d'absence
+      <div style={{ fontSize: 12, color: MUTED, marginBottom: 4 }}>
+        Charge <b style={{ color: over ? RED : TEXT }}>{Math.round(load * 100)}%</b>
         {" · "}capacité nette <b style={{ color: TEXT }}>{Math.round(cap * 100)}%</b>
-        {load > 0 && <>{" · "}affecté(e) à <b style={{ color: load > cap + 0.001 ? RED : TEXT }}>{Math.round(load * 100)}%</b></>}
-        {lostToLeave <= 0.001 && " (congé demandé ou refusé : ne réduit pas la capacité)"}
+        {lostToLeave > 0.001 && <>{" · "}absence <b style={{ color: TEXT }}>{Math.round(lostToLeave * 100)}%</b></>}
+        {over && <>{" · "}<b style={{ color: RED }}>sur-allocation de {Math.round((load - cap) * 100)} pts</b></>}
       </div>
+
+      {allocations.length > 0 && (
+        <>
+          {section(`${allocations.length} affectation(s)`)}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {allocations.map((a) => (
+              <div key={a.lineId || a.projectId} style={{ ...card(over ? RED : GREEN), cursor: onOpenProject ? "pointer" : undefined }} onClick={() => onOpenProject?.(a.projectId)} title="Ouvrir le projet">
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700 }}>{a.projectName}</span>
+                  <span style={{ color: ACCENT, fontWeight: 700 }}>{Math.round(a.pct * 100)}%</span>
+                  {a.projectStatus && <Badge color={MUTED} text={a.projectStatus} />}
+                </div>
+                <div>Affectation du <b>{labelFor(a.periodStart)}</b> au <b>{labelFor(a.periodEnd)}</b></div>
+                {a.backupName && <div style={{ color: MUTED, marginTop: 2 }}>Backup : {a.backupName}</div>}
+                {a.createdByName && <div style={{ color: MUTED, marginTop: 2 }}>Saisie par {a.createdByName}</div>}
+                {a.comment && <div style={{ marginTop: 6, fontStyle: "italic", color: MUTED }}>« {a.comment} »</div>}
+                {a.validationComment && <div style={{ marginTop: 4, fontStyle: "italic", color: MUTED }}>Validation : « {a.validationComment} »</div>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {backups.length > 0 && (
+        <>
+          {section("Backup pour")}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {backups.map((b) => (
+              <div key={`${b.projectId}-${b.primaryName}`} style={{ ...card(ACCENT2), cursor: onOpenProject ? "pointer" : undefined }} onClick={() => onOpenProject?.(b.projectId)} title="Ouvrir le projet">
+                <span style={{ fontWeight: 700 }}>{b.projectName}</span>
+                <span style={{ color: MUTED }}> — remplaçant(e) de {b.primaryName}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {leaves.length > 0 && (
+        <>
+          {section(<><CalendarOff size={12} style={{ verticalAlign: -2, marginRight: 4 }} />{leaves.length} congé(s)</>)}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {leaves.map((u) => (
+              <div key={u.id || `${u.type}${u.startDate}`} style={card(leaveColor(u.type))}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, color: leaveColor(u.type), textTransform: "capitalize" }}>{u.type}</span>
+                  <Badge color={u.source === "ascii" ? ACCENT : MUTED} text={u.source === "ascii" ? "ASCII" : "Saisie manuelle"} />
+                </div>
+                <div>{fmtFull(u.startDate)} → {fmtFull(u.endDate)}</div>
+                <div style={{ color: MUTED, marginTop: 2 }}>{calendarDays(u.startDate, u.endDate)} jour(s) calendaire(s)</div>
+                {u.comment && <div style={{ marginTop: 6, fontStyle: "italic", color: MUTED }}>« {u.comment} »</div>}
+              </div>
+            ))}
+          </div>
+          {lostToLeave <= 0.001 && <div style={{ fontSize: 11.5, color: MUTED, marginTop: 6 }}>Congé demandé ou refusé : ne réduit pas la capacité.</div>}
+        </>
+      )}
+
+      {allocations.length === 0 && backups.length === 0 && leaves.length === 0 && (
+        <div style={{ fontSize: 12, color: MUTED }}>Rien de planifié cette semaine.</div>
+      )}
     </div>
   );
 }
@@ -375,10 +423,22 @@ const VIEW_MODES = [
 
 function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
   const [expanded, setExpanded] = useState(null);
-  const [leaveCell, setLeaveCell] = useState(null); // { resId, period }
+  const [cell, setCell] = useState(null); // { resId, period } — clicked week cell
   const [viewMode, setViewMode] = useState("plan");
   const { pool, overAllocGrid, capacityGrid, unavailableGrid, overAllocProjects, unavailableMembers, backupFor, loggedHoursGrid, workingDaysByPeriod, periods, currentPeriod } = data;
   const scrollRef = useRef(null);
+  // Visible width of the scroll container — the detail panel is capped to it
+  // so it never stretches under the 64 hidden columns.
+  const [viewportWidth, setViewportWidth] = useState(0);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setViewportWidth(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // The window now reaches 12 weeks into the past, so "today" is no longer
   // the first column — scroll it into view on load instead of burying it.
@@ -407,7 +467,7 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
         {viewMode === "plan" && "Rouge = charge supérieure à la capacité nette de la personne cette semaine-là (temps de travail, congés validés, arrivée/départ), tous projets confondus. Ambre = congé partiel : le chiffre reste affiché."}
         {viewMode === "reel" && "Heures réellement loggées dans Tempo, tous projets confondus (nécessite une synchro depuis Pool)."}
         {viewMode === "ecart" && "Réel moins attendu (planifié × 8h × jours ouvrés de la semaine, fériés déduits), pour les semaines passées ou en cours seulement."}
-        {" "}Cliquez sur une ressource pour voir le détail des projets sur lesquels elle travaille, sur une case « Congé » pour voir le détail du congé. Défilement horizontal pour voir toute l'année.
+        {" "}Cliquez sur une ressource pour voir le détail des projets sur lesquels elle travaille, sur une case (%, Congé, Backup) pour voir le détail de cette semaine : projets, plage d'affectation, congés. Défilement horizontal pour voir toute l'année.
       </div>
       <div ref={scrollRef} style={{ overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", fontSize: 11.5, width: "100%" }}>
@@ -495,18 +555,19 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                         : viewMode === "ecart" && normalActive ? `Planifié ${Math.round(expected)}h (${workingDaysByPeriod?.[p] ?? 5} j ouvrés) · Réel ${Math.round(logged)}h`
                         : over ? `${Math.round(v * 100)}% affecté pour ${capLabel}`
                         : cap < 0.999 ? capLabel : undefined;
-                      const isLeaveOpen = leaveCell?.resId === res.id && leaveCell?.period === p;
+                      const isCellOpen = cell?.resId === res.id && cell?.period === p;
+                      const clickable = pillActive || cap < 0.999;
                       return (
                         <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
-                          <span title={unavailable ? `${tooltip} — cliquer pour le détail` : tooltip}
-                            onClick={unavailable ? () => setLeaveCell(isLeaveOpen ? null : { resId: res.id, period: p }) : undefined}
+                          <span title={clickable ? `${tooltip ? tooltip + " — " : ""}cliquer pour le détail` : tooltip}
+                            onClick={clickable ? () => setCell(isCellOpen ? null : { resId: res.id, period: p }) : undefined}
                             style={{
                               display: "inline-block", minWidth: 40, padding: "3px 6px", borderRadius: 999,
                               border: `1px solid ${pillActive ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
-                              background: pillActive ? `color-mix(in srgb, ${pillColor} ${isLeaveOpen ? 28 : 12}%, transparent)` : "transparent",
+                              background: pillActive ? `color-mix(in srgb, ${pillColor} ${isCellOpen ? 28 : 12}%, transparent)` : "transparent",
                               color: pillColor, fontWeight: over || unavailable || ecartSignificant ? 700 : 500,
-                              cursor: unavailable ? "pointer" : undefined,
-                              outline: isLeaveOpen ? `2px solid ${pillColor}` : undefined,
+                              cursor: clickable ? "pointer" : undefined,
+                              outline: isCellOpen ? `2px solid ${pillColor}` : undefined,
                             }}>
                             {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? (fullyOff || v <= 0.001 ? "Congé" : `${Math.round(v * 100)}% ◐`) : backupOnly ? "Backup" : normalLabel}
                           </span>
@@ -514,20 +575,24 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                       );
                     })}
                   </tr>
-                  {leaveCell?.resId === res.id && unavailableMembers?.[res.id]?.[leaveCell.period] && (
+                  {cell?.resId === res.id && (
                     <tr>
                       <td colSpan={periods.length + 1} style={{ background: SURFACE2, padding: 0, borderBottom: `1px solid ${BORDER}` }}>
                         {/* The row spans all 64 columns while the grid is scrolled to
                             "today" — pin the panel to the visible left edge instead. */}
-                        <div style={{ position: "sticky", left: 0, display: "inline-block", maxWidth: scrollRef.current?.clientWidth || "100%", boxSizing: "border-box", padding: "10px 12px" }}>
-                        <LeaveDetailPanel
+                        <div style={{ position: "sticky", left: 0, display: "inline-block", maxWidth: viewportWidth || "100%", boxSizing: "border-box", padding: "10px 12px" }}>
+                        <CellDetailPanel
                           name={res.name}
-                          periodLabel={labelFor(leaveCell.period)}
-                          leaves={uniqueLeaves(unavailableMembers[res.id][leaveCell.period])}
-                          lostToLeave={unavailableGrid?.[res.id]?.[leaveCell.period] || 0}
-                          cap={capacityGrid?.[res.id]?.[leaveCell.period] ?? 1}
-                          load={overAllocGrid[res.id]?.[leaveCell.period] || 0}
-                          onClose={() => setLeaveCell(null)}
+                          periodLabel={labelFor(cell.period)}
+                          labelFor={labelFor}
+                          allocations={overAllocProjects?.[`${res.id}:${cell.period}`] || []}
+                          backups={backupFor?.[res.id]?.[cell.period] || []}
+                          leaves={uniqueLeaves(unavailableMembers?.[res.id]?.[cell.period])}
+                          lostToLeave={unavailableGrid?.[res.id]?.[cell.period] || 0}
+                          cap={capacityGrid?.[res.id]?.[cell.period] ?? 1}
+                          load={overAllocGrid[res.id]?.[cell.period] || 0}
+                          onOpenProject={onOpenProject}
+                          onClose={() => setCell(null)}
                         />
                         </div>
                       </td>
