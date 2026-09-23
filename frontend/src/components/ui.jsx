@@ -31,6 +31,29 @@ export function BrandHeader() {
   );
 }
 
+// Section label between rail groups ("Pilotage", "Organisation", "Admin").
+export function NavGroup({ children }) {
+  return (
+    <div style={{ fontSize: 10.5, color: SIDEBAR_MUTED, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", padding: "14px 10px 4px" }}>
+      {children}
+    </div>
+  );
+}
+
+// Icon-only nav entry used when the rail is collapsed — square, tooltip via
+// title, same active tint as full NavItem.
+export function RailItem({ icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick} title={label} aria-label={label} style={{
+      display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, margin: "1px auto",
+      background: active ? SIDEBAR_ACTIVE : "transparent", border: "none", borderRadius: CONTROL_RADIUS,
+      color: active ? ACCENT : SIDEBAR_MUTED, cursor: "pointer",
+    }}>
+      {icon}
+    </button>
+  );
+}
+
 export function NavItem({ icon, label, active, onClick }) {
   return (
     <button onClick={onClick} style={{
@@ -60,6 +83,17 @@ export function Kpi({ label, value, accent, icon, hint }) {
       <div style={{ fontSize: 24, fontWeight: 700, color: accent || TEXT, letterSpacing: "-0.02em" }}>{value}</div>
       <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2 }}>{label}</div>
       {hint && <div style={{ fontSize: 11, color: MUTED, marginTop: 4, opacity: 0.85 }}>{hint}</div>}
+    </div>
+  );
+}
+
+// Horizontal fill bar: value against max, tinted by severity threshold —
+// used for per-profile coverage and project gap rows instead of plain text.
+export function GaugeBar({ ratio, color, height = 6, background }) {
+  const pct100 = Math.max(0, Math.min(1, ratio)) * 100;
+  return (
+    <div style={{ width: "100%", height, borderRadius: height, background: background || `color-mix(in srgb, ${MUTED} 18%, transparent)`, overflow: "hidden" }}>
+      <div style={{ width: `${pct100}%`, height: "100%", background: color, borderRadius: height, transition: "width .25s ease" }} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { subscribeToast } from "../lib/toast";
-import { SURFACE, BORDER, TEXT, RED, GREEN, AMBER, CARD_SHADOW, FONT_BODY } from "../styles";
+import { SURFACE, TEXT, RED, GREEN, AMBER, CARD_SHADOW, FONT_BODY } from "../styles";
 
 const COLORS = { error: RED, warning: AMBER, success: GREEN };
 

@@ -1,10 +1,10 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge, UserCheck, Inbox, Unlock, FileText, CalendarOff, Timer, Battery, Activity } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, FolderKanban, CheckCircle2, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge , Inbox, Unlock, CalendarOff, Timer, Battery, Activity } from "lucide-react";
 import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, AMBER, RED, CARD_SHADOW, btnGhost } from "../styles";
-import { Kpi, Th, Td, Badge } from "../components/ui";
+import { Kpi, Th, Td, Badge, GaugeBar } from "../components/ui";
 
 const PROFILE_COLORS = { Mobile: ACCENT2, "TPE Android": GREEN, "TPE Engage": AMBER, Digital: ACCENT };
 
@@ -128,9 +128,43 @@ function OwnDashboard({ data, labelFor, onOpenProject, minimalDashboard }) {
   );
 }
 
+function pctColor(p) { return p == null ? MUTED : p >= 100 ? GREEN : p >= 70 ? AMBER : RED; }
+
+// Problem strip on top of the HSV dashboard: strictly the things that need
+// action, each card scrolls to the part of the page that shows it.
+function AlertBand({ items }) {
+  if (items.length === 0) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, background: `color-mix(in srgb, ${GREEN} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${GREEN} 35%, transparent)`, borderRadius: 12, padding: "10px 14px", marginBottom: 16, color: GREEN, fontSize: 13, fontWeight: 600 }}>
+        <CheckCircle2 size={16} /> Plan sain : aucune sur-allocation, conflit de congé ou besoin non couvert.
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(items.length, 3)}, 1fr)`, gap: 12, marginBottom: 16 }}>
+      {items.map((it, i) => {
+        const Icon = it.icon;
+        const go = it.scroll ? () => { it.then?.(); document.getElementById(it.scroll)?.scrollIntoView({ behavior: "smooth", block: "start" }); } : undefined;
+        return (
+          <button key={i} onClick={go} disabled={!go} style={{
+            display: "flex", alignItems: "center", gap: 10, textAlign: "left", cursor: go ? "pointer" : "default",
+            background: `color-mix(in srgb, ${it.color} 7%, transparent)`, border: `1px solid color-mix(in srgb, ${it.color} 35%, transparent)`,
+            borderRadius: 12, padding: "12px 14px", color: it.color, fontFamily: FONT_BODY,
+          }}>
+            <Icon size={18} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 13, fontWeight: 700 }}>{it.n}</span>
+            <span style={{ fontSize: 12, color: TEXT }}>{it.text}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- HSV / global view
 
 function AllDashboard({ data, labelFor, onOpenProject }) {
+  const [gridMode, setGridMode] = useState("plan");
   const { totals, bySquad, demandByMonth, allocByPeriod, capacityByPeriod, alertCount, projectsCount, topProjects, realizationByProfile, planningWeeks, currentPeriod } = data;
   const startIdx = Math.max(0, demandByMonth.findIndex((r) => r.period === currentPeriod));
   const chartWeeks = demandByMonth.slice(startIdx, startIdx + planningWeeks);
@@ -142,7 +176,6 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
     "Capacité nette": capacityByPeriod?.[startIdx + i]?.total ?? 0,
     Alloué: allocByPeriod?.[startIdx + i]?.total ?? 0,
   }));
-  const ecart = totals.ecartTotal;
   const couverture = totals.couvertureTotal;
   const withTempo = (realizationByProfile || []).filter((r) => r.ratio != null);
 
@@ -154,26 +187,24 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
         {" "}1 ETP·semaine = une personne à 100% pendant une semaine. La capacité est nette des congés validés, du temps partiel, des arrivées/départs et des jours fériés.
       </p>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-        <Kpi label="Projets" value={projectsCount} icon={<FolderKanban size={18} />} />
+      <AlertBand items={[
+        alertCount > 0 && { n: alertCount, text: alertCount === 1 ? "sur-allocation (pers. × sem.)" : "sur-allocations (pers. × sem.)", color: RED, icon: AlertTriangle, scroll: "resource-grid", then: () => setGridMode("plan") },
+        totals.conflictCount > 0 && { n: totals.conflictCount, text: "conflit(s) congé / affectation", color: RED, icon: CalendarOff, scroll: "resource-grid", then: () => setGridMode("plan") },
+        totals.ecartTotal < -0.05 && { n: `${-totals.ecartTotal} ETP·sem.`, text: "de besoin non couvert à temps", color: AMBER, icon: Scale, scroll: "top-projects" },
+        totals.backlogCount > 0 && { n: totals.backlogCount, text: "demande(s) à traiter dans la file", color: AMBER, icon: Inbox },
+        totals.timesheetGapCount > 0 && { n: totals.timesheetGapCount, text: "écart(s) plan / réel dans Tempo", color: MUTED, icon: Timer, scroll: "resource-grid", then: () => setGridMode("ecart") },
+        totals.releasePendingCount > 0 && { n: totals.releasePendingCount, text: "libération(s) en attente", color: AMBER, icon: Unlock },
+      ].filter(Boolean)} />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
+        <Kpi label="Projets" value={projectsCount} icon={<FolderKanban size={18} />} hint={`${totals.submittedCount} soumis · ${totals.draftCount} brouillons`} />
         <Kpi label="Besoin soumis (ETP·sem.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />}
           hint={totals.besoinDraftTotal > 0 ? `+ ${totals.besoinDraftTotal} en brouillon, non comptés` : undefined} />
         <Kpi label="Capacité nette (ETP·sem.)" value={totals.capTotal} icon={<Battery size={18} />} hint={`${totals.headcount} personnes · ${totals.capNow} ETP cette semaine`} />
         <Kpi label="Charge du pool" value={totals.chargeCapacitePct == null ? "—" : `${totals.chargeCapacitePct}%`} accent={totals.chargeCapacitePct > 100 ? RED : totals.chargeCapacitePct > 85 ? AMBER : GREEN} icon={<Gauge size={18} />} hint="besoin soumis / capacité nette" />
-        <Kpi label="Couvert dans les bonnes semaines" value={totals.coveredTotal} accent={GREEN} icon={<Users size={18} />} hint={totals.allocTotal > totals.coveredTotal + 0.05 ? `${totals.allocTotal} alloués au total (hors besoin : ${Math.round((totals.allocTotal - totals.coveredTotal) * 10) / 10})` : undefined} />
-        <Kpi label="Couverture" value={couverture == null ? "—" : `${couverture}%`} accent={couverture == null ? undefined : couverture >= 100 ? GREEN : RED} icon={<Percent size={18} />} />
-        <Kpi label="Écart (ETP·sem.)" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
-      </div>
-
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <Kpi label="Sur-allocations (pers. × sem.)" value={alertCount} accent={alertCount > 0 ? RED : GREEN} icon={<AlertTriangle size={18} />} hint="charge > capacité nette de la personne" />
-        <Kpi label="Conflits congé / affectation" value={totals.conflictCount} accent={totals.conflictCount > 0 ? RED : GREEN} icon={<CalendarOff size={18} />} />
-        <Kpi label="Écart plan / réel (Tempo)" value={totals.timesheetGapCount} accent={totals.timesheetGapCount > 0 ? RED : GREEN} icon={<Timer size={18} />} />
-        <Kpi label="Disponibles cette semaine" value={totals.availableCount} accent={GREEN} icon={<UserCheck size={18} />} hint={`${totals.freeNow} ETP libres au total`} />
-        <Kpi label="Utilisation du pool (semaine en cours)" value={`${totals.poolUtilizationPct}%`} accent={totals.poolUtilizationPct > 100 ? RED : undefined} icon={<Gauge size={18} />} hint="planifié / capacité nette" />
-        <Kpi label="Demandes en attente de validation" value={totals.backlogCount} accent={totals.backlogCount > 0 ? AMBER : GREEN} icon={<Inbox size={18} />} />
-        <Kpi label="Libérations en attente" value={totals.releasePendingCount} accent={totals.releasePendingCount > 0 ? AMBER : GREEN} icon={<Unlock size={18} />} />
-        <Kpi label="Brouillons / Soumises" value={`${totals.draftCount} / ${totals.submittedCount}`} icon={<FileText size={18} />} />
+        <Kpi label="Couverture à temps" value={couverture == null ? "—" : `${couverture}%`} accent={pctColor(couverture)} icon={<Percent size={18} />}
+          hint={totals.allocTotal > totals.coveredTotal + 0.05 ? `${totals.coveredTotal} couverts sur ${totals.allocTotal} alloués` : undefined} />
+        <Kpi label="Pool cette semaine" value={`${totals.poolUtilizationPct}%`} accent={totals.poolUtilizationPct > 100 ? RED : undefined} icon={<Users size={18} />} hint={`${totals.availableCount} présents sans charge · ${totals.freeNow} ETP libres`} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginBottom: 20 }}>
@@ -207,38 +238,41 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
         </div>
 
         <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Besoin / Capacité nette / Alloué par profil (ETP·sem.)</div>
-          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
-            Couverture : {bySquad.map((s) => `${s.name} ${s.couverture == null ? "—" : `${s.couverture}%`}`).join(" · ")}
-            <br />Charge : {bySquad.map((s) => `${s.name} ${s.charge == null ? "—" : `${s.charge}%`}`).join(" · ")}
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Profils sur les {planningWeeks} prochaines semaines</div>
+          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 12 }}>
+            Jauge = besoin rempli à temps (couvert). "Charge" = besoin / capacité nette disponible.
           </div>
-          <ResponsiveContainer width="100%" height={195}>
-            <BarChart data={bySquad}>
-              <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
-              <XAxis dataKey="name" stroke={MUTED} fontSize={11} />
-              <YAxis stroke={MUTED} fontSize={11} />
-              <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="besoin" name="Besoin" fill={ACCENT} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="capacite" name="Capacité nette" fill={GREEN} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="couvert" name="Couvert" fill={AMBER} radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginTop: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {bySquad.map((s2) => (
+              <div key={s2.name}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: PROFILE_COLORS[s2.name] }}>{s2.name}</span>
+                  <span style={{ fontSize: 11.5, color: MUTED }}>
+                    {s2.effectif} pers. · {s2.capaciteSemaine} ETP/sem.
+                    {s2.couverture != null && <> · <span style={{ color: pctColor(s2.couverture), fontWeight: 600 }}>couvert {s2.couverture}%</span></>}
+                    {s2.charge != null && <> · <span style={{ color: s2.charge > 100 ? RED : s2.charge > 85 ? AMBER : GREEN, fontWeight: 600 }}>charge {s2.charge}%</span></>}
+                  </span>
+                </div>
+                <GaugeBar ratio={(s2.couverture ?? 0) / 100} color={pctColor(s2.couverture)} />
+                <div style={{ fontSize: 11, color: MUTED, marginTop: 4 }}>Besoin {s2.besoin} · couvert {s2.couvert} · alloué {s2.alloue} · capacité {s2.capacite} ETP·sem.</div>
+              </div>
+            ))}
+          </div>
+
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginTop: 14 }}>
             <thead>
               <tr style={{ background: SURFACE2 }}>
-                <Th>Profil</Th><Th>Effectif</Th><Th>Cap. / sem.</Th><Th>Réel / planifié</Th>
+                <Th>Profil</Th>
+                <Th title="Heures réellement loggées / heures planifiées, semaines passées, ressources mappées Tempo.">Réel / planifié (Tempo)</Th>
               </tr>
             </thead>
             <tbody>
-              {bySquad.map((s) => {
-                const r = (realizationByProfile || []).find((x) => x.name === s.name);
+              {bySquad.map((s2) => {
+                const r = (realizationByProfile || []).find((x) => x.name === s2.name);
                 return (
-                  <tr key={s.name} style={{ borderTop: `1px solid ${BORDER}` }}>
-                    <Td><span style={{ color: PROFILE_COLORS[s.name], fontWeight: 600 }}>{s.name}</span></Td>
-                    <Td>{s.effectif}</Td>
-                    <Td>{s.capaciteSemaine} ETP</Td>
-                    <Td title={r?.ratio != null ? `${r.loggedHours}h loggées pour ${r.plannedHours}h planifiées (semaines passées, ressources mappées Tempo)` : "Pas de données Tempo"}>
+                  <tr key={s2.name} style={{ borderTop: `1px solid ${BORDER}` }}>
+                    <Td><span style={{ color: PROFILE_COLORS[s2.name], fontWeight: 600 }}>{s2.name}</span></Td>
+                    <Td title={r?.ratio != null ? `${r.loggedHours}h loggées pour ${r.plannedHours}h planifiées` : "Pas de données Tempo"}>
                       {r?.ratio == null ? <span style={{ color: MUTED }}>—</span>
                         : <span style={{ color: r.ratio > 1.2 ? RED : r.ratio < 0.8 ? AMBER : GREEN, fontWeight: 600 }}>×{r.ratio}</span>}
                     </Td>
@@ -257,34 +291,36 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
       </div>
 
       {topProjects?.length > 0 && (
-        <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW, marginBottom: 20 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Top projets en manque</div>
+        <div id="top-projects" style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, boxShadow: CARD_SHADOW, marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Projets en manque</div>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
-            Les projets soumis avec le plus grand manque (couvert − demandé, en ETP·semaines, sur les {planningWeeks} prochaines semaines). Cliquez sur un projet pour l'ouvrir.
+            Besoin non rempli dans les bonnes semaines, sur les {planningWeeks} prochaines semaines (ETP·sem.) — du plus au moins exposé.
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: SURFACE2 }}>
-                <Th>Projet</Th><Th>SVO</Th><Th>Statut</Th><Th>Semaines</Th><Th>Demandé</Th><Th>Couvert</Th><Th>Écart</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {topProjects.map((p) => (
-                <tr key={p.id} style={{ borderTop: `1px solid ${BORDER}`, cursor: "pointer" }} onClick={() => onOpenProject?.(p.id)}>
-                  <Td><span style={{ fontWeight: 600 }}>{p.name}</span></Td>
-                  <Td><span style={{ color: MUTED }}>{p.svo}</span></Td>
-                  <Td><span style={{ color: MUTED }}>{p.status}</span></Td>
-                  <Td>{p.weeks}</Td>
-                  <Td>{p.demand}</Td>
-                  <Td>{p.covered}<span style={{ color: MUTED, fontSize: 11.5 }}> · {p.couverture}%</span></Td>
-                  <Td><span style={{ color: p.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{p.ecart}</span></Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {topProjects.map((pr) => {
+              const ratio = pr.demand > 0 ? pr.covered / pr.demand : 0;
+              return (
+                <button key={pr.id} onClick={() => onOpenProject?.(pr.id)} style={{
+                  display: "grid", gridTemplateColumns: "minmax(180px, 2fr) auto minmax(160px, 3fr) auto", alignItems: "center", gap: 12, textAlign: "left",
+                  background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "9px 12px", cursor: "pointer", fontFamily: FONT_BODY, color: TEXT,
+                }}>
+                  <span>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{pr.name}</div>
+                    <div style={{ fontSize: 11.5, color: MUTED }}>{pr.svo} · {pr.status} · {pr.weeks} sem. de besoin</div>
+                  </span>
+                  <span style={{ fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>besoin {pr.demand}</span>
+                  <GaugeBar ratio={ratio} color={pctColor(pr.couverture)} />
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: pctColor(pr.couverture), minWidth: 84, textAlign: "right" }}>{pr.couverture}% ({pr.ecart})</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
+      <span id="resource-grid" style={{ display: "contents" }}>
+        <ResourceLoadGrid data={data} labelFor={labelFor} onOpenProject={onOpenProject} viewMode={gridMode} setViewMode={setGridMode} />
+      </span>
       <ResourceLoadGrid data={data} labelFor={labelFor} onOpenProject={onOpenProject} />
     </div>
   );
@@ -319,25 +355,127 @@ const VIEW_MODES = [
   { value: "ecart", label: "Écart" },
 ];
 
-function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
-  const [expanded, setExpanded] = useState(null);
-  const [viewMode, setViewMode] = useState("plan");
-  const { pool, overAllocGrid, capacityGrid, unavailableGrid, overAllocProjects, unavailableMembers, backupFor, loggedHoursGrid, workingDaysByPeriod, periods, currentPeriod } = data;
-  const scrollRef = useRef(null);
+const CELL_ZOOMS = [
+  { key: "s", label: "S", width: 34, showLabel: false },
+  { key: "m", label: "M", width: 48, showLabel: true },
+  { key: "l", label: "L", width: 74, showLabel: true },
+];
+const RANGE_WINDOWS = [
+  { key: 13, label: "13 sem." },
+  { key: 26, label: "26 sem." },
+  { key: 0, label: "Tout" },
+];
+const HATCH = "repeating-linear-gradient(45deg, transparent 0 3px, currentColor 3px 4px)";
 
-  // The window now reaches 12 weeks into the past, so "today" is no longer
-  // the first column — scroll it into view on load instead of burying it.
-  // Centered, not aligned to the start: the sticky "Ressource" column sits
-  // on top of the scroll container's left edge and would otherwise cover it.
-  useEffect(() => {
-    scrollRef.current?.querySelector('[data-current="true"]')?.scrollIntoView({ inline: "center", block: "nearest" });
-  }, [periods]);
+function round1(n) { return Math.round(n * 10) / 10; }
+
+// One week cell as a capacity bar: track = the person's net capacity that
+// week, fill = planned load, red = the part overflowing the capacity, amber
+// hatch = leave actually eating part of the week. The number stays readable
+// on top when the zoom level has room for it.
+function CapacityCell({ width, showLabel, load, cap, leaveFrac, hasPendingLeave, backupOnly, tooltip }) {
+  const loadPct100 = cap > 0.001 ? (load / cap) * 100 : load > 0.001 ? 100 : 0;
+  const fillPct100 = Math.min(100, loadPct100);
+  const over = load > cap + 0.001;
+  const color = over ? RED : leaveFrac > 0 ? AMBER : load > 0.001 ? GREEN : MUTED;
+  const label = load > 0.001 ? `${Math.round(load * 100)}%` : "";
+  return (
+    <div style={{ position: "relative", width, height: 22, margin: "0 auto", borderRadius: 5, overflow: "hidden", background: `color-mix(in srgb, ${MUTED} ${cap > 0.001 ? 14 : 6}%, transparent)` }} title={tooltip}>
+      {leaveFrac > 0 && (
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.min(100, leaveFrac * 100)}%`, color: AMBER, backgroundImage: HATCH, opacity: 0.5 }} />
+      )}
+      {load > 0.001 && !over && (
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${fillPct100}%`, background: color, opacity: 0.3 }} />
+      )}
+      {over && (
+        <>
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${fillPct100}%`, background: RED, opacity: 0.35 }} />
+          <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: 3, background: RED }} />
+        </>
+      )}
+      {showLabel && (label !== "" || over) && (
+        <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, fontWeight: over ? 700 : 500, color: leaveFrac > 0 || over ? color : TEXT }}>
+          {label}{over ? " ▲" : ""}{hasPendingLeave ? " ?" : ""}
+        </span>
+      )}
+      {!showLabel && (over || hasPendingLeave) && (
+        <span style={{ position: "absolute", top: 1, right: 2, width: 5, height: 5, borderRadius: 999, background: over ? RED : AMBER }} />
+      )}
+      {backupOnly && (
+        <div style={{ position: "absolute", inset: 0, border: `1px dashed ${ACCENT2}`, borderRadius: 5 }} />
+      )}
+    </div>
+  );
+}
+
+function ResourceLoadGrid({ data, labelFor, onOpenProject, viewMode: controlledMode, setViewMode: controlledSetMode }) {
+  const [expanded, setExpanded] = useState(null);
+  const [localMode, setLocalMode] = useState("plan");
+  const viewMode = controlledMode ?? localMode;
+  const setViewMode = controlledSetMode ?? setLocalMode;
+  const { pool, overAllocGrid, capacityGrid, unavailableGrid, overAllocProjects, unavailableMembers, backupFor, loggedHoursGrid, workingDaysByPeriod, periods, currentPeriod } = data;
+
+  // Window + zoom + profile filter: default to a quarter around this week
+  // instead of the 64-week wall of numbers.
+  const curIdx = Math.max(0, periods.indexOf(currentPeriod));
+  const [windowSize, setWindowSize] = useState(13);
+  const [offset, setOffset] = useState(0);
+  const [zoomKey, setZoomKey] = useState("m");
+  const [profileFilter, setProfileFilter] = useState("Tous");
+  const zoom = CELL_ZOOMS.find((z) => z.key === zoomKey) || CELL_ZOOMS[1];
+
+  const startIdx = windowSize === 0 ? 0 : Math.min(Math.max(0, curIdx - 4 + offset), Math.max(0, periods.length - windowSize));
+  const shown = windowSize === 0 ? periods : periods.slice(startIdx, startIdx + windowSize);
+  const shownPool = profileFilter === "Tous" ? pool : pool.filter((m) => m.sousEquipe === profileFilter);
+
+  // Footer per week — answers "is there room this week?" at a glance.
+  const ratioFor = (p) => {
+    let l = 0, c = 0, logged = 0, expected = 0;
+    for (const m of shownPool) {
+      const load = overAllocGrid[m.id]?.[p] || 0;
+      l += load;
+      c += capacityGrid?.[m.id]?.[p] ?? 1;
+      logged += loggedHoursGrid?.[m.id]?.[p] || 0;
+      expected += load * 8 * (workingDaysByPeriod?.[p] ?? 5);
+    }
+    return viewMode === "reel" ? { v: logged, suffix: "h", over: false }
+      : viewMode === "ecart" ? { v: logged - expected, suffix: "h", over: false }
+      : { v: c > 0.001 ? (100 * l) / c : 0, suffix: "%", over: c > 0.001 && l > c + 0.001 };
+  };
 
   return (
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>Charge par ressource et par semaine ({periods.length} semaines, historique inclus)</div>
-        <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>Charge par ressource et par semaine</div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          {["Tous", ...Object.keys(PROFILE_COLORS)].map((name) => (
+            <button key={name} onClick={() => setProfileFilter(name)} style={{
+              border: `1px solid ${profileFilter === name ? PROFILE_COLORS[name] || ACCENT : BORDER}`, borderRadius: 999, padding: "3px 10px",
+              background: profileFilter === name ? `color-mix(in srgb, ${PROFILE_COLORS[name] || ACCENT} 14%, transparent)` : "transparent",
+              color: profileFilter === name ? (PROFILE_COLORS[name] || ACCENT) : MUTED, fontSize: 11, fontWeight: 600, cursor: "pointer",
+            }}>
+              {name}
+            </button>
+          ))}
+          <span style={{ width: 1, height: 18, background: BORDER }} />
+          {RANGE_WINDOWS.map((w) => (
+            <button key={w.key} onClick={() => { setWindowSize(w.key); setOffset(0); }} style={{ ...btnGhost, fontSize: 11, padding: "4px 9px", ...(windowSize === w.key ? { background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`, color: ACCENT, borderColor: ACCENT } : {}) }}>
+              {w.label}
+            </button>
+          ))}
+          {windowSize !== 0 && (
+            <>
+              <button aria-label="Périodes précédentes" onClick={() => setOffset((o) => Math.max(-(curIdx - 4), o - windowSize))} style={{ ...btnGhost, padding: "4px 8px" }}><ChevronRight size={13} style={{ transform: "rotate(180deg)" }} /></button>
+              <button aria-label="Périodes suivantes" onClick={() => setOffset((o) => Math.min(Math.max(0, periods.length - windowSize - (curIdx - 4)), o + windowSize))} style={{ ...btnGhost, padding: "4px 8px" }}><ChevronRight size={13} /></button>
+            </>
+          )}
+          <span style={{ width: 1, height: 18, background: BORDER }} />
+          {CELL_ZOOMS.map((z) => (
+            <button key={z.key} onClick={() => setZoomKey(z.key)} style={{ ...btnGhost, fontSize: 10.5, padding: "3px 7px", textTransform: "uppercase", ...(zoomKey === z.key ? { background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`, color: ACCENT, borderColor: ACCENT } : {}) }}>
+              {z.label}
+            </button>
+          ))}
+          <span style={{ width: 1, height: 18, background: BORDER }} />
           {VIEW_MODES.map((m) => (
             <button key={m.value} onClick={() => setViewMode(m.value)} style={{
               ...btnGhost, fontSize: 11, padding: "4px 9px",
@@ -348,29 +486,36 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
           ))}
         </div>
       </div>
-      <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
-        {viewMode === "plan" && "Rouge = charge supérieure à la capacité nette de la personne cette semaine-là (temps de travail, congés validés, arrivée/départ), tous projets confondus. Ambre = congé partiel : le chiffre reste affiché."}
-        {viewMode === "reel" && "Heures réellement loggées dans Tempo, tous projets confondus (nécessite une synchro depuis Pool)."}
-        {viewMode === "ecart" && "Réel moins attendu (planifié × 8h × jours ouvrés de la semaine, fériés déduits), pour les semaines passées ou en cours seulement."}
-        {" "}Cliquez sur une ressource pour voir le détail des projets sur lesquels elle travaille. Défilement horizontal pour voir toute l'année.
+      {/* legend — what the visuals mean, no hovering random cells required */}
+      <div style={{ fontSize: 11.5, color: MUTED, display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 22, height: 10, borderRadius: 3, background: `color-mix(in srgb, ${GREEN} 30%, transparent)` }} /> charge planifiée</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ position: "relative", width: 22, height: 10, borderRadius: 3, background: `color-mix(in srgb, ${MUTED} 14%, transparent)` }}><span style={{ position: "absolute", left: 0, right: 0, top: 0, height: 2.5, background: RED }} /></span> surcharge</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 22, height: 10, borderRadius: 3, color: AMBER, backgroundImage: HATCH, opacity: 0.7 }} /> congé (partie hachurée)</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 22, height: 10, borderRadius: 3, border: `1px dashed ${ACCENT2}` }} /> backup (ne compte pas)</span>
+        <span>Fond gris = capacité nette restante.</span>
       </div>
-      <div ref={scrollRef} style={{ overflowX: "auto" }}>
+      <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
+        {viewMode === "reel" && "Mode Réel : heures Tempo loggées tous projets (synchronisées depuis Pool)."}
+        {viewMode === "ecart" && "Mode Écart : réel moins attendu (planifié × 8h × jours ouvrés, fériés déduits), semaines passées seulement."}
+        {viewMode === "plan" && "Cliquez sur une ressource pour voir ses projets semaine par semaine."}
+      </div>
+      <div style={{ overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", fontSize: 11.5, width: "100%" }}>
           <thead>
             <tr>
-              <th style={{ position: "sticky", left: 0, background: SURFACE, textAlign: "left", padding: "4px 8px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}` }}>Ressource</th>
-              {periods.map((p) => (
-                <th key={p} data-current={p === currentPeriod || undefined} style={{ padding: "4px 6px", color: p === currentPeriod ? ACCENT : MUTED, fontWeight: 600, borderBottom: p === currentPeriod ? `2px solid ${ACCENT}` : `1px solid ${BORDER}`, minWidth: 40, whiteSpace: "nowrap" }}>{labelFor(p)}</th>
+              <th style={{ position: "sticky", left: 0, background: SURFACE, textAlign: "left", padding: "4px 8px", color: MUTED, fontWeight: 600, borderBottom: `1px solid ${BORDER}`, zIndex: 2 }}>Ressource</th>
+              {shown.map((p) => (
+                <th key={p} data-current={p === currentPeriod || undefined} style={{ padding: "4px 4px", color: p === currentPeriod ? ACCENT : MUTED, fontWeight: 600, borderBottom: p === currentPeriod ? `2px solid ${ACCENT}` : `1px solid ${BORDER}`, minWidth: zoom.width, whiteSpace: "nowrap", fontSize: 10.5 }}>{labelFor(p)}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {pool.map((res) => {
+            {shownPool.map((res) => {
               const isOpen = expanded === res.id;
-              const detail = periods
+              const detail = shown
                 .map((p) => ({ period: p, entries: overAllocProjects?.[`${res.id}:${p}`] || [] }))
                 .filter((row) => row.entries.length > 0);
-              const backupDetail = periods
+              const backupDetail = shown
                 .map((p) => ({ period: p, entries: backupFor?.[res.id]?.[p] || [] }))
                 .filter((row) => row.entries.length > 0);
               return (
@@ -379,84 +524,65 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                     <td onClick={() => setExpanded(isOpen ? null : res.id)}
                       style={{
                         position: "sticky", left: 0, background: SURFACE, padding: "3px 8px", whiteSpace: "nowrap",
-                        borderBottom: `1px solid ${BORDER}`, cursor: "pointer",
+                        borderBottom: `1px solid ${BORDER}`, cursor: "pointer", zIndex: 1,
                         color: isOpen ? ACCENT : TEXT, fontWeight: isOpen ? 600 : 400,
                       }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {res.name}
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        <span>{res.name}</span>
+                        {(res.capacityPct ?? 1) < 1 && <span style={{ fontSize: 9.5, fontWeight: 700, color: MUTED, border: `1px solid ${BORDER}`, borderRadius: 4, padding: "0 4px" }}>{Math.round(res.capacityPct * 100)}%</span>}
                       </div>
+                      <div style={{ fontSize: 10, color: MUTED }}>{res.sousEquipe}</div>
                     </td>
-                    {periods.map((p) => {
+                    {shown.map((p) => {
                       const v = overAllocGrid[res.id]?.[p] || 0;
                       const cap = capacityGrid?.[res.id]?.[p] ?? 1;
                       const lostToLeave = unavailableGrid?.[res.id]?.[p] || 0;
                       const unavailable = unavailableMembers?.[res.id]?.[p];
                       const backups = backupFor?.[res.id]?.[p];
-                      // Staffed beyond what's really left after leave is a
-                      // conflict (the allocation exists but the person won't
-                      // be there for all of it) — red. A partial leave that
-                      // still fits the load just tints the cell amber.
-                      const over = v > cap + 0.001;
-                      const conflict = !!unavailable && lostToLeave > 0 && over;
-                      const fullyOff = lostToLeave >= 0.999;
-                      // A backup role only gets its own flag when there's no
-                      // real load/leave to show instead — it isn't an actual
-                      // allocation, just "reachable if needed".
-                      const backupOnly = !conflict && !unavailable && v <= 0.001 && backups?.length > 0;
+                      const backupOnly = v <= 0.001 && !unavailable && backups?.length > 0;
 
-                      // Congé/conflit/backup stay the same regardless of view
-                      // mode (they're planning facts, not hours) — only the
-                      // "nothing special" case below switches what it shows.
                       const logged = loggedHoursGrid?.[res.id]?.[p] || 0;
                       const expected = v * (STANDARD_WEEK_HOURS / 5) * (workingDaysByPeriod?.[p] ?? 5);
-                      const ecart = logged - expected;
-                      const ecartSignificant = expected > 0.001 && Math.abs(ecart) / expected > 0.2;
-                      let normalLabel, normalColor, normalActive;
-                      if (viewMode === "reel") {
-                        normalActive = logged > 0.001;
-                        normalLabel = normalActive ? `${Math.round(logged * 10) / 10}h` : "—";
-                        normalColor = normalActive ? GREEN : MUTED;
-                      } else if (viewMode === "ecart") {
-                        // No Tempo mapping for this person — "no data" isn't
-                        // an écart, don't flag a fake 100% gap.
-                        normalActive = !!res.jiraAccountId && p <= currentPeriod && expected > 0.001;
-                        normalLabel = normalActive ? `${ecart > 0 ? "+" : ""}${Math.round(ecart)}h` : "—";
-                        normalColor = !normalActive ? MUTED : ecartSignificant ? RED : GREEN;
-                      } else {
-                        normalActive = v > 0;
-                        normalLabel = normalActive ? `${Math.round(v * 100)}%` : "—";
-                        normalColor = over ? RED : v > 0 ? GREEN : MUTED;
-                      }
 
-                      const pillColor = conflict ? RED : unavailable ? AMBER : backupOnly ? ACCENT2 : normalColor;
-                      const pillActive = v > 0 || unavailable || backupOnly || normalActive;
                       const leaves = unavailable ? leaveDetails(unavailable).join(", ") : "";
-                      const backupList = backups ? backups.map((b) => `${b.projectName} (${b.primaryName})`).join(", ") : "";
-                      const capLabel = `capacité nette ${Math.round(cap * 100)}%`;
-                      const tooltip = unavailable
-                        ? (conflict ? `${leaves} — ${capLabel}, mais affecté(e) à ${Math.round(v * 100)}% cette semaine`
-                          : `${leaves} — ${capLabel}${v > 0 ? `, affecté(e) à ${Math.round(v * 100)}%` : ""}`)
-                        : backupOnly ? `Backup pour : ${backupList}`
-                        : viewMode === "ecart" && normalActive ? `Planifié ${Math.round(expected)}h (${workingDaysByPeriod?.[p] ?? 5} j ouvrés) · Réel ${Math.round(logged)}h`
-                        : over ? `${Math.round(v * 100)}% affecté pour ${capLabel}`
-                        : cap < 0.999 ? capLabel : undefined;
+                      const pendingOnly = !!unavailable && lostToLeave <= 0.001;
+                      if (viewMode === "reel") {
+                        const active = logged > 0.001;
+                        return (
+                          <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
+                            <span title={active ? `${round1(logged)}h loggées` : undefined} style={{ display: "inline-block", minWidth: zoom.width - 10, padding: "3px 6px", borderRadius: 999, border: `1px solid ${active ? `color-mix(in srgb, ${GREEN} 45%, transparent)` : BORDER}`, background: active ? `color-mix(in srgb, ${GREEN} 12%, transparent)` : "transparent", color: active ? GREEN : MUTED, fontWeight: 500 }}>
+                              {active ? `${round1(logged)}h` : "—"}
+                            </span>
+                          </td>
+                        );
+                      }
+                      if (viewMode === "ecart") {
+                        const active = !!res.jiraAccountId && p <= currentPeriod && expected > 0.001;
+                        const ecart = logged - expected;
+                        const significant = active && Math.abs(ecart) / expected > 0.2;
+                        return (
+                          <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
+                            <span title={active ? `Planifié ${Math.round(expected)}h (${workingDaysByPeriod?.[p] ?? 5} j ouvrés) · Réel ${Math.round(logged)}h` : undefined} style={{ display: "inline-block", minWidth: zoom.width - 10, padding: "3px 6px", borderRadius: 999, border: `1px solid ${active ? `color-mix(in srgb, ${significant ? RED : GREEN} 45%, transparent)` : BORDER}`, background: active ? `color-mix(in srgb, ${significant ? RED : GREEN} 12%, transparent)` : "transparent", color: !active ? MUTED : significant ? RED : GREEN, fontWeight: significant ? 700 : 500 }}>
+                              {active ? `${ecart > 0 ? "+" : ""}${Math.round(ecart)}h` : "—"}
+                            </span>
+                          </td>
+                        );
+                      }
+                      const capLabel = `capacité nette ${Math.round(cap * 100)}%${lostToLeave > 0 ? ` (${Math.round(lostToLeave * 100)}% en congé)` : ""}`;
+                      const tooltip = [leaves, backupOnly ? `Backup pour : ${backups.map((b) => `${b.projectName} (${b.primaryName})`).join(", ")}` : null, `${Math.round(v * 100)}% affecté pour ${capLabel}${pendingOnly ? " — demande RH en attente" : ""}`].filter(Boolean).join("\n");
                       return (
                         <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
-                          <span title={tooltip} style={{
-                            display: "inline-block", minWidth: 40, padding: "3px 6px", borderRadius: 999,
-                            border: `1px solid ${pillActive ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
-                            background: pillActive ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
-                            color: pillColor, fontWeight: over || unavailable || ecartSignificant ? 700 : 500,
-                          }}>
-                            {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? (fullyOff || v <= 0.001 ? "Congé" : `${Math.round(v * 100)}% ◐`) : backupOnly ? "Backup" : normalLabel}
-                          </span>
+                          <CapacityCell width={zoom.width - 8} showLabel={zoom.showLabel}
+                            load={v} cap={cap} leaveFrac={lostToLeave}
+                            hasPendingLeave={pendingOnly} backupOnly={backupOnly} tooltip={tooltip} />
                         </td>
                       );
                     })}
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={periods.length + 1} style={{ background: SURFACE2, padding: "10px 12px", borderBottom: `1px solid ${BORDER}` }}>
+                      <td colSpan={shown.length + 1} style={{ background: SURFACE2, padding: "10px 12px", borderBottom: `1px solid ${BORDER}` }}>
                         {detail.length === 0 && backupDetail.length === 0 ? (
                           <span style={{ color: MUTED, fontSize: 12 }}>Aucune affectation pour {res.name}.</span>
                         ) : (
@@ -494,6 +620,25 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
               );
             })}
           </tbody>
+          <tfoot>
+            <tr>
+              <td style={{ position: "sticky", left: 0, background: SURFACE2, fontWeight: 700, color: MUTED, fontSize: 11.5, padding: "6px 8px", borderTop: `1px solid ${BORDER}` }}>
+                Charge du pool{profileFilter !== "Tous" ? ` (${profileFilter})` : ""}
+              </td>
+              {shown.map((p) => {
+                const t = ratioFor(p);
+                const label = t.suffix === "%" ? `${Math.round(t.v)}%` : t.v !== 0 ? `${viewMode === "ecart" && t.v > 0 ? "+" : ""}${Math.round(round1(t.v))}h` : "—";
+                return (
+                  <td key={p} data-current={p === currentPeriod || undefined} style={{ textAlign: "center", borderTop: `1px solid ${BORDER}`, background: SURFACE2, padding: "4px 2px" }}>
+                    <span title={viewMode === "plan" ? `charge planifiée ${Math.round(t.v)}% de la capacité nette du pool` : undefined}
+                      style={{ fontSize: 10.5, fontWeight: 700, color: t.over ? RED : t.v > 0 ? GREEN : MUTED }}>
+                      {label}
+                    </span>
+                  </td>
+                );
+              })}
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
