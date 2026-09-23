@@ -300,13 +300,67 @@ const fmtDay = (d) => new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", 
 // A leave spanning several weeks shows up once per week in unavailableMembers —
 // dedupe back down to the underlying records so the tooltip lists each leave
 // once, with its actual days, not one entry per week it touches.
-function leaveDetails(entries) {
+function uniqueLeaves(entries) {
   const seen = new Map();
   for (const u of entries || []) {
-    const key = `${u.type}|${u.startDate}|${u.endDate}`;
-    if (!seen.has(key)) seen.set(key, `${u.type} (${fmtDay(u.startDate)} → ${fmtDay(u.endDate)})`);
+    const key = u.id || `${u.type}|${u.startDate}|${u.endDate}`;
+    if (!seen.has(key)) seen.set(key, u);
   }
   return [...seen.values()];
+}
+function leaveDetails(entries) {
+  return uniqueLeaves(entries).map((u) => `${u.type} (${fmtDay(u.startDate)} → ${fmtDay(u.endDate)})`);
+}
+
+const fmtFull = (d) => new Date(d).toLocaleDateString("fr-FR", { weekday: "short", day: "2-digit", month: "long", year: "numeric" });
+// Calendar days, inclusive — the raw span, not net of weekends/holidays
+// (the capacity impact for that is shown separately).
+const calendarDays = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000) + 1;
+const LEAVE_COLORS = { refus: RED, demand: AMBER, valid: GREEN };
+function leaveColor(type) {
+  const t = String(type || "").toLowerCase();
+  if (t.includes("refus")) return LEAVE_COLORS.refus;
+  if (t.includes("demand")) return LEAVE_COLORS.demand;
+  return LEAVE_COLORS.valid;
+}
+
+// Detail panel shown under a resource row when a leave cell is clicked:
+// each underlying leave record once, with its exact days, source and comment,
+// plus what it costs on the clicked week.
+function LeaveDetailPanel({ name, periodLabel, leaves, lostToLeave, cap, load, onClose }) {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+          <CalendarOff size={13} style={{ verticalAlign: -2, marginRight: 6 }} />
+          {name} — semaine {periodLabel}
+        </div>
+        <button onClick={onClose} style={{ ...btnGhost, fontSize: 11, padding: "3px 8px" }}>Fermer</button>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+        {leaves.map((u) => (
+          <div key={u.id || `${u.type}${u.startDate}`} style={{
+            background: SURFACE, border: `1px solid color-mix(in srgb, ${leaveColor(u.type)} 45%, transparent)`,
+            borderLeft: `4px solid ${leaveColor(u.type)}`, borderRadius: 8, padding: "8px 12px", minWidth: 260, fontSize: 12,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span style={{ fontWeight: 700, color: leaveColor(u.type), textTransform: "capitalize" }}>{u.type}</span>
+              <Badge color={u.source === "ascii" ? ACCENT : MUTED} text={u.source === "ascii" ? "ASCII" : "Saisie manuelle"} />
+            </div>
+            <div>{fmtFull(u.startDate)} → {fmtFull(u.endDate)}</div>
+            <div style={{ color: MUTED, marginTop: 2 }}>{calendarDays(u.startDate, u.endDate)} jour(s) calendaire(s)</div>
+            {u.comment && <div style={{ marginTop: 6, fontStyle: "italic", color: MUTED }}>« {u.comment} »</div>}
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 12, color: MUTED }}>
+        Impact cette semaine : <b style={{ color: TEXT }}>{Math.round(lostToLeave * 100)}%</b> d'absence
+        {" · "}capacité nette <b style={{ color: TEXT }}>{Math.round(cap * 100)}%</b>
+        {load > 0 && <>{" · "}affecté(e) à <b style={{ color: load > cap + 0.001 ? RED : TEXT }}>{Math.round(load * 100)}%</b></>}
+        {lostToLeave <= 0.001 && " (congé demandé ou refusé : ne réduit pas la capacité)"}
+      </div>
+    </div>
+  );
 }
 
 // Matches lib/tempo.js's STANDARD_WEEK_HOURS on the backend — kept as a
@@ -321,6 +375,7 @@ const VIEW_MODES = [
 
 function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
   const [expanded, setExpanded] = useState(null);
+  const [leaveCell, setLeaveCell] = useState(null); // { resId, period }
   const [viewMode, setViewMode] = useState("plan");
   const { pool, overAllocGrid, capacityGrid, unavailableGrid, overAllocProjects, unavailableMembers, backupFor, loggedHoursGrid, workingDaysByPeriod, periods, currentPeriod } = data;
   const scrollRef = useRef(null);
@@ -352,7 +407,7 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
         {viewMode === "plan" && "Rouge = charge supérieure à la capacité nette de la personne cette semaine-là (temps de travail, congés validés, arrivée/départ), tous projets confondus. Ambre = congé partiel : le chiffre reste affiché."}
         {viewMode === "reel" && "Heures réellement loggées dans Tempo, tous projets confondus (nécessite une synchro depuis Pool)."}
         {viewMode === "ecart" && "Réel moins attendu (planifié × 8h × jours ouvrés de la semaine, fériés déduits), pour les semaines passées ou en cours seulement."}
-        {" "}Cliquez sur une ressource pour voir le détail des projets sur lesquels elle travaille. Défilement horizontal pour voir toute l'année.
+        {" "}Cliquez sur une ressource pour voir le détail des projets sur lesquels elle travaille, sur une case « Congé » pour voir le détail du congé. Défilement horizontal pour voir toute l'année.
       </div>
       <div ref={scrollRef} style={{ overflowX: "auto" }}>
         <table style={{ borderCollapse: "collapse", fontSize: 11.5, width: "100%" }}>
@@ -440,20 +495,44 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                         : viewMode === "ecart" && normalActive ? `Planifié ${Math.round(expected)}h (${workingDaysByPeriod?.[p] ?? 5} j ouvrés) · Réel ${Math.round(logged)}h`
                         : over ? `${Math.round(v * 100)}% affecté pour ${capLabel}`
                         : cap < 0.999 ? capLabel : undefined;
+                      const isLeaveOpen = leaveCell?.resId === res.id && leaveCell?.period === p;
                       return (
                         <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
-                          <span title={tooltip} style={{
-                            display: "inline-block", minWidth: 40, padding: "3px 6px", borderRadius: 999,
-                            border: `1px solid ${pillActive ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
-                            background: pillActive ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
-                            color: pillColor, fontWeight: over || unavailable || ecartSignificant ? 700 : 500,
-                          }}>
+                          <span title={unavailable ? `${tooltip} — cliquer pour le détail` : tooltip}
+                            onClick={unavailable ? () => setLeaveCell(isLeaveOpen ? null : { resId: res.id, period: p }) : undefined}
+                            style={{
+                              display: "inline-block", minWidth: 40, padding: "3px 6px", borderRadius: 999,
+                              border: `1px solid ${pillActive ? `color-mix(in srgb, ${pillColor} 45%, transparent)` : BORDER}`,
+                              background: pillActive ? `color-mix(in srgb, ${pillColor} ${isLeaveOpen ? 28 : 12}%, transparent)` : "transparent",
+                              color: pillColor, fontWeight: over || unavailable || ecartSignificant ? 700 : 500,
+                              cursor: unavailable ? "pointer" : undefined,
+                              outline: isLeaveOpen ? `2px solid ${pillColor}` : undefined,
+                            }}>
                             {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? (fullyOff || v <= 0.001 ? "Congé" : `${Math.round(v * 100)}% ◐`) : backupOnly ? "Backup" : normalLabel}
                           </span>
                         </td>
                       );
                     })}
                   </tr>
+                  {leaveCell?.resId === res.id && unavailableMembers?.[res.id]?.[leaveCell.period] && (
+                    <tr>
+                      <td colSpan={periods.length + 1} style={{ background: SURFACE2, padding: 0, borderBottom: `1px solid ${BORDER}` }}>
+                        {/* The row spans all 64 columns while the grid is scrolled to
+                            "today" — pin the panel to the visible left edge instead. */}
+                        <div style={{ position: "sticky", left: 0, display: "inline-block", maxWidth: scrollRef.current?.clientWidth || "100%", boxSizing: "border-box", padding: "10px 12px" }}>
+                        <LeaveDetailPanel
+                          name={res.name}
+                          periodLabel={labelFor(leaveCell.period)}
+                          leaves={uniqueLeaves(unavailableMembers[res.id][leaveCell.period])}
+                          lostToLeave={unavailableGrid?.[res.id]?.[leaveCell.period] || 0}
+                          cap={capacityGrid?.[res.id]?.[leaveCell.period] ?? 1}
+                          load={overAllocGrid[res.id]?.[leaveCell.period] || 0}
+                          onClose={() => setLeaveCell(null)}
+                        />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                   {isOpen && (
                     <tr>
                       <td colSpan={periods.length + 1} style={{ background: SURFACE2, padding: "10px 12px", borderBottom: `1px solid ${BORDER}` }}>

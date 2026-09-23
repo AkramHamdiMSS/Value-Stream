@@ -45,7 +45,7 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
       },
     }),
     prisma.unavailability.findMany({
-      select: { poolMemberId: true, startDate: true, endDate: true, type: true },
+      select: { id: true, poolMemberId: true, startDate: true, endDate: true, type: true, comment: true, source: true },
     }),
     prisma.loggedTime.findMany({
       where: { period: { in: periods } },
@@ -81,7 +81,7 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
       // days involved instead of just "en congé cette semaine".
       const touching = leaves.filter((u) => (isBlockingLeave(u) || isWarningLeave(u)) && unavailableFraction([u], monday) > 0);
       if (touching.length > 0) {
-        (unavailableMembers[res.id] ||= {})[p] = touching.map((u) => ({ type: u.type, startDate: u.startDate, endDate: u.endDate }));
+        (unavailableMembers[res.id] ||= {})[p] = touching.map((u) => ({ id: u.id, type: u.type, startDate: u.startDate, endDate: u.endDate, comment: u.comment, source: u.source }));
       }
     }
   }
