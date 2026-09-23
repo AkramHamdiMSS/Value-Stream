@@ -3,7 +3,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { Loader2, ChevronDown, ChevronRight, FolderKanban, CheckCircle2, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge , Inbox, Unlock, CalendarOff, Timer, Battery, Activity } from "lucide-react";
-import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, AMBER, RED, CARD_SHADOW, btnGhost } from "../styles";
+import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, AMBER, RED, CARD_SHADOW, FONT_BODY, btnGhost } from "../styles";
 import { Kpi, Th, Td, Badge, GaugeBar } from "../components/ui";
 
 const PROFILE_COLORS = { Mobile: ACCENT2, "TPE Android": GREEN, "TPE Engage": AMBER, Digital: ACCENT };
@@ -321,7 +321,6 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
       <span id="resource-grid" style={{ display: "contents" }}>
         <ResourceLoadGrid data={data} labelFor={labelFor} onOpenProject={onOpenProject} viewMode={gridMode} setViewMode={setGridMode} />
       </span>
-      <ResourceLoadGrid data={data} labelFor={labelFor} onOpenProject={onOpenProject} />
     </div>
   );
 }
