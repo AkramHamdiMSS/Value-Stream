@@ -33,7 +33,27 @@ const memberSchema = z.object({
   // Atlassian Cloud accountId — how a Tempo worklog's author is matched
   // back to this person (see scripts/sync-tempo-worklogs.js).
   jiraAccountId: z.union([z.string().trim(), z.literal("")]),
+  // Contractual time (1 = full time, 0.5 = half time) and tenure bounds —
+  // see lib/capacity.js for how they drive weekly capacity.
+  capacityPct: z.number().min(0).max(1),
+  startDate: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]),
+  endDate: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]),
 });
+
+// "" / null from the form mean "clear the bound"; a date string becomes a
+// Date at 00:00 UTC, which lib/capacity.js reads back as a whole local day.
+function normalizeMemberData(data) {
+  const out = { ...data };
+  if (out.email === "") out.email = null;
+  if (out.jiraAccountId === "") out.jiraAccountId = null;
+  for (const k of ["startDate", "endDate"]) {
+    if (k in out) out[k] = out[k] ? new Date(out[k]) : null;
+  }
+  if (out.startDate && out.endDate && out.startDate > out.endDate) {
+    return { error: "La date de départ doit être après la date d'arrivée." };
+  }
+  return { data: out };
+}
 
 router.post("/", async (req, res) => {
   const parsed = memberSchema.partial().safeParse(req.body);
@@ -55,9 +75,9 @@ router.patch("/:id", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Requête invalide." });
   const before = await prisma.poolMember.findUnique({ where: { id: req.params.id } });
   if (!before) return res.status(404).json({ error: "Personne introuvable." });
-  const data = { ...parsed.data };
-  if (data.email === "") data.email = null;
-  if (data.jiraAccountId === "") data.jiraAccountId = null;
+  const merged = normalizeMemberData({ startDate: before.startDate, endDate: before.endDate, ...parsed.data });
+  if (merged.error) return res.status(400).json({ error: merged.error });
+  const data = Object.fromEntries(Object.entries(merged.data).filter(([k]) => k in parsed.data));
   const member = await prisma.poolMember.update({ where: { id: req.params.id }, data });
 
   let action = null;
@@ -66,6 +86,9 @@ router.patch("/:id", async (req, res) => {
   else if ("sousEquipe" in parsed.data) action = `a changé la sous-équipe de ${before.name} en "${parsed.data.sousEquipe}"`;
   else if ("roleTitle" in parsed.data) action = `a changé le rôle de ${before.name} en "${parsed.data.roleTitle}"`;
   else if ("email" in parsed.data) action = `a mis à jour l'email de ${before.name}`;
+  else if ("capacityPct" in parsed.data) action = `a passé ${before.name} à ${Math.round(parsed.data.capacityPct * 100)}% de temps de travail`;
+  else if ("startDate" in parsed.data) action = `a défini la date d'arrivée de ${before.name}`;
+  else if ("endDate" in parsed.data) action = `a défini la date de départ de ${before.name}`;
   if (action) await logActivity({ user: req.user, action });
 
   res.json(member);

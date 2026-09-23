@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge, UserCheck, Inbox, Unlock, FileText, CalendarOff, Timer } from "lucide-react";
+import { Loader2, ChevronDown, ChevronRight, FolderKanban, Clock, Users, Scale, ClipboardList, AlertTriangle, Percent, Gauge, UserCheck, Inbox, Unlock, FileText, CalendarOff, Timer, Battery, Activity } from "lucide-react";
 import { SURFACE, SURFACE2, BORDER, MUTED, TEXT, ACCENT, ACCENT2, GREEN, AMBER, RED, CARD_SHADOW, btnGhost } from "../styles";
 import { Kpi, Th, Td, Badge } from "../components/ui";
 
@@ -42,16 +42,17 @@ function OwnDashboard({ data, labelFor, onOpenProject, minimalDashboard }) {
       <p style={{ color: MUTED, fontSize: 13, margin: "0 0 20px" }}>
         {minimalDashboard
           ? "Charge des ressources, tous projets confondus — aucune saisie ici."
-          : "Calculé en direct à partir de vos projets — aucune saisie ici."}
+          : `Calculé en direct à partir de vos projets, semaine par semaine sur les ${data.planningWeeks} prochaines semaines — 1 ETP·semaine = une personne à 100% pendant une semaine.`}
       </p>
 
       {!minimalDashboard && (
         <>
           <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
             <Kpi label="Mes projets" value={projectsCount} icon={<FolderKanban size={18} />} />
-            <Kpi label="Besoin exprimé (pers.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />} />
-            <Kpi label="Alloué (pers.)" value={totals.allocTotal} accent={GREEN} icon={<Users size={18} />} />
-            <Kpi label="Écart" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
+            <Kpi label="Besoin exprimé (ETP·sem.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />} />
+            <Kpi label="Couvert dans les bonnes semaines" value={totals.coveredTotal} accent={GREEN} icon={<Users size={18} />} />
+            <Kpi label="Couverture" value={totals.couvertureTotal == null ? "—" : `${totals.couvertureTotal}%`} accent={totals.couvertureTotal == null ? undefined : totals.couvertureTotal >= 100 ? GREEN : RED} icon={<Percent size={18} />} />
+            <Kpi label="Écart (ETP·sem.)" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
             <Kpi label="Demandes en brouillon" value={draftCount} accent={draftCount > 0 ? undefined : GREEN} icon={<ClipboardList size={18} />} />
           </div>
 
@@ -96,7 +97,7 @@ function OwnDashboard({ data, labelFor, onOpenProject, minimalDashboard }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: SURFACE2 }}>
-                  <Th>Projet</Th><Th>Statut</Th><Th>Besoin</Th><Th>Alloué</Th><Th>Écart</Th><Th>Demande</Th>
+                  <Th>Projet</Th><Th>Statut</Th><Th>Besoin</Th><Th>Alloué</Th><Th>Couvert</Th><Th>Écart</Th><Th>Demande</Th>
                 </tr>
               </thead>
               <tbody>
@@ -106,6 +107,7 @@ function OwnDashboard({ data, labelFor, onOpenProject, minimalDashboard }) {
                     <Td><span style={{ color: MUTED }}>{p.status}</span></Td>
                     <Td>{p.demand}</Td>
                     <Td>{p.alloc}</Td>
+                    <Td>{p.covered}{p.couverture != null && <span style={{ color: MUTED, fontSize: 11.5 }}> · {p.couverture}%</span>}</Td>
                     <Td><span style={{ color: p.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{p.ecart}</span></Td>
                     <Td>
                       {p.demandSubmitted ? <Badge color={GREEN} text="Soumise" /> : <Badge color={MUTED} text="Brouillon" />}
@@ -113,7 +115,7 @@ function OwnDashboard({ data, labelFor, onOpenProject, minimalDashboard }) {
                   </tr>
                 ))}
                 {myProjects.length === 0 && (
-                  <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: MUTED }}>Aucun projet ne vous est encore assigné.</td></tr>
+                  <tr><td colSpan={7} style={{ padding: 24, textAlign: "center", color: MUTED }}>Aucun projet ne vous est encore assigné.</td></tr>
                 )}
               </tbody>
             </table>
@@ -129,33 +131,46 @@ function OwnDashboard({ data, labelFor, onOpenProject, minimalDashboard }) {
 // ---------------------------------------------------------------- HSV / global view
 
 function AllDashboard({ data, labelFor, onOpenProject }) {
-  const { totals, bySquad, demandByMonth, alertCount, projectsCount, topProjects } = data;
-  const chartWeeks = demandByMonth.slice(0, 16);
+  const { totals, bySquad, demandByMonth, allocByPeriod, capacityByPeriod, alertCount, projectsCount, topProjects, realizationByProfile, planningWeeks, currentPeriod } = data;
+  const startIdx = Math.max(0, demandByMonth.findIndex((r) => r.period === currentPeriod));
+  const chartWeeks = demandByMonth.slice(startIdx, startIdx + planningWeeks);
+  // Demand vs net capacity vs approved allocation, totals per week — the
+  // honest supply/demand picture over the planning horizon.
+  const balanceWeeks = chartWeeks.map((row, i) => ({
+    period: row.period,
+    Besoin: row.total,
+    "Capacité nette": capacityByPeriod?.[startIdx + i]?.total ?? 0,
+    Alloué: allocByPeriod?.[startIdx + i]?.total ?? 0,
+  }));
   const ecart = totals.ecartTotal;
   const couverture = totals.couvertureTotal;
+  const withTempo = (realizationByProfile || []).filter((r) => r.ratio != null);
 
   return (
     <div>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px" }}>Dashboard</h1>
       <p style={{ color: MUTED, fontSize: 13, margin: "0 0 20px" }}>
-        Calculé en direct à partir des projets, du Pool et des affectations — aucune saisie ici.
+        Calculé en direct à partir des projets soumis, du Pool et des affectations validées, semaine par semaine sur les {planningWeeks} prochaines semaines.
+        {" "}1 ETP·semaine = une personne à 100% pendant une semaine. La capacité est nette des congés validés, du temps partiel, des arrivées/départs et des jours fériés.
       </p>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <Kpi label="Projets" value={projectsCount} icon={<FolderKanban size={18} />} />
-        <Kpi label="Besoin total (pers.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />} />
-        <Kpi label="Alloué (pers.)" value={totals.allocTotal} accent={GREEN} icon={<Users size={18} />} />
+        <Kpi label="Besoin soumis (ETP·sem.)" value={totals.besoinTotal} accent={ACCENT} icon={<Clock size={18} />}
+          hint={totals.besoinDraftTotal > 0 ? `+ ${totals.besoinDraftTotal} en brouillon, non comptés` : undefined} />
+        <Kpi label="Capacité nette (ETP·sem.)" value={totals.capTotal} icon={<Battery size={18} />} hint={`${totals.headcount} personnes · ${totals.capNow} ETP cette semaine`} />
+        <Kpi label="Charge du pool" value={totals.chargeCapacitePct == null ? "—" : `${totals.chargeCapacitePct}%`} accent={totals.chargeCapacitePct > 100 ? RED : totals.chargeCapacitePct > 85 ? AMBER : GREEN} icon={<Gauge size={18} />} hint="besoin soumis / capacité nette" />
+        <Kpi label="Couvert dans les bonnes semaines" value={totals.coveredTotal} accent={GREEN} icon={<Users size={18} />} hint={totals.allocTotal > totals.coveredTotal + 0.05 ? `${totals.allocTotal} alloués au total (hors besoin : ${Math.round((totals.allocTotal - totals.coveredTotal) * 10) / 10})` : undefined} />
         <Kpi label="Couverture" value={couverture == null ? "—" : `${couverture}%`} accent={couverture == null ? undefined : couverture >= 100 ? GREEN : RED} icon={<Percent size={18} />} />
-        <Kpi label="Écart" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
-        <Kpi label="Capacité pool" value={totals.capTotal} icon={<Users size={18} />} />
-        <Kpi label="Ressources en sur-allocation" value={alertCount} accent={alertCount > 0 ? RED : GREEN} icon={<AlertTriangle size={18} />} />
-        <Kpi label="Conflits congé / affectation" value={totals.conflictCount} accent={totals.conflictCount > 0 ? RED : GREEN} icon={<CalendarOff size={18} />} />
-        <Kpi label="Écart plan / réel (Tempo)" value={totals.timesheetGapCount} accent={totals.timesheetGapCount > 0 ? RED : GREEN} icon={<Timer size={18} />} />
+        <Kpi label="Écart (ETP·sem.)" value={`${ecart > 0 ? "+" : ""}${ecart}`} accent={ecart < -0.001 ? RED : GREEN} icon={<Scale size={18} />} />
       </div>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <Kpi label="Ressources disponibles" value={totals.availableCount} accent={GREEN} icon={<UserCheck size={18} />} />
-        <Kpi label="Utilisation du pool (semaine en cours)" value={`${totals.poolUtilizationPct}%`} accent={totals.poolUtilizationPct > 100 ? RED : undefined} icon={<Gauge size={18} />} />
+        <Kpi label="Sur-allocations (pers. × sem.)" value={alertCount} accent={alertCount > 0 ? RED : GREEN} icon={<AlertTriangle size={18} />} hint="charge > capacité nette de la personne" />
+        <Kpi label="Conflits congé / affectation" value={totals.conflictCount} accent={totals.conflictCount > 0 ? RED : GREEN} icon={<CalendarOff size={18} />} />
+        <Kpi label="Écart plan / réel (Tempo)" value={totals.timesheetGapCount} accent={totals.timesheetGapCount > 0 ? RED : GREEN} icon={<Timer size={18} />} />
+        <Kpi label="Disponibles cette semaine" value={totals.availableCount} accent={GREEN} icon={<UserCheck size={18} />} hint={`${totals.freeNow} ETP libres au total`} />
+        <Kpi label="Utilisation du pool (semaine en cours)" value={`${totals.poolUtilizationPct}%`} accent={totals.poolUtilizationPct > 100 ? RED : undefined} icon={<Gauge size={18} />} hint="planifié / capacité nette" />
         <Kpi label="Demandes en attente de validation" value={totals.backlogCount} accent={totals.backlogCount > 0 ? AMBER : GREEN} icon={<Inbox size={18} />} />
         <Kpi label="Libérations en attente" value={totals.releasePendingCount} accent={totals.releasePendingCount > 0 ? AMBER : GREEN} icon={<Unlock size={18} />} />
         <Kpi label="Brouillons / Soumises" value={`${totals.draftCount} / ${totals.submittedCount}`} icon={<FileText size={18} />} />
@@ -163,8 +178,21 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginBottom: 20 }}>
         <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Besoin par semaine (16 premières semaines)</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Besoin vs capacité nette par semaine (ETP, {planningWeeks} prochaines semaines)</div>
           <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={balanceWeeks}>
+              <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
+              <XAxis dataKey="period" stroke={MUTED} fontSize={10} interval={1} />
+              <YAxis stroke={MUTED} fontSize={11} />
+              <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Line type="monotone" dataKey="Capacité nette" stroke={GREEN} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="Besoin" stroke={ACCENT} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="Alloué" stroke={AMBER} strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+          <div style={{ fontSize: 12, fontWeight: 600, margin: "14px 0 8px" }}>Besoin par profil et par semaine</div>
+          <ResponsiveContainer width="100%" height={160}>
             <LineChart data={chartWeeks}>
               <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
               <XAxis dataKey="period" stroke={MUTED} fontSize={10} interval={1} />
@@ -179,9 +207,10 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
         </div>
 
         <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Besoin / Capacité / Alloué par profil</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Besoin / Capacité nette / Alloué par profil (ETP·sem.)</div>
           <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
             Couverture : {bySquad.map((s) => `${s.name} ${s.couverture == null ? "—" : `${s.couverture}%`}`).join(" · ")}
+            <br />Charge : {bySquad.map((s) => `${s.name} ${s.charge == null ? "—" : `${s.charge}%`}`).join(" · ")}
           </div>
           <ResponsiveContainer width="100%" height={195}>
             <BarChart data={bySquad}>
@@ -190,11 +219,40 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
               <YAxis stroke={MUTED} fontSize={11} />
               <Tooltip contentStyle={{ background: SURFACE2, border: `1px solid ${BORDER}`, fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="besoin" fill={ACCENT} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="capacite" fill={GREEN} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="alloue" fill={AMBER} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="besoin" name="Besoin" fill={ACCENT} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="capacite" name="Capacité nette" fill={GREEN} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="couvert" name="Couvert" fill={AMBER} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginTop: 10 }}>
+            <thead>
+              <tr style={{ background: SURFACE2 }}>
+                <Th>Profil</Th><Th>Effectif</Th><Th>Cap. / sem.</Th><Th>Réel / planifié</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {bySquad.map((s) => {
+                const r = (realizationByProfile || []).find((x) => x.name === s.name);
+                return (
+                  <tr key={s.name} style={{ borderTop: `1px solid ${BORDER}` }}>
+                    <Td><span style={{ color: PROFILE_COLORS[s.name], fontWeight: 600 }}>{s.name}</span></Td>
+                    <Td>{s.effectif}</Td>
+                    <Td>{s.capaciteSemaine} ETP</Td>
+                    <Td title={r?.ratio != null ? `${r.loggedHours}h loggées pour ${r.plannedHours}h planifiées (semaines passées, ressources mappées Tempo)` : "Pas de données Tempo"}>
+                      {r?.ratio == null ? <span style={{ color: MUTED }}>—</span>
+                        : <span style={{ color: r.ratio > 1.2 ? RED : r.ratio < 0.8 ? AMBER : GREEN, fontWeight: 600 }}>×{r.ratio}</span>}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {withTempo.length > 0 && (
+            <div style={{ fontSize: 11.5, color: MUTED, marginTop: 8, display: "flex", gap: 6, alignItems: "flex-start" }}>
+              <Activity size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>Réel / planifié &gt; 1 : ce profil consomme plus que prévu — les prochaines demandes sont probablement sous-estimées. &lt; 1 : sur-estimées ou temps non saisi.</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -202,12 +260,12 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
         <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16, boxShadow: CARD_SHADOW, marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Top projets en manque</div>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
-            Les projets soumis avec le plus grand écart négatif (alloué − demandé). Cliquez sur un projet pour l'ouvrir.
+            Les projets soumis avec le plus grand manque (couvert − demandé, en ETP·semaines, sur les {planningWeeks} prochaines semaines). Cliquez sur un projet pour l'ouvrir.
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: SURFACE2 }}>
-                <Th>Projet</Th><Th>SVO</Th><Th>Statut</Th><Th>Demandé</Th><Th>Alloué</Th><Th>Écart</Th>
+                <Th>Projet</Th><Th>SVO</Th><Th>Statut</Th><Th>Semaines</Th><Th>Demandé</Th><Th>Couvert</Th><Th>Écart</Th>
               </tr>
             </thead>
             <tbody>
@@ -216,8 +274,9 @@ function AllDashboard({ data, labelFor, onOpenProject }) {
                   <Td><span style={{ fontWeight: 600 }}>{p.name}</span></Td>
                   <Td><span style={{ color: MUTED }}>{p.svo}</span></Td>
                   <Td><span style={{ color: MUTED }}>{p.status}</span></Td>
+                  <Td>{p.weeks}</Td>
                   <Td>{p.demand}</Td>
-                  <Td>{p.alloc}</Td>
+                  <Td>{p.covered}<span style={{ color: MUTED, fontSize: 11.5 }}> · {p.couverture}%</span></Td>
                   <Td><span style={{ color: p.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{p.ecart}</span></Td>
                 </tr>
               ))}
@@ -263,7 +322,7 @@ const VIEW_MODES = [
 function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
   const [expanded, setExpanded] = useState(null);
   const [viewMode, setViewMode] = useState("plan");
-  const { pool, overAllocGrid, overAllocProjects, unavailableMembers, backupFor, loggedHoursGrid, periods, currentPeriod } = data;
+  const { pool, overAllocGrid, capacityGrid, unavailableGrid, overAllocProjects, unavailableMembers, backupFor, loggedHoursGrid, workingDaysByPeriod, periods, currentPeriod } = data;
   const scrollRef = useRef(null);
 
   // The window now reaches 12 weeks into the past, so "today" is no longer
@@ -290,9 +349,9 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
         </div>
       </div>
       <div style={{ fontSize: 12, color: MUTED, marginBottom: 12 }}>
-        {viewMode === "plan" && "Rouge = plus de 100% cette semaine-là, tous projets confondus."}
+        {viewMode === "plan" && "Rouge = charge supérieure à la capacité nette de la personne cette semaine-là (temps de travail, congés validés, arrivée/départ), tous projets confondus. Ambre = congé partiel : le chiffre reste affiché."}
         {viewMode === "reel" && "Heures réellement loggées dans Tempo, tous projets confondus (nécessite une synchro depuis Pool)."}
-        {viewMode === "ecart" && "Réel moins attendu (planifié × 40h), pour les semaines passées ou en cours seulement."}
+        {viewMode === "ecart" && "Réel moins attendu (planifié × 8h × jours ouvrés de la semaine, fériés déduits), pour les semaines passées ou en cours seulement."}
         {" "}Cliquez sur une ressource pour voir le détail des projets sur lesquels elle travaille. Défilement horizontal pour voir toute l'année.
       </div>
       <div ref={scrollRef} style={{ overflowX: "auto" }}>
@@ -329,13 +388,17 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                     </td>
                     {periods.map((p) => {
                       const v = overAllocGrid[res.id]?.[p] || 0;
+                      const cap = capacityGrid?.[res.id]?.[p] ?? 1;
+                      const lostToLeave = unavailableGrid?.[res.id]?.[p] || 0;
                       const unavailable = unavailableMembers?.[res.id]?.[p];
                       const backups = backupFor?.[res.id]?.[p];
-                      // On leave AND staffed that same week is a real
-                      // conflict (the allocation exists but the person
-                      // won't be there) — flagged red, not just amber.
-                      const conflict = unavailable && v > 0.001;
-                      const over = v > 1.001;
+                      // Staffed beyond what's really left after leave is a
+                      // conflict (the allocation exists but the person won't
+                      // be there for all of it) — red. A partial leave that
+                      // still fits the load just tints the cell amber.
+                      const over = v > cap + 0.001;
+                      const conflict = !!unavailable && lostToLeave > 0 && over;
+                      const fullyOff = lostToLeave >= 0.999;
                       // A backup role only gets its own flag when there's no
                       // real load/leave to show instead — it isn't an actual
                       // allocation, just "reachable if needed".
@@ -345,7 +408,7 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                       // mode (they're planning facts, not hours) — only the
                       // "nothing special" case below switches what it shows.
                       const logged = loggedHoursGrid?.[res.id]?.[p] || 0;
-                      const expected = v * STANDARD_WEEK_HOURS;
+                      const expected = v * (STANDARD_WEEK_HOURS / 5) * (workingDaysByPeriod?.[p] ?? 5);
                       const ecart = logged - expected;
                       const ecartSignificant = expected > 0.001 && Math.abs(ecart) / expected > 0.2;
                       let normalLabel, normalColor, normalActive;
@@ -369,10 +432,14 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                       const pillActive = v > 0 || unavailable || backupOnly || normalActive;
                       const leaves = unavailable ? leaveDetails(unavailable).join(", ") : "";
                       const backupList = backups ? backups.map((b) => `${b.projectName} (${b.primaryName})`).join(", ") : "";
+                      const capLabel = `capacité nette ${Math.round(cap * 100)}%`;
                       const tooltip = unavailable
-                        ? (conflict ? `${leaves} — mais affecté(e) à ${Math.round(v * 100)}% cette semaine` : leaves)
+                        ? (conflict ? `${leaves} — ${capLabel}, mais affecté(e) à ${Math.round(v * 100)}% cette semaine`
+                          : `${leaves} — ${capLabel}${v > 0 ? `, affecté(e) à ${Math.round(v * 100)}%` : ""}`)
                         : backupOnly ? `Backup pour : ${backupList}`
-                        : viewMode === "ecart" && normalActive ? `Planifié ${Math.round(expected)}h · Réel ${Math.round(logged)}h` : undefined;
+                        : viewMode === "ecart" && normalActive ? `Planifié ${Math.round(expected)}h (${workingDaysByPeriod?.[p] ?? 5} j ouvrés) · Réel ${Math.round(logged)}h`
+                        : over ? `${Math.round(v * 100)}% affecté pour ${capLabel}`
+                        : cap < 0.999 ? capLabel : undefined;
                       return (
                         <td key={p} style={{ textAlign: "center", padding: "3px 4px", borderBottom: `1px solid ${BORDER}` }}>
                           <span title={tooltip} style={{
@@ -381,7 +448,7 @@ function ResourceLoadGrid({ data, labelFor, onOpenProject }) {
                             background: pillActive ? `color-mix(in srgb, ${pillColor} 12%, transparent)` : "transparent",
                             color: pillColor, fontWeight: over || unavailable || ecartSignificant ? 700 : 500,
                           }}>
-                            {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? "Congé" : backupOnly ? "Backup" : normalLabel}
+                            {conflict ? `⚠ ${Math.round(v * 100)}%` : unavailable ? (fullyOff || v <= 0.001 ? "Congé" : `${Math.round(v * 100)}% ◐`) : backupOnly ? "Backup" : normalLabel}
                           </span>
                         </td>
                       );

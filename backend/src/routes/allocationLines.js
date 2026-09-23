@@ -5,7 +5,7 @@ const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
 const { logActivity } = require("../lib/activity");
 const { notifyHSV, notifyUser, notifyPoolMember, notifyTeamLeadsForSousEquipe, projectLink } = require("../lib/notify");
-const { findUnavailabilityConflicts, conflictErrorMessage } = require("../lib/unavailability");
+const { checkAllocationFeasibility } = require("../lib/unavailability");
 
 const router = express.Router();
 router.use(authenticate);
@@ -81,13 +81,17 @@ router.patch("/:id", async (req, res) => {
   // about to confirm a pending line (even with no field changes, in case the
   // leave was registered after the original proposal).
   const willApprove = canManage && line.status === "pending";
-  const fieldsChanging = parsed.data.poolMemberId !== undefined || parsed.data.periodStart !== undefined || parsed.data.periodEnd !== undefined;
+  const fieldsChanging = parsed.data.poolMemberId !== undefined || parsed.data.periodStart !== undefined || parsed.data.periodEnd !== undefined || parsed.data.pct !== undefined;
+  let warnings = [];
   if (fieldsChanging || willApprove) {
-    const conflicts = await findUnavailabilityConflicts(nextPoolMemberId, nextStart, nextEnd);
-    if (conflicts.length > 0) {
-      const target = nextPoolMemberId === line.poolMemberId ? line.poolMember : await prisma.poolMember.findUnique({ where: { id: nextPoolMemberId } });
-      return res.status(409).json({ error: conflictErrorMessage(target.name, conflicts) });
-    }
+    const target = nextPoolMemberId === line.poolMemberId ? line.poolMember : await prisma.poolMember.findUnique({ where: { id: nextPoolMemberId } });
+    if (!target) return res.status(400).json({ error: "Ressource introuvable." });
+    const check = await checkAllocationFeasibility({
+      member: target, periodStart: nextStart, periodEnd: nextEnd,
+      requestedPct: parsed.data.pct ?? Number(line.pct), excludeLineId: line.id,
+    });
+    if (check.blocking.length > 0) return res.status(409).json({ error: check.blocking.join(" ") });
+    warnings = check.warnings;
   }
 
   // The validation comment belongs to whoever approves — a proposer editing
@@ -116,7 +120,7 @@ router.patch("/:id", async (req, res) => {
     await notifyApproval({ line, project: line.project, approver: req.user });
   }
 
-  res.json(updated);
+  res.json({ ...updated, warnings });
 });
 
 // Shared by /approve and a direct HSV edit of a pending line (which also
@@ -150,10 +154,11 @@ router.post("/:id/approve", requirePermission("manageAllocations"), async (req, 
   const line = await prisma.allocationLine.findUnique({ where: { id: req.params.id }, include: { project: true, poolMember: true, createdBy: true } });
   if (!line) return res.status(404).json({ error: "Ligne introuvable." });
 
-  const conflicts = await findUnavailabilityConflicts(line.poolMemberId, line.periodStart, line.periodEnd);
-  if (conflicts.length > 0) {
-    return res.status(409).json({ error: conflictErrorMessage(line.poolMember.name, conflicts) });
-  }
+  const check = await checkAllocationFeasibility({
+    member: line.poolMember, periodStart: line.periodStart, periodEnd: line.periodEnd,
+    requestedPct: Number(line.pct), excludeLineId: line.id,
+  });
+  if (check.blocking.length > 0) return res.status(409).json({ error: check.blocking.join(" ") });
 
   const updated = await prisma.allocationLine.update({
     where: { id: req.params.id },
@@ -162,7 +167,7 @@ router.post("/:id/approve", requirePermission("manageAllocations"), async (req, 
   });
   await logActivity({ user: req.user, action: `a validé l'affectation de ${line.poolMember.name} (${rangeLabel(line)})`, project: line.project });
   await notifyApproval({ line, project: line.project, approver: req.user });
-  res.json(updated);
+  res.json({ ...updated, warnings: check.warnings });
 });
 
 // Removing a line: manageAllocations can remove anything (this doubles as

@@ -9,11 +9,13 @@ const STATUS_FILTERS = [
   { value: "all", label: "Toutes" },
   { value: "untreated", label: "Non traitées" },
   { value: "proposed", label: "Team Lead (1ère validation)" },
+  { value: "partial", label: "Partiellement couvertes" },
   { value: "validated", label: "Admin (2ème validation)" },
 ];
 const STATUS_BADGE = {
   untreated: { color: AMBER, text: "Non traitée" },
   proposed: { color: ACCENT, text: "Team Lead ✓ (1/2)" },
+  partial: { color: AMBER, text: "Partielle" },
   validated: { color: GREEN, text: "Admin ✓✓ (2/2)" },
 };
 
@@ -105,7 +107,7 @@ export default function DemandQueue({ canManageAllocations, onOpenProject, refre
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
-              <Th>Projet</Th><Th>SVO</Th><Th>Période</Th><Th>Profil</Th><Th>Demandé</Th><Th>Alloué</Th><Th>Écart</Th><Th>Statut</Th>
+              <Th>Projet</Th><Th>SVO</Th><Th>Période</Th><Th>Profil</Th><Th>Demandé</Th><Th>Alloué</Th><Th>Écart</Th><Th>Couverture</Th><Th>Statut</Th>
               {canManageAllocations && <Th></Th>}
             </tr>
           </thead>
@@ -130,6 +132,10 @@ export default function DemandQueue({ canManageAllocations, onOpenProject, refre
                       <Td>{row.demanded}</Td>
                       <Td>{row.allocated}</Td>
                       <Td><span style={{ color: row.ecart < -0.001 ? RED : GREEN, fontWeight: 600 }}>{row.ecart}</span></Td>
+                      <Td title={`${row.coveredWeeks}/${row.weeks} semaine(s) entièrement couverte(s)`}>
+                        <span style={{ color: row.couverture >= 100 ? GREEN : row.couverture > 0 ? AMBER : MUTED, fontWeight: 600 }}>{row.couverture}%</span>
+                        <span style={{ color: MUTED, fontSize: 11.5 }}> · {row.coveredWeeks}/{row.weeks} sem.</span>
+                      </Td>
                       <Td><Badge color={STATUS_BADGE[row.status]?.color || MUTED} text={STATUS_BADGE[row.status]?.text || row.status} /></Td>
                       {canManageAllocations && (
                         <Td>

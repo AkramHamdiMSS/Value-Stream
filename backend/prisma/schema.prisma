@@ -57,6 +57,16 @@ model PoolMember {
   // explicitly rather than fuzzy-matched (name matching is what broke the
   // ASCII import on "Hamdi AKRAM" vs "Akram Hamdi").
   jiraAccountId String? @map("jira_account_id")
+  // Contractual availability: 1 = full time, 0.8 = 4 days/week, 0.5 = half
+  // time. Multiplies this person's weekly capacity everywhere (dashboard
+  // capacity, over-allocation threshold) — a 0.5 person is over-allocated
+  // at 60%, not at 110%.
+  capacityPct Decimal  @default(1) @db.Decimal(4, 2) @map("capacity_pct")
+  // Arrival / departure: outside [startDate, endDate] the person contributes
+  // no capacity and can't be allocated, so a leaver stops inflating the pool
+  // and a newcomer isn't "available" before their first day. Null = open.
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
 
   allocationLines AllocationLine[] @relation("AllocationPrimary")
   backupAllocationLines AllocationLine[] @relation("AllocationBackup")

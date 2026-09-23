@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
 import { subscribeToast } from "../lib/toast";
-import { SURFACE, BORDER, TEXT, RED, GREEN, CARD_SHADOW, FONT_BODY } from "../styles";
+import { SURFACE, BORDER, TEXT, RED, GREEN, AMBER, CARD_SHADOW, FONT_BODY } from "../styles";
+
+const COLORS = { error: RED, warning: AMBER, success: GREEN };
 
 // Mounted once in App.jsx — every screen (and api.js, for every failed
 // request platform-wide) raises alerts through showToast() without needing
@@ -11,7 +13,9 @@ export default function ToastContainer() {
 
   useEffect(() => subscribeToast((toast) => {
     setToasts((prev) => [...prev, toast]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== toast.id)), 7000);
+    // Warnings carry a precise explanation (which week, which %) — leave
+    // them up a bit longer than a plain success message.
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== toast.id)), toast.type === "warning" ? 12000 : 7000);
   }), []);
 
   const dismiss = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -25,12 +29,12 @@ export default function ToastContainer() {
     }}>
       {toasts.map((t) => (
         <div key={t.id} style={{
-          background: SURFACE, border: `1px solid ${t.type === "error" ? RED : GREEN}`, borderRadius: 10,
+          background: SURFACE, border: `1px solid ${COLORS[t.type] || GREEN}`, borderRadius: 10,
           padding: "10px 12px", boxShadow: CARD_SHADOW, display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13,
         }}>
-          {t.type === "error"
-            ? <AlertTriangle size={16} color={RED} style={{ flexShrink: 0, marginTop: 1 }} />
-            : <CheckCircle2 size={16} color={GREEN} style={{ flexShrink: 0, marginTop: 1 }} />}
+          {t.type === "success"
+            ? <CheckCircle2 size={16} color={GREEN} style={{ flexShrink: 0, marginTop: 1 }} />
+            : <AlertTriangle size={16} color={COLORS[t.type] || RED} style={{ flexShrink: 0, marginTop: 1 }} />}
           <span style={{ color: TEXT, flex: 1, lineHeight: 1.4 }}>{t.message}</span>
           <button onClick={() => dismiss(t.id)} aria-label="Fermer"
             style={{ background: "none", border: "none", cursor: "pointer", color: TEXT, padding: 0, display: "flex", flexShrink: 0 }}>

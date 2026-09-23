@@ -44,6 +44,13 @@ async function request(path, { method = "GET", body, silent = false } = {}) {
       if (!silent) showToast(message, "error");
       throw new Error(message);
     }
+    // A successful write may still carry non-blocking warnings (e.g. this
+    // allocation over-loads the resource that week) — surface them the same
+    // way as errors, then hand back the payload as if they weren't there.
+    if (data && Array.isArray(data.warnings)) {
+      if (!silent) data.warnings.forEach((w) => showToast(w, "warning"));
+      delete data.warnings;
+    }
     return data;
   } finally {
     decLoading();

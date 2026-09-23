@@ -2,31 +2,35 @@ const express = require("express");
 const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
-const { effective, generatePeriods, generatePeriodDates, currentPeriodId, inRange, dateRangeOverlapsWeek } = require("../lib/periods");
-const { PROFILES, PROFILE_FIELDS } = require("../lib/profiles");
+const { generatePeriods, generatePeriodDates, currentPeriodId, inRange } = require("../lib/periods");
+const { PROFILES } = require("../lib/profiles");
 const { buildDemandQueueRows } = require("../lib/demandQueueRows");
 const { STANDARD_WEEK_HOURS } = require("../lib/tempo");
+const { netCapacity, isBlockingLeave, isWarningLeave, unavailableFraction } = require("../lib/capacity");
+const { workingDaysOfWeek } = require("../lib/holidays");
+const { projectCoverage, weeklyDemand, weeklyAllocation, coveragePct, zero: zeroByProfile, sum, round1 } = require("../lib/coverage");
 
 const router = express.Router();
 router.use(authenticate);
 
-function round1(n) {
-  return Math.round((n + Number.EPSILON) * 10) / 10;
-}
-function zeroByProfile() {
-  return Object.fromEntries(PROFILES.map((p) => [p, 0]));
-}
+const HOURS_PER_DAY = STANDARD_WEEK_HOURS / 5;
 
 function canViewAllProjects(user) {
   return hasPermission(user, "viewAllProjects") || hasPermission(user, "manageProjects") || hasPermission(user, "manageAllocations");
 }
 
 // Resource-load grid (who's on what, per week) — shared context every
-// authenticated user sees regardless of scope, same as the original
-// prototype's dashboard: knowing who's already loaded is useful context
-// even for an SVO who can only act on their own projects. A Team/Tech Lead
-// (viewDashboard and nothing else) only gets their own sous-équipe, not the
-// whole org — see sousEquipeFilter below.
+// authenticated user sees regardless of scope. A Team/Tech Lead
+// (viewDashboard and nothing else) only gets their own sous-équipe.
+//
+// Everything here is per resource × week:
+//   overAllocGrid    planned load (sum of approved allocation %)
+//   capacityGrid     net capacity — contract × tenure × (1 − validated leave),
+//                    see lib/capacity.js. The over-allocation threshold is
+//                    this number, not a flat 100%: a half-time person is
+//                    over-allocated at 60%.
+//   unavailableGrid  share of the week lost to validated leave (0..1)
+//   loggedHoursGrid  real hours from Tempo
 async function buildResourceLoad(periods, sousEquipeFilter) {
   const [allMembers, allocationLines, unavailabilities, loggedTime] = await Promise.all([
     prisma.poolMember.findMany(),
@@ -41,122 +45,134 @@ async function buildResourceLoad(periods, sousEquipeFilter) {
       },
     }),
     prisma.unavailability.findMany({
-      select: { poolMemberId: true, startDate: true, endDate: true, type: true }
+      select: { poolMemberId: true, startDate: true, endDate: true, type: true },
     }),
-    // period is already an ISO week id string here (see LoggedTime.period),
-    // no date-range overlap math needed like for Unavailability.
     prisma.loggedTime.findMany({
       where: { period: { in: periods } },
       select: { poolMemberId: true, period: true, hours: true },
     }),
   ]);
   const pool = sousEquipeFilter ? allMembers.filter((m) => m.sousEquipe === sousEquipeFilter) : allMembers;
-
-  const overAllocGrid = {};
-  const overAllocProjects = {};
-  const unavailableMembers = {}; // Track unavailability by member and period
-
-  for (const res of pool) overAllocGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
-
-  // `periods` is just id strings — pair each one back up with its actual
-  // Monday date (via the same walk generatePeriods() itself uses) so a
-  // multi-week leave can be tested for overlap, not just whether its start
-  // or end date happens to land inside a given week.
   const periodDates = generatePeriodDates().filter((pd) => periods.includes(pd.id));
+
+  // Working days per week (5 minus public holidays) — what a "100%" week
+  // really amounts to in hours for the Tempo comparison.
+  const workingDaysByPeriod = Object.fromEntries(periodDates.map(({ id, monday }) => [id, workingDaysOfWeek(monday).length]));
+
+  const leavesByMember = {};
   for (const u of unavailabilities) {
-    if (!overAllocGrid[u.poolMemberId]) continue;
+    if (u.type === "congé refusé") continue; // never happened — changes nothing
+    (leavesByMember[u.poolMemberId] ||= []).push(u);
+  }
+
+  const overAllocGrid = {}, capacityGrid = {}, unavailableGrid = {}, loggedHoursGrid = {};
+  const overAllocProjects = {};
+  const unavailableMembers = {};
+  for (const res of pool) {
+    overAllocGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
+    capacityGrid[res.id] = {};
+    unavailableGrid[res.id] = {};
+    loggedHoursGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
+    const leaves = leavesByMember[res.id] || [];
     for (const { id: p, monday } of periodDates) {
-      if (!dateRangeOverlapsWeek(u.startDate, u.endDate, monday)) continue;
-      if (!unavailableMembers[u.poolMemberId]) unavailableMembers[u.poolMemberId] = {};
-      if (!unavailableMembers[u.poolMemberId][p]) unavailableMembers[u.poolMemberId][p] = [];
-      // Full record (not just the type), so the UI can show the actual
+      capacityGrid[res.id][p] = netCapacity(res, leaves, monday);
+      unavailableGrid[res.id][p] = round1(unavailableFraction(leaves.filter(isBlockingLeave), monday) * 100) / 100;
+      // Full records (validated + pending), so the UI can show the actual
       // days involved instead of just "en congé cette semaine".
-      unavailableMembers[u.poolMemberId][p].push({ type: u.type, startDate: u.startDate, endDate: u.endDate });
+      const touching = leaves.filter((u) => (isBlockingLeave(u) || isWarningLeave(u)) && unavailableFraction([u], monday) > 0);
+      if (touching.length > 0) {
+        (unavailableMembers[res.id] ||= {})[p] = touching.map((u) => ({ type: u.type, startDate: u.startDate, endDate: u.endDate }));
+      }
     }
   }
-  
+
   for (const l of allocationLines) {
     if (!overAllocGrid[l.poolMemberId]) continue;
     for (const p of periods) {
       if (!inRange(p, l.periodStart, l.periodEnd)) continue;
       overAllocGrid[l.poolMemberId][p] += Number(l.pct) || 0;
-      const key = `${l.poolMemberId}:${p}`;
-      if (!overAllocProjects[key]) overAllocProjects[key] = [];
-      overAllocProjects[key].push({ projectId: l.project.id, projectName: l.project.name, pct: round1(Number(l.pct) || 0), backupName: l.backupPoolMember?.name || null });
+      (overAllocProjects[`${l.poolMemberId}:${p}`] ||= []).push({
+        projectId: l.project.id, projectName: l.project.name, pct: round1(Number(l.pct) || 0), backupName: l.backupPoolMember?.name || null,
+      });
     }
   }
 
   // The reverse view: for someone LISTED as a backup, which weeks/projects
-  // are they on call for — doesn't touch overAllocGrid (a backup isn't a
-  // real allocation, it shouldn't count as load), just its own map so the
-  // backup's own row can flag it instead of showing a plain "—".
+  // are they on call for — a backup isn't a real allocation, it shouldn't
+  // count as load, just flag the backup's own row.
   const backupFor = {};
   for (const l of allocationLines) {
     if (!l.backupPoolMemberId || !overAllocGrid[l.backupPoolMemberId]) continue;
     for (const p of periods) {
       if (!inRange(p, l.periodStart, l.periodEnd)) continue;
-      if (!backupFor[l.backupPoolMemberId]) backupFor[l.backupPoolMemberId] = {};
-      if (!backupFor[l.backupPoolMemberId][p]) backupFor[l.backupPoolMemberId][p] = [];
-      backupFor[l.backupPoolMemberId][p].push({ projectId: l.project.id, projectName: l.project.name, primaryName: l.poolMember?.name || null });
+      ((backupFor[l.backupPoolMemberId] ||= {})[p] ||= []).push({ projectId: l.project.id, projectName: l.project.name, primaryName: l.poolMember?.name || null });
     }
   }
 
-  // Real hours logged (Tempo sync — see scripts/sync-tempo-worklogs.js),
-  // weekly per resource. Compared against overAllocGrid (the plan) below to
-  // flag significant gaps — only for weeks that have already happened, a
-  // future week can't have any hours logged against it yet.
-  const loggedHoursGrid = {};
-  for (const res of pool) loggedHoursGrid[res.id] = Object.fromEntries(periods.map((p) => [p, 0]));
   for (const t of loggedTime) {
     if (!loggedHoursGrid[t.poolMemberId]) continue;
     loggedHoursGrid[t.poolMemberId][t.period] = round1((loggedHoursGrid[t.poolMemberId][t.period] || 0) + Number(t.hours));
   }
 
-  // A resource staffed on a project during a week they're also marked
-  // unavailable (congé/maladie/...) is a real scheduling conflict — the
-  // allocation exists but the person won't actually be there.
-  let alertCount = 0;
-  let conflictCount = 0;
-  let timesheetGapCount = 0;
+  // KPIs over the grid. "Expected hours" for a past week = planned load ×
+  // hours per day × that week's working days, so a public holiday doesn't
+  // read as a 20% timesheet gap.
+  let alertCount = 0, conflictCount = 0, timesheetGapCount = 0;
   const currentPeriod = currentPeriodId();
+  const realization = Object.fromEntries(PROFILES.map((p) => [p, { planned: 0, logged: 0 }]));
   for (const res of pool) {
     for (const p of periods) {
-      const load = overAllocGrid[res.id]?.[p] || 0;
-      if (load > 1.001) alertCount++;
-      if (load > 0.001 && unavailableMembers[res.id]?.[p]) conflictCount++;
+      const load = overAllocGrid[res.id][p] || 0;
+      const cap = capacityGrid[res.id][p] ?? 1;
+      if (load > cap + 0.001) alertCount++;
+      if (load > 0.001 && unavailableGrid[res.id][p] > 0 && load > cap + 0.001) conflictCount++;
       if (p > currentPeriod) continue; // no expectation yet for a future week
       if (!res.jiraAccountId) continue; // no Tempo mapping — "no data" isn't "a gap"
-      const expected = load * STANDARD_WEEK_HOURS;
-      if (expected <= 0.001) continue; // nothing planned — not this KPI's concern
-      const logged = loggedHoursGrid[res.id]?.[p] || 0;
+      const expected = load * HOURS_PER_DAY * (workingDaysByPeriod[p] ?? 5);
+      if (expected <= 0.001) continue;
+      const logged = loggedHoursGrid[res.id][p] || 0;
       if (Math.abs(logged - expected) / expected > 0.2) timesheetGapCount++;
+      if (res.sousEquipe in realization) {
+        realization[res.sousEquipe].planned += expected;
+        realization[res.sousEquipe].logged += logged;
+      }
     }
   }
 
   return {
-    pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad, sousEquipe: p.sousEquipe, jiraAccountId: p.jiraAccountId })),
+    pool: pool.map((p) => ({ id: p.id, name: p.name, squad: p.squad, sousEquipe: p.sousEquipe, jiraAccountId: p.jiraAccountId, capacityPct: Number(p.capacityPct ?? 1) })),
     overAllocGrid,
+    capacityGrid,
+    unavailableGrid,
     overAllocProjects,
     unavailableMembers,
     backupFor,
     loggedHoursGrid,
+    workingDaysByPeriod,
     alertCount,
     conflictCount,
     timesheetGapCount,
+    // Real vs planned, per profile, past weeks with Tempo data only. A ratio
+    // consistently above 1 means that profile's demands are under-estimated.
+    realizationByProfile: PROFILES.map((name) => {
+      const r = realization[name];
+      return { name, plannedHours: Math.round(r.planned), loggedHours: Math.round(r.logged), ratio: r.planned > 0.001 ? round1((r.logged / r.planned) * 100) / 100 : null };
+    }),
   };
 }
 
 router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   const periods = generatePeriods();
-  // periods[0] is the oldest past week now that the window reaches into
-  // history, not "today" — send the real current week id explicitly so the
-  // frontend doesn't have to guess a position or reimplement ISO week math.
   const currentPeriod = currentPeriodId();
+  // Planning horizon: current week + the next N−1 (default 16, ?horizon=26
+  // or 52 to look further). Past weeks stay in the grid for history, but a
+  // demand that was (or wasn't) covered last month is no longer something
+  // the HSV can act on, and capacity summed over a whole year would dwarf
+  // the demand of the coming weeks — so KPIs look at a bounded window.
+  const horizonWeeks = Math.min(52, Math.max(4, parseInt(req.query.horizon, 10) || 16));
+  const planningPeriods = periods.filter((p) => p >= currentPeriod).slice(0, horizonWeeks);
+  const horizon = new Set(planningPeriods);
 
-  // Same "minimal dashboard" cohort the frontend restricts to the grid-only
-  // view: viewDashboard granted but no org-wide oversight permission.
-  // proposeAllocations (or any other non-oversight permission) doesn't pull
-  // them out of this — only the broader ones do.
   const isMinimal = req.user.role !== "hsv" && !canViewAllProjects(req.user);
   let sousEquipeFilter = null;
   if (isMinimal) {
@@ -166,85 +182,94 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
   const resourceLoad = await buildResourceLoad(periods, sousEquipeFilter);
 
   if (!canViewAllProjects(req.user)) {
-    const own = await buildOwnDashboard(req.user, periods);
-    return res.json({ ...own, ...resourceLoad, periods, currentPeriod });
+    const own = await buildOwnDashboard(req.user, periods, horizon);
+    return res.json({ ...own, ...resourceLoad, periods, currentPeriod, planningWeeks: planningPeriods.length });
   }
 
   const projects = await prisma.project.findMany({
     include: { svo: true, demandLines: true, allocationLines: { include: { poolMember: true } } },
   });
 
-  const map = Object.fromEntries(periods.map((p) => [p, { period: p, ...zeroByProfile() }]));
-  const besoin = zeroByProfile();
-  const alloc = zeroByProfile();
-  let draftCount = 0, submittedCount = 0;
-  let releasePendingCount = 0;
+  // Net capacity per profile per week, summed over the pool — the honest
+  // "supply" side to put against weekly demand.
+  const capacityByPeriod = periods.map((p) => {
+    const row = { period: p, ...zeroByProfile() };
+    for (const m of resourceLoad.pool) {
+      if (m.sousEquipe in row) row[m.sousEquipe] = round1(row[m.sousEquipe] + (resourceLoad.capacityGrid[m.id]?.[p] || 0));
+    }
+    row.total = round1(sum(Object.fromEntries(PROFILES.map((k) => [k, row[k]]))));
+    return row;
+  });
+
+  // Weekly demand / allocation over submitted projects only — a draft is a
+  // SVO still making up their mind, not a need the org has to staff yet.
+  const demandMap = Object.fromEntries(periods.map((p) => [p, { period: p, ...zeroByProfile(), total: 0 }]));
+  const allocMap = Object.fromEntries(periods.map((p) => [p, { period: p, ...zeroByProfile(), total: 0 }]));
+  const besoin = zeroByProfile(), alloc = zeroByProfile(), covered = zeroByProfile();
+  let besoinDraftTotal = 0;
+  let draftCount = 0, submittedCount = 0, releasePendingCount = 0;
   const projectStats = [];
 
   for (const proj of projects) {
-    if (proj.demandSubmitted) submittedCount++; else draftCount++;
-
-    const pDemand = zeroByProfile();
-    for (const l of proj.demandLines) {
-      for (const { profile, countField, pctField } of PROFILE_FIELDS) {
-        const eff = effective(l[countField], l[pctField]);
-        besoin[profile] += eff;
-        pDemand[profile] += eff;
-        for (const p of periods) {
-          if (inRange(p, l.periodStart, l.periodEnd)) map[p][profile] = round1(map[p][profile] + eff);
-        }
-      }
+    for (const a of proj.allocationLines) if (a.releaseRequested) releasePendingCount++;
+    const cov = projectCoverage(proj, { weeks: horizon });
+    if (!proj.demandSubmitted) {
+      draftCount++;
+      besoinDraftTotal += cov.demand.total;
+      continue;
     }
-
-    const pAlloc = zeroByProfile();
-    for (const a of proj.allocationLines) {
-      if (a.releaseRequested) releasePendingCount++;
-      if (a.status !== "approved") continue;
-      const key = a.poolMember?.sousEquipe;
-      const pct = Number(a.pct) || 0;
-      if (key in alloc) alloc[key] += pct;
-      if (key in pAlloc) pAlloc[key] += pct;
+    submittedCount++;
+    for (const p of PROFILES) {
+      besoin[p] += cov.demand[p];
+      alloc[p] += cov.alloc[p];
+      covered[p] += cov.covered[p];
     }
+    for (const [w, row] of cov.byWeek.demand) if (demandMap[w]) for (const p of PROFILES) demandMap[w][p] = round1(demandMap[w][p] + row[p]);
+    for (const [w, row] of cov.byWeek.alloc) if (allocMap[w]) for (const p of PROFILES) allocMap[w][p] = round1(allocMap[w][p] + row[p]);
 
-    // Only submitted projects with an actual demand count toward "top
-    // projets en manque" — a draft, or a submitted line with nothing
-    // requested yet, has no gap worth surfacing.
-    const demandTotal = Object.values(pDemand).reduce((a, b) => a + b, 0);
-    if (proj.demandSubmitted && demandTotal > 0.001) {
-      const allocTotal = Object.values(pAlloc).reduce((a, b) => a + b, 0);
+    // Only projects with an actual upcoming demand count toward "top
+    // projets en manque"; the gap is what's missing in the right weeks.
+    if (cov.demand.total > 0.001) {
       projectStats.push({
         id: proj.id, name: proj.name, svo: proj.svo.name, status: proj.status,
-        demand: round1(demandTotal), alloc: round1(allocTotal), ecart: round1(allocTotal - demandTotal),
+        demand: round1(cov.demand.total), alloc: round1(cov.alloc.total), covered: round1(cov.covered.total),
+        ecart: round1(cov.covered.total - cov.demand.total), couverture: coveragePct(cov.covered.total, cov.demand.total),
+        weeks: cov.weeksCount,
       });
     }
   }
-  const demandByMonth = periods.map((p) => map[p]);
+  for (const row of Object.values(demandMap)) row.total = round1(sum(Object.fromEntries(PROFILES.map((k) => [k, row[k]]))));
+  for (const row of Object.values(allocMap)) row.total = round1(sum(Object.fromEntries(PROFILES.map((k) => [k, row[k]]))));
 
-  const cap = zeroByProfile();
-  for (const p of resourceLoad.pool) {
-    if (p.sousEquipe in cap) cap[p.sousEquipe] += 1;
+  // Capacity in the same unit and over the same horizon as demand
+  // (FTE-weeks), so the three bars per profile are comparable.
+  const cap = zeroByProfile(), capNow = zeroByProfile(), headcount = zeroByProfile();
+  for (const m of resourceLoad.pool) {
+    if (!(m.sousEquipe in cap)) continue;
+    headcount[m.sousEquipe] += 1;
+    capNow[m.sousEquipe] += resourceLoad.capacityGrid[m.id]?.[currentPeriod] || 0;
+    for (const p of planningPeriods) cap[m.sousEquipe] += resourceLoad.capacityGrid[m.id]?.[p] || 0;
   }
-  const besoinTotal = Object.values(besoin).reduce((a, b) => a + b, 0);
-  const allocTotal = Object.values(alloc).reduce((a, b) => a + b, 0);
-  const capTotal = Object.values(cap).reduce((a, b) => a + b, 0);
-  const couvertureTotal = besoinTotal > 0.001 ? round1((100 * allocTotal) / besoinTotal) : null;
 
-  // Backlog: per-profile demand lines from submitted projects that an admin
-  // hasn't validated yet (same untreated/proposed statuses as the "Demandes
-  // à affecter" queue, computed the same way so the two numbers never drift).
+  const besoinTotal = sum(besoin), allocTotal = sum(alloc), coveredTotal = sum(covered), capTotal = sum(cap);
+
+  // Backlog: per-profile demand lines from submitted projects not yet fully
+  // staffed (same rows as the "Demandes à affecter" queue).
   const queueRows = buildDemandQueueRows(projects.filter((p) => p.demandSubmitted));
   const backlogCount = queueRows.filter((r) => r.status !== "validated").length;
 
-  // Pool utilization right now: sum of every resource's current load
-  // against the pool's theoretical 100%-each capacity, plus how many are
-  // sitting completely idle.
-  let loadSum = 0, availableCount = 0;
-  for (const p of resourceLoad.pool) {
-    const load = resourceLoad.overAllocGrid[p.id]?.[currentPeriod] || 0;
-    loadSum += load;
-    if (load < 0.001) availableCount++;
+  // Pool right now: planned load against net capacity this week, people
+  // with nothing planned who are actually present, and free FTE left.
+  let loadNow = 0, capNowTotal = 0, availableCount = 0, freeNow = 0;
+  for (const m of resourceLoad.pool) {
+    const load = resourceLoad.overAllocGrid[m.id]?.[currentPeriod] || 0;
+    const c = resourceLoad.capacityGrid[m.id]?.[currentPeriod] || 0;
+    loadNow += load;
+    capNowTotal += c;
+    if (c > 0.001 && load < 0.001) availableCount++;
+    freeNow += Math.max(0, c - load);
   }
-  const poolUtilizationPct = resourceLoad.pool.length > 0 ? round1((100 * loadSum) / resourceLoad.pool.length) : 0;
+  const poolUtilizationPct = capNowTotal > 0.001 ? round1((100 * loadNow) / capNowTotal) : 0;
 
   projectStats.sort((a, b) => a.ecart - b.ecart);
   const topProjects = projectStats.slice(0, 5);
@@ -253,12 +278,20 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
     scope: "all",
     periods,
     currentPeriod,
+    planningWeeks: planningPeriods.length,
+    unit: "ETP-semaines",
     totals: {
       besoinTotal: round1(besoinTotal),
+      besoinDraftTotal: round1(besoinDraftTotal),
       allocTotal: round1(allocTotal),
-      capTotal,
-      ecartTotal: round1(allocTotal - besoinTotal),
-      couvertureTotal,
+      coveredTotal: round1(coveredTotal),
+      capTotal: round1(capTotal),
+      ecartTotal: round1(coveredTotal - besoinTotal),
+      couvertureTotal: coveragePct(coveredTotal, besoinTotal),
+      chargeCapacitePct: capTotal > 0.001 ? round1((100 * besoinTotal) / capTotal) : null,
+      headcount: sum(headcount),
+      capNow: round1(sum(capNow)),
+      freeNow: round1(freeNow),
       poolUtilizationPct,
       availableCount,
       backlogCount,
@@ -268,14 +301,20 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
       conflictCount: resourceLoad.conflictCount,
       timesheetGapCount: resourceLoad.timesheetGapCount,
     },
-    bySquad: PROFILES.map((name) => {
-      const b = besoin[name], a = alloc[name];
-      return {
-        name, besoin: round1(b), capacite: cap[name], alloue: round1(a),
-        couverture: b > 0.001 ? round1((100 * a) / b) : null,
-      };
-    }),
-    demandByMonth,
+    bySquad: PROFILES.map((name) => ({
+      name,
+      besoin: round1(besoin[name]),
+      alloue: round1(alloc[name]),
+      couvert: round1(covered[name]),
+      capacite: round1(cap[name]),
+      capaciteSemaine: round1(capNow[name]),
+      effectif: headcount[name],
+      couverture: coveragePct(covered[name], besoin[name]),
+      charge: cap[name] > 0.001 ? round1((100 * besoin[name]) / cap[name]) : null,
+    })),
+    demandByMonth: periods.map((p) => demandMap[p]),
+    allocByPeriod: periods.map((p) => allocMap[p]),
+    capacityByPeriod,
     topProjects,
     ...resourceLoad,
     projectsCount: projects.length,
@@ -283,69 +322,47 @@ router.get("/", requirePermission("viewDashboard"), async (req, res) => {
 });
 
 // SVO view: scoped to the projects they own — how well is MY expressed need
-// covered, not the whole org's pool/capacity picture (which they can't act on).
-// The shared resource-load grid (see buildResourceLoad) is merged in on top.
-async function buildOwnDashboard(user, periods) {
+// covered, in the right weeks, not the whole org's pool/capacity picture.
+async function buildOwnDashboard(user, periods, horizon) {
   const projects = await prisma.project.findMany({
     where: { svoUserId: user.id },
     include: { demandLines: true, allocationLines: { include: { poolMember: true } } },
   });
 
-  const map = Object.fromEntries(periods.map((p) => [p, { period: p, ...zeroByProfile() }]));
-  const besoin = zeroByProfile();
-  const alloc = zeroByProfile();
+  const demandMap = Object.fromEntries(periods.map((p) => [p, { period: p, ...zeroByProfile() }]));
+  const besoin = zeroByProfile(), alloc = zeroByProfile(), covered = zeroByProfile();
   let draftCount = 0, submittedCount = 0;
 
   const myProjects = projects.map((proj) => {
     if (!proj.demandSubmitted) draftCount++; else submittedCount++;
-
-    const pDemand = zeroByProfile();
-    for (const l of proj.demandLines) {
-      for (const { profile, countField, pctField } of PROFILE_FIELDS) {
-        const eff = effective(l[countField], l[pctField]);
-        pDemand[profile] += eff;
-        besoin[profile] += eff;
-        for (const p of periods) {
-          if (inRange(p, l.periodStart, l.periodEnd)) map[p][profile] = round1(map[p][profile] + eff);
-        }
-      }
+    const cov = projectCoverage(proj, { weeks: horizon });
+    for (const p of PROFILES) {
+      besoin[p] += cov.demand[p];
+      alloc[p] += cov.alloc[p];
+      covered[p] += cov.covered[p];
     }
-
-    const pAlloc = zeroByProfile();
-    for (const l of proj.allocationLines) {
-      if (l.status !== "approved") continue;
-      const pct = Number(l.pct) || 0;
-      const key = l.poolMember?.sousEquipe;
-      if (!(key in pAlloc)) continue;
-      pAlloc[key] += pct;
-      alloc[key] += pct;
-    }
-
-    const demandTotal = Object.values(pDemand).reduce((a, b) => a + b, 0);
-    const allocTotal = Object.values(pAlloc).reduce((a, b) => a + b, 0);
+    for (const [w, row] of cov.byWeek.demand) if (demandMap[w]) for (const p of PROFILES) demandMap[w][p] = round1(demandMap[w][p] + row[p]);
     return {
-      id: proj.id,
-      name: proj.name,
-      status: proj.status,
-      demandSubmitted: proj.demandSubmitted,
-      demand: round1(demandTotal),
-      alloc: round1(allocTotal),
-      ecart: round1(allocTotal - demandTotal),
+      id: proj.id, name: proj.name, status: proj.status, demandSubmitted: proj.demandSubmitted,
+      demand: round1(cov.demand.total), alloc: round1(cov.alloc.total), covered: round1(cov.covered.total),
+      ecart: round1(cov.covered.total - cov.demand.total), couverture: coveragePct(cov.covered.total, cov.demand.total),
+      weeks: cov.weeksCount,
     };
   });
 
-  const besoinTotal = Object.values(besoin).reduce((a, b) => a + b, 0);
-  const allocTotal = Object.values(alloc).reduce((a, b) => a + b, 0);
-
+  const besoinTotal = sum(besoin), allocTotal = sum(alloc), coveredTotal = sum(covered);
   return {
     scope: "own",
+    unit: "ETP-semaines",
     totals: {
       besoinTotal: round1(besoinTotal),
       allocTotal: round1(allocTotal),
-      ecartTotal: round1(allocTotal - besoinTotal),
+      coveredTotal: round1(coveredTotal),
+      ecartTotal: round1(coveredTotal - besoinTotal),
+      couvertureTotal: coveragePct(coveredTotal, besoinTotal),
     },
-    bySquad: PROFILES.map((name) => ({ name, besoin: round1(besoin[name]), alloue: round1(alloc[name]) })),
-    demandByMonth: periods.map((p) => map[p]),
+    bySquad: PROFILES.map((name) => ({ name, besoin: round1(besoin[name]), alloue: round1(alloc[name]), couvert: round1(covered[name]), couverture: coveragePct(covered[name], besoin[name]) })),
+    demandByMonth: periods.map((p) => demandMap[p]),
     projectsCount: projects.length,
     draftCount,
     submittedCount,

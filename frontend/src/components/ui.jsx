@@ -46,7 +46,7 @@ export function NavItem({ icon, label, active, onClick }) {
 
 // Icon-badge + big number + label, per the reference's KPI cards (icon in a
 // tinted rounded-square badge, value bold, label muted below).
-export function Kpi({ label, value, accent, icon }) {
+export function Kpi({ label, value, accent, icon, hint }) {
   return (
     <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: 16, flex: 1, minWidth: 140, boxShadow: CARD_SHADOW }}>
       {icon && (
@@ -59,6 +59,7 @@ export function Kpi({ label, value, accent, icon }) {
       )}
       <div style={{ fontSize: 24, fontWeight: 700, color: accent || TEXT, letterSpacing: "-0.02em" }}>{value}</div>
       <div style={{ fontSize: 12.5, color: MUTED, marginTop: 2 }}>{label}</div>
+      {hint && <div style={{ fontSize: 11, color: MUTED, marginTop: 4, opacity: 0.85 }}>{hint}</div>}
     </div>
   );
 }

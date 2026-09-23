@@ -3,11 +3,12 @@ const { z } = require("zod");
 const prisma = require("../lib/prisma");
 const { authenticate, requirePermission } = require("../middleware/auth");
 const { hasPermission } = require("../lib/permissions");
-const { effective, inRange } = require("../lib/periods");
+const { effective } = require("../lib/periods");
 const { PROFILES, PROFILE_FIELDS } = require("../lib/profiles");
+const { projectCoverage, weeklyDemand, weeklyAllocation } = require("../lib/coverage");
 const { logActivity } = require("../lib/activity");
 const { notifyHSV, notifyPoolMember, notifyTeamLeadsForSousEquipe, projectLink } = require("../lib/notify");
-const { findUnavailabilityConflicts, conflictErrorMessage } = require("../lib/unavailability");
+const { checkAllocationFeasibility } = require("../lib/unavailability");
 
 const router = express.Router();
 router.use(authenticate);
@@ -24,26 +25,11 @@ function rangeLabel(line) {
   return line.periodStart === line.periodEnd ? line.periodStart : `${line.periodStart} → ${line.periodEnd}`;
 }
 
+// FTE-weeks, week by week — see lib/coverage.js. `covered` is the part of
+// the demand actually staffed in the right weeks; `alloc` may exceed it.
 function computeTotals(project) {
-  const demand = Object.fromEntries(PROFILES.map((p) => [p, 0]));
-  for (const l of project.demandLines) {
-    for (const { profile, countField, pctField } of PROFILE_FIELDS) {
-      demand[profile] += effective(l[countField], l[pctField]);
-    }
-  }
-  const alloc = Object.fromEntries(PROFILES.map((p) => [p, 0]));
-  // Pending (unapproved) proposals don't count as real capacity yet.
-  for (const l of project.allocationLines) {
-    if (l.status !== "approved") continue;
-    const key = l.poolMember?.sousEquipe;
-    if (key in alloc) alloc[key] += Number(l.pct) || 0;
-  }
-  const dTotal = Object.values(demand).reduce((a, b) => a + b, 0);
-  const aTotal = Object.values(alloc).reduce((a, b) => a + b, 0);
-  return {
-    demand: { ...demand, total: dTotal },
-    alloc: { ...alloc, total: aTotal },
-  };
+  const cov = projectCoverage(project);
+  return { demand: cov.demand, alloc: cov.alloc, covered: cov.covered, weeks: cov.weeksCount, unit: "ETP-semaines" };
 }
 
 function serializeProject(project) {
@@ -369,13 +355,16 @@ router.post("/:id/allocation-lines", async (req, res) => {
     }
   }
 
-  // A resource on leave that week can't be proposed or assigned at all —
-  // block outright rather than just warning after the fact.
-  const conflicts = await findUnavailabilityConflicts(parsed.data.poolMemberId, periodStart, periodEnd);
-  if (conflicts.length > 0) {
-    const target = await prisma.poolMember.findUnique({ where: { id: parsed.data.poolMemberId } });
-    return res.status(409).json({ error: conflictErrorMessage(target.name, conflicts) });
-  }
+  // A resource that isn't really available that week (validated leave,
+  // part-time, not yet arrived / already left) can't be proposed or assigned
+  // at all — block outright rather than just warning after the fact.
+  // Over-allocation and pending leave requests come back as warnings.
+  const target = await prisma.poolMember.findUnique({ where: { id: parsed.data.poolMemberId } });
+  if (!target) return res.status(400).json({ error: "Ressource introuvable." });
+  const check = await checkAllocationFeasibility({
+    member: target, periodStart, periodEnd, requestedPct: parsed.data.pct ?? 1,
+  });
+  if (check.blocking.length > 0) return res.status(409).json({ error: check.blocking.join(" ") });
 
   const status = canManage ? "approved" : "pending";
   const line = await prisma.allocationLine.create({
@@ -426,7 +415,7 @@ router.post("/:id/allocation-lines", async (req, res) => {
     );
   }
 
-  res.status(201).json(line);
+  res.status(201).json({ ...line, warnings: check.warnings });
 });
 
 // ---- synthesis: demandé vs alloué, by period, for one project ----
@@ -435,24 +424,16 @@ router.get("/:id/synthesis", async (req, res) => {
   const project = await loadProjectOr404(req, res);
   if (!project) return;
 
-  const periods = new Set();
-  project.demandLines.forEach((l) => { periods.add(l.periodStart); periods.add(l.periodEnd); });
-  project.allocationLines.forEach((l) => { periods.add(l.periodStart); periods.add(l.periodEnd); });
-
-  const rows = [...periods].sort().map((period) => {
-    const row = { period, ...Object.fromEntries(PROFILES.map((p) => [p, { dem: 0, alloc: 0 }])) };
-    project.demandLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
-      for (const { profile, countField, pctField } of PROFILE_FIELDS) {
-        row[profile].dem += effective(l[countField], l[pctField]);
-      }
-    });
-    project.allocationLines.filter((l) => inRange(period, l.periodStart, l.periodEnd)).forEach((l) => {
-      const key = l.poolMember?.sousEquipe;
-      if (key in row) row[key].alloc += Number(l.pct) || 0;
-    });
-    return row;
+  // Every week either side touches (not just the boundary weeks), approved
+  // allocations only — same numbers the dashboard and the queue show.
+  const demand = weeklyDemand(project);
+  const alloc = weeklyAllocation(project);
+  const weeks = [...new Set([...demand.keys(), ...alloc.keys()])].sort();
+  const rows = weeks.map((period) => {
+    const d = demand.get(period) || {};
+    const a = alloc.get(period) || {};
+    return { period, ...Object.fromEntries(PROFILES.map((p) => [p, { dem: d[p] || 0, alloc: a[p] || 0 }])) };
   });
-
   res.json(rows);
 });
 

@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { Plus, Trash2, Calendar, X, Timer, Download, Terminal } from "lucide-react";
-import { api, getToken } from "../api";
+import { api } from "../api";
 import { SURFACE, SURFACE2, BORDER, MUTED, GREEN, RED, CARD_SHADOW, inputStyle, btnPrimary, btnGhost, iconBtn } from "../styles";
 import { Th, Td } from "../components/ui";
 import { isValidEmail } from "../lib/validate";
 import { showToast } from "../lib/toast";
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+
+// Date stored as ISO timestamp (or already a "YYYY-MM-DD" draft) → value for
+// an <input type="date">; empty when unset.
+const toDateInput = (v) => (v ? String(v).slice(0, 10) : "");
 
 export default function PoolView({ pool, overAllocGrid, periods, onChanged, unavailabilitiesData = {} }) {
   const [error, setError] = useState("");
@@ -45,6 +48,15 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
     if (key === "email" && value.trim() && !isValidEmail(value)) {
       showToast("Adresse email invalide — format attendu : nom@domaine.com", "error");
       return;
+    }
+    // Contract time comes from a "80" style input → 0.8 for the API.
+    if (key === "capacityPct") {
+      const n = Number(String(value).replace("%", "").trim());
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        showToast("Temps de travail invalide — un pourcentage entre 0 et 100.", "error");
+        return;
+      }
+      value = Math.round(n) / 100;
     }
     try {
       await api.patch(`/pool/${id}`, { [key]: value });
@@ -122,7 +134,7 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
         "success"
       );
       onChanged();
-    } catch (e) {
+    } catch {
       // api.js already toasts the error message.
     } finally {
       setSyncingTempo(false);
@@ -258,7 +270,11 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: SURFACE2 }}>
-              <Th>Nom</Th><Th>Email</Th><Th>Jira Account ID</Th><Th>Squad</Th><Th>Sous-équipe</Th><Th>Rôle</Th><Th>Indisponibilités</Th><Th>Pic de charge</Th><Th></Th>
+              <Th>Nom</Th><Th>Email</Th><Th>Jira Account ID</Th><Th>Squad</Th><Th>Sous-équipe</Th><Th>Rôle</Th>
+              <Th title="Temps de travail contractuel : 100 = plein temps, 50 = mi-temps. Réduit la capacité et le seuil de sur-allocation.">Temps</Th>
+              <Th title="Avant cette date, la personne n'apporte aucune capacité.">Arrivée</Th>
+              <Th title="Après cette date, la personne n'apporte plus aucune capacité.">Départ</Th>
+              <Th>Indisponibilités</Th><Th>Pic de charge</Th><Th></Th>
             </tr>
           </thead>
           <tbody>
@@ -282,6 +298,22 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
                   <Td><input value={draftValue(p, "roleTitle")} onChange={(e) => setDraft(p.id, "roleTitle", e.target.value)}
                     onBlur={(e) => patchPerson(p.id, "roleTitle", e.target.value)} style={inputStyle} /></Td>
                   <Td>
+                    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <input type="number" min={0} max={100} step={10}
+                        value={draftValue(p, "capacityPctInput") ?? Math.round(Number(p.capacityPct ?? 1) * 100)}
+                        onChange={(e) => setDraft(p.id, "capacityPctInput", e.target.value)}
+                        onBlur={(e) => patchPerson(p.id, "capacityPct", e.target.value)}
+                        style={{ ...inputStyle, width: 56, textAlign: "right" }} />
+                      <span style={{ color: MUTED, fontSize: 12 }}>%</span>
+                    </div>
+                  </Td>
+                  <Td><input type="date" value={toDateInput(draftValue(p, "startDate"))}
+                    onChange={(e) => setDraft(p.id, "startDate", e.target.value)}
+                    onBlur={(e) => patchPerson(p.id, "startDate", e.target.value)} style={{ ...inputStyle, width: 130 }} /></Td>
+                  <Td><input type="date" value={toDateInput(draftValue(p, "endDate"))}
+                    onChange={(e) => setDraft(p.id, "endDate", e.target.value)}
+                    onBlur={(e) => patchPerson(p.id, "endDate", e.target.value)} style={{ ...inputStyle, width: 130 }} /></Td>
+                  <Td>
                     <button 
                       onClick={() => handleOpenUnavailability(p)}
                       style={{ 
@@ -300,7 +332,8 @@ export default function PoolView({ pool, overAllocGrid, periods, onChanged, unav
                     </button>
                   </Td>
                   <Td>
-                    <span style={{ color: peak > 1.001 ? RED : peak > 0 ? GREEN : MUTED, fontWeight: 600 }}>
+                    <span title={`Seuil de sur-allocation : ${Math.round(Number(p.capacityPct ?? 1) * 100)}% (temps de travail)`}
+                      style={{ color: peak > Number(p.capacityPct ?? 1) + 0.001 ? RED : peak > 0 ? GREEN : MUTED, fontWeight: 600 }}>
                       {Math.round(peak * 100)}%
                     </span>
                   </Td>
