@@ -9,7 +9,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "jira:import": "node scripts/sync-jira-account-ids.js import scripts/jira-ids.json"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

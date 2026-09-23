@@ -4,8 +4,8 @@
 // spelling, glued surnames).
 //
 // Two steps:
-//   1. On the source machine (local):   node scripts/sync-jira-account-ids.js export > jira-ids.json
-//   2. On the target machine (remote):  node scripts/sync-jira-account-ids.js import jira-ids.json [--dry-run] [--force]
+//   1. On the source machine (local):   node scripts/sync-jira-account-ids.js export > scripts/jira-ids.json  (committed)
+//   2. On the target machine (remote):  git pull && npm run jira:import   (or ... import scripts/jira-ids.json [--dry-run] [--force])
 //
 // Each step uses the DATABASE_URL of the machine it runs on (backend/.env).
 // Import never overwrites an existing, different ID unless --force is given.
